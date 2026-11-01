@@ -12,6 +12,9 @@
 #include "dolphin/mtx.h"
 #include "sys_ucode.h"
 #include "libforest/emu64/emu64_wrapper.h"
+#ifdef SONAR_PORT
+#include <sonar/base/endian.h>
+#endif
 #include "sys_ucode.h"
 
 #ifdef EMU64_DEBUG
@@ -199,10 +202,32 @@ typedef union {
     u32 raw;
 } EmuColor;
 
+/* An EmuColor as the 0xRRGGBBAA a command carries */
+#ifdef SONAR_PORT
+/* sonarlib port: the bytes in memory are r, g, b, a on any host */
+#define EMU_COLOR_U32(c) sl_load_be32(&(c).raw)
+#define EMU_COLOR_SET_U32(c, v) sl_store_be32(&(c).raw, (v))
+#else
+#define EMU_COLOR_U32(c) ((c).raw)
+#define EMU_COLOR_SET_U32(c, v) ((c).raw = (v))
+#endif
+
 typedef struct {
     Vec position;
     union {
         struct {
+#ifdef SONAR_PORT
+            /* sonarlib port: the host's compilers allocate bit-fields from the least significant bit */
+            u16 nonshared : 1;
+            u16 _pad1 : 7;
+            u16 cull_x_lesser : 1;
+            u16 cull_x_greater : 1;
+            u16 cull_y_lesser : 1;
+            u16 cull_y_greater : 1;
+            u16 cull_z_lesser : 1;
+            u16 cull_z_greater : 1;
+            u16 _pad0 : 2;
+#else
             u16 _pad0 : 2;
             u16 cull_z_greater : 1;
             u16 cull_z_lesser : 1;
@@ -212,6 +237,7 @@ typedef struct {
             u16 cull_x_lesser : 1;
             u16 _pad1 : 7;
             u16 nonshared : 1;
+#endif
         };
         u16 flag;
     };
@@ -611,7 +637,7 @@ class emu64 : public emu64_print {
     void texture_gen(int tile);
     void texture_matrix();
     void disp_matrix(MtxP mtx);
-    const char* segchk(u32 seg);
+    const char* segchk(uaddr seg);
     const char* combine_name(u32 param, u32 type);
     const char* combine_alpha(int param, int type);
     const char* combine_tev_color_name(u32 color_param);
@@ -622,7 +648,7 @@ class emu64 : public emu64_print {
     void print_combine(u64 combine);
     void print_combine_tev(u64 combine_tev);
     void print_guMtxXFM1F_dol2(MtxP mtx, GXProjectionType type, float x, float y, float z);
-    u32 seg2k0(u32 seg);
+    uaddr seg2k0(uaddr seg);
     void setup_texture_tile(int tile);
     void setup_1tri_2tri_1quad(unsigned int vtx_idx);
     void draw_1tri_2tri_1quad(unsigned int n_verts, ...);
@@ -730,8 +756,8 @@ private:
     /* 0x0060 */ ucode_info* ucode_info_p;
     /* 0x0064 */ int ucode_type; // maybe?
     /* 0x0068 */ int _0068;      /* ??? */
-    /* 0x006C */ u32 segments[EMU64_NUM_SEGMENTS];
-    /* 0x00AC */ u32 DL_stack[DL_MAX_STACK_LEVEL];
+    /* 0x006C */ uaddr segments[EMU64_NUM_SEGMENTS];
+    /* 0x00AC */ uaddr DL_stack[DL_MAX_STACK_LEVEL];
     /* 0x00F4 */ s8 DL_stack_level;
     /* 0x00F8 */ u32 othermode_high;
     /* 0x00FC */ u32 othermode_low;
@@ -792,7 +818,7 @@ private:
     /* 0x09E8 */ GXProjectionType projection_type;
     /* 0x09EC */ GC_Mtx perspective_mtx;
     /* 0x0A1C */ u32 _0A1C;
-    /* 0x0A20 */ u32 rdpHalf_1;
+    /* 0x0A20 */ uaddr rdpHalf_1;
     /* 0x0A24 */ EmuLight lights[NUM_LIGHTS];
     /* 0x0B64 */ u8 num_lights;
     /* 0x0B68 */ u32 lookatx_cnt;

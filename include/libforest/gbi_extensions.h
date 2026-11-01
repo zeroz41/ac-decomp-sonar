@@ -219,6 +219,10 @@ extern "C" {
 #define COMBINER_TEV_GET_Ac1(words)((words.w0 >>  3) & 7)
 #define COMBINER_TEV_GET_Ad1(words)((words.w0 >>  0) & 7)
 
+#ifdef SONAR_PORT
+/* sonarlib port: the views of a display-list command below, laid out for the host (port/tools/gbi_views.py) */
+#include <port/gbi_extensions_views.h>
+#else
 typedef struct {
     unsigned int cmd:8;
     unsigned int a0:4;
@@ -602,6 +606,7 @@ typedef struct {
 		u32		len:8;
 		unsigned int	data:32;
 } Gsetothermode_dolphin;
+#endif /* SONAR_PORT */
 
 typedef struct {
     unsigned char col[3];

@@ -4,9 +4,24 @@
 #include "terminal.h"
 #include "MSL_C/w_math.h"
 
-u32 emu64::seg2k0(u32 segadr) {
-    u32 k0;
+uaddr emu64::seg2k0(uaddr segadr) {
+    uaddr k0;
 
+#ifdef SONAR_PORT
+    /* sonarlib port: a segment's base is a host pointer and an address outside the segments is one too */
+    if (segadr < 0x10000000 && segadr >= 0x03000000) {
+        k0 = this->segments[(segadr >> 24) & 0xF] + (segadr & 0xFFFFFF);
+        this->resolved_addresses++;
+    } else {
+        if (segadr < 0x03000000) {
+            this->Printf0(VT_COL(RED, WHITE) "segadr=%08x" VT_RST "\n", (u32)segadr);
+            this->panic("segadr is over 0x03000000.", __FILE__, 20);
+            this->abnormal_addresses++;
+        }
+        k0 = segadr;
+    }
+    return k0;
+#else
     if ((segadr >> 28) == 0) {
         if (segadr < 0x03000000) {
             this->Printf0(VT_COL(RED, WHITE) "segadr=%08x" VT_RST "\n", segadr);
@@ -27,6 +42,7 @@ u32 emu64::seg2k0(u32 segadr) {
     }
 
     return k0;
+#endif
 }
 
 /* @unused void guMtxXFMWF(MtxP, float, float, float, float, float, float*, float*, float*, float*) */

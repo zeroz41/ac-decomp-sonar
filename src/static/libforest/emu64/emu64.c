@@ -2704,7 +2704,7 @@ void emu64::set_position(unsigned int vtx) {
     }
 
     /* Vertex color */
-    GXColor1u32(emu_vtx->color.raw);
+    GXColor1u32(EMU_COLOR_U32(emu_vtx->color));
 
     /* If texture is on, write texture coordinates */
     if (this->texture_gfx.on != G_OFF) {
@@ -3546,7 +3546,7 @@ void emu64::dl_G_LOADTILE() {
         return;
 
     /* Determine tmem base address */
-    u32 dram = this->now_setimg.setimg2.imgaddr;
+    uaddr dram = this->now_setimg.setimg2.imgaddr;
     dram += ((loadtile.tl / 4) * EXPAND_WIDTH(this->now_setimg.setimg2.wd) + (loadtile.sl / 4)
              << this->now_setimg.setimg2.siz) /
             2;
@@ -3574,7 +3574,7 @@ void emu64::dl_G_LOADTILE() {
 void emu64::dl_G_LOADBLOCK() {
     int tmem_idx;
     Gloadblock* loadblock = (Gloadblock*)this->gfx_p;
-    u32 addr;
+    uaddr addr;
     int i;
 
 #ifdef EMU64_DEBUG
@@ -3699,7 +3699,7 @@ void emu64::dl_G_LOADTLUT() {
         if (this->disable_polygons == false) {
             u16 count = ((loadtlut->words.w1 >> 14) & 0x3FF) + 1;
             void* tlut;
-            u32 addr = this->now_setimg.setimg2.imgaddr;
+            uaddr addr = this->now_setimg.setimg2.imgaddr;
             u32 tlut_name = (settile_p->tmem / 16) & 0xF;
 
             if (addr == (uaddr)this->tlut_addresses[tlut_name]) {
@@ -4088,8 +4088,8 @@ void emu64::dl_G_SETENVCOLOR() {
                (this->gfx.setcolor.color >> 16) & 0xFF, (this->gfx.setcolor.color >> 8) & 0xFF,
                (this->gfx.setcolor.color >> 0) & 0xFF);
 
-    if (this->environment_color.raw != this->gfx.setcolor.color) {
-        this->environment_color.raw = this->gfx.setcolor.color;
+    if (EMU_COLOR_U32(this->environment_color) != this->gfx.setcolor.color) {
+        EMU_COLOR_SET_U32(this->environment_color, this->gfx.setcolor.color);
         this->dirty_flags[EMU64_DIRTY_FLAG_ENV_COLOR] = true;
     }
 }
@@ -4099,8 +4099,8 @@ void emu64::dl_G_SETBLENDCOLOR() {
                (this->gfx.setcolor.color >> 16) & 0xFF, (this->gfx.setcolor.color >> 8) & 0xFF,
                (this->gfx.setcolor.color >> 0) & 0xFF);
 
-    if (this->blend_color.raw != this->gfx.setcolor.color) {
-        this->blend_color.raw = this->gfx.setcolor.color;
+    if (EMU_COLOR_U32(this->blend_color) != this->gfx.setcolor.color) {
+        EMU_COLOR_SET_U32(this->blend_color, this->gfx.setcolor.color);
         this->dirty_flags[EMU64_DIRTY_FLAG_BLEND_COLOR] = true;
     }
 }
@@ -4110,8 +4110,8 @@ void emu64::dl_G_SETFOGCOLOR() {
                (this->gfx.setcolor.color >> 16) & 0xFF, (this->gfx.setcolor.color >> 8) & 0xFF,
                (this->gfx.setcolor.color >> 0) & 0xFF);
 
-    if (this->fog_color.raw != this->gfx.setcolor.color) {
-        this->fog_color.raw = this->gfx.setcolor.color;
+    if (EMU_COLOR_U32(this->fog_color) != this->gfx.setcolor.color) {
+        EMU_COLOR_SET_U32(this->fog_color, this->gfx.setcolor.color);
         this->dirty_flags[EMU64_DIRTY_FLAG_FOG] = true;
     }
 }
@@ -4119,8 +4119,8 @@ void emu64::dl_G_SETFOGCOLOR() {
 void emu64::dl_G_SETFILLCOLOR() {
     EMU64_LOGF("gsDPSetFillColor(0x%08x),", this->gfx.setcolor.color);
 
-    if (this->fill_color.raw != this->gfx.setcolor.color) {
-        this->fill_color.raw = this->gfx.setcolor.color;
+    if (EMU_COLOR_U32(this->fill_color) != this->gfx.setcolor.color) {
+        EMU_COLOR_SET_U32(this->fill_color, this->gfx.setcolor.color);
 
         u16* color = (u16*)&this->gfx.setcolor.color;
         this->fill_tev_color.color.r = (*color >> 8) & 0xF8;
@@ -4151,8 +4151,8 @@ void emu64::dl_G_SETPRIMCOLOR() {
                (this->gfx.setcolor.color >> 16) & 0xFF, (this->gfx.setcolor.color >> 8) & 0xFF,
                (this->gfx.setcolor.color >> 0) & 0xFF);
 
-    if (this->primitive_color.raw != this->gfx.setcolor.color) {
-        this->primitive_color.raw = this->gfx.setcolor.color;
+    if (EMU_COLOR_U32(this->primitive_color) != this->gfx.setcolor.color) {
+        EMU_COLOR_SET_U32(this->primitive_color, this->gfx.setcolor.color);
         this->dirty_flags[EMU64_DIRTY_FLAG_PRIM_COLOR] = true;
     }
 
@@ -5080,9 +5080,17 @@ void emu64::dl_G_MOVEWORD() {
         case G_MW_SEGMENT: {
             u32 segment = moveword->offset / 4;
             EMU64_WARNF("gsSPSegmentA(%d, 0x%08x),", segment, moveword->data);
+#ifdef SONAR_PORT
+            /* sonarlib port: the base is a host pointer, and the console wrote past the table for a bad segment */
+            if (segment < EMU64_NUM_SEGMENTS) {
+                this->segments[segment] = moveword->data;
+            }
+            if (segment >= EMU64_NUM_SEGMENTS || (moveword->data != 0 && moveword->data < 0x10000000)) {
+#else
             this->segments[segment] = (0x80000000 + (moveword->data & 0x0FFFFFFF));
             if (segment >= EMU64_NUM_SEGMENTS ||
                 (moveword->data != 0 && (moveword->data < 0x80000000 || moveword->data > 0x83000000))) {
+#endif
                 sprintf(s1, "gsSPSegmentA no=%d", segment);
                 sprintf(s2, "base=%s", this->segchk(moveword->data));
                 sprintf(s3, "gfxp=%s", this->segchk((uaddr)this->gfx_p));
@@ -5128,10 +5136,19 @@ void emu64::dl_G_MOVEWORD() {
 
             this->gfx_p++; /* gsSPLightColor generates two commands */
 
+#ifdef SONAR_PORT
+            /* sonarlib port: the word is 0xRRGGBBAA, whose bytes are not r, g, b, a on the host */
+            EmuColor color;
+            EMU_COLOR_SET_U32(color, (u32)((Gmoveword*)&this->gfx)->data);
+            this->lights[light].color.rgba.r = color.rgba.r;
+            this->lights[light].color.rgba.g = color.rgba.g;
+            this->lights[light].color.rgba.b = color.rgba.b;
+#else
             GXColor* color = (GXColor*)&((Gmoveword*)&this->gfx)->data;
             this->lights[light].color.rgba.r = color->r;
             this->lights[light].color.rgba.g = color->g;
             this->lights[light].color.rgba.b = color->b;
+#endif
 
             this->dirty_flags[EMU64_DIRTY_FLAG_LIGHTS] = true;
         } break;

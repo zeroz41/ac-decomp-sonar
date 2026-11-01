@@ -68,12 +68,13 @@ target_include_directories(ac_game PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter/
 set_target_properties(ac_game PROPERTIES C_STANDARD 11 C_EXTENSIONS ON CXX_STANDARD 20 CXX_EXTENSIONS ON)
 target_compile_definitions(ac_game PRIVATE SONAR_PORT=1)
 if(CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
-    target_compile_options(ac_game PRIVATE "/FI${CMAKE_CURRENT_SOURCE_DIR}/adapter/intrinsics.h"
+    set(adapter_includes "/FI${CMAKE_CURRENT_SOURCE_DIR}/adapter/intrinsics.h"
         "/FI${CMAKE_CURRENT_SOURCE_DIR}/adapter/names.h")
 else()
-    target_compile_options(ac_game PRIVATE "SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/adapter/intrinsics.h"
+    set(adapter_includes "SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/adapter/intrinsics.h"
         "SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/adapter/names.h")
 endif()
+target_compile_options(ac_game PRIVATE ${adapter_includes})
 # The exact-sim profile (porting-model.md, 64-bit and endianness; Floating-point determinism).
 target_compile_options(ac_game PRIVATE -fwrapv -fno-strict-aliasing -fno-delete-null-pointer-checks
                        -ffp-contract=off -Werror=int-to-pointer-cast
@@ -81,18 +82,31 @@ target_compile_options(ac_game PRIVATE -fwrapv -fno-strict-aliasing -fno-delete-
                        # C++ treats falling off the end of a function as unreachable, not as an unused result.
                        $<$<COMPILE_LANGUAGE:CXX>:-Werror=return-type>)
 # Units that still keep host pointers in 32-bit fields: the audio driver's sound tables, command stacks and DMA
-# requests, and emu64's display-list reader, which takes addresses from the 32-bit views of a Gfx word.
+# requests.
 set(narrow_pointer_sources
     jaudio_NES/game/melody.c
     jaudio_NES/internal/bankread.c jaudio_NES/internal/channel.c jaudio_NES/internal/cmdstack.c
     jaudio_NES/internal/driver.c jaudio_NES/internal/dspdriver.c jaudio_NES/internal/dummyrom.c
     jaudio_NES/internal/heapctrl.c jaudio_NES/internal/memory.c jaudio_NES/internal/oneshot.c
     jaudio_NES/internal/seqsetup.c jaudio_NES/internal/sub_sys.c jaudio_NES/internal/system.c
-    jaudio_NES/internal/waveread.c
-    libforest/emu64/emu64.c)
+    jaudio_NES/internal/waveread.c)
 list(TRANSFORM narrow_pointer_sources PREPEND "${AC_ROOT}/src/static/")
 set_source_files_properties(${narrow_pointer_sources} TARGET_DIRECTORY ac_game
                             PROPERTIES COMPILE_OPTIONS -Wno-error=int-to-pointer-cast)
 # The original compiler took C++98, which allowed narrowing in braced initializers.
 target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>)
 target_link_libraries(ac_game PRIVATE sonar::base)
+
+# The port's views of a display-list command (tools/gbi_views.py): each field where the console's compiler put it,
+# and the views current with the console's structs.
+enable_testing()
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_executable(ac_gbi_views_test tests/gbi_views_test.c)
+target_include_directories(ac_gbi_views_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include"
+    "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin" "${AC_ROOT}")
+target_compile_definitions(ac_gbi_views_test PRIVATE SONAR_PORT=1 F3DEX_GBI_2 _LANGUAGE_C)
+target_compile_options(ac_gbi_views_test PRIVATE ${adapter_includes})
+set_target_properties(ac_gbi_views_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
+target_link_libraries(ac_gbi_views_test PRIVATE sonar::base)
+add_test(NAME ac_gbi_views COMMAND ac_gbi_views_test)
+add_test(NAME ac_gbi_views_current COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/gbi_views.py" --check)

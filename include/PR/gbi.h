@@ -1478,6 +1478,10 @@ typedef union {
 		{	{{ {{0,0,0},0,{0,0,0},0,{rightx,righty,rightz},0}}, \
 			{ {{0,0x80,0},0,{0,0x80,0},0,{upx,upy,upz},0}}}   }
 
+#ifdef SONAR_PORT
+/* sonarlib port: the views of a display-list command below, laid out for the host (port/tools/gbi_views.py) */
+#include <port/gbi_views.h>
+#else
 /*
  *  Graphics DMA Packet
  */
@@ -1649,6 +1653,7 @@ typedef struct {
 		unsigned int	dsdx:16;/* Change in S per change in X	*/
 		unsigned int	dtdy:16;/* Change in T per change in Y	*/
 } Gtexrect;
+#endif /* SONAR_PORT */
 
 #define	MakeTexRect(xh,yh,flip,tile,xl,yl,s,t,dsdx,dtdy)		\
 	G_TEXRECT, xh, yh, 0, flip, 0, tile, xl, yl, s, t, dsdx, dtdy
