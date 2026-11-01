@@ -7,6 +7,15 @@
 #define REFRESH_RATE_DEVIATION_NTSC 1.00278f
 #define REFRESH_RATE_NTSC 60
 
+/* The lowest value the bank relocation takes for a relocated pointer rather than an offset within a bank. On the
+   console, the start of cached memory. In the port, 64 KiB: above every offset in a bank, which the importer keeps
+   smaller, and below every host address, since no 64-bit host maps its first 64 KiB. */
+#ifdef SONAR_PORT
+#define NA_RELOCATED_BASE 0x10000
+#else
+#define NA_RELOCATED_BASE OS_BASE_CACHED
+#endif
+
 typedef enum SET_EXT_POINTER_TYPE {
     EXT_POINTER_TYPE_ADDR,
     EXT_POINTER_TYPE_SIZE,

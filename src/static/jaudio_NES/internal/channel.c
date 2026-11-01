@@ -408,7 +408,7 @@ extern perctable* PercToPp(s32 prog, s32 drum) {
         return NULL;
     }
 
-    if ((uaddr)AG.voice_info[prog].percussion < OS_BASE_CACHED) {
+    if ((uaddr)AG.voice_info[prog].percussion < NA_RELOCATED_BASE) {
         return NULL;
     }
 
@@ -438,7 +438,7 @@ extern percvoicetable* VpercToVep(s32 prog, s32 sfx) {
         return NULL;
     }
 
-    if ((uaddr)AG.voice_info[prog].effects < OS_BASE_CACHED) {
+    if ((uaddr)AG.voice_info[prog].effects < NA_RELOCATED_BASE) {
         return NULL;
     }
 

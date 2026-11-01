@@ -1693,7 +1693,7 @@ static void __WaveTouch(wtstr* wavetouch_str, uaddr ram_addr, WaveMedia* wave_me
     smzwavetable* wavetable;
     void* reloc;
 
-    if ((uaddr)wavetouch_str->wavetable <= OS_BASE_CACHED) {
+    if ((uaddr)wavetouch_str->wavetable <= NA_RELOCATED_BASE) {
         // wave is not relocated
         reloc = (void*)((uaddr)wavetouch_str->wavetable + ram_addr);
         wavetouch_str->wavetable = (smzwavetable*)reloc;
