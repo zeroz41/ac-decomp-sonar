@@ -224,7 +224,12 @@ void DVDDumpWaitingQueue();
 
 #define DVD_WATYPE_MAX 2
 
+#ifdef SONAR_PORT
+/* sonarlib port: the console's low memory, which the port's platform layer stands in for */
+extern DVDDiskID DiskID;
+#else
 DVDDiskID DiskID AT_ADDRESS(0x80000000);
+#endif
 
 //////////////////////////////////
 

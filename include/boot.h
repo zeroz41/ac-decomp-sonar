@@ -27,7 +27,12 @@ extern u8 boot_sound_initializing;
 typedef void(*HotStartProc)();
 
 #define NMISaveArea (void*)0x811FFFC0
+#ifdef SONAR_PORT
+/* sonarlib port: the console's low memory, which the port's platform layer stands in for */
+extern OSModuleHeader* BaseModule;
+#else
 OSModuleHeader* BaseModule AT_ADDRESS(0x800030C8);
+#endif
 
 // TODO: this macro should probably go elsewhere
 #define MAKE_PARTIAL_ADDRESS(segment, ofs) \

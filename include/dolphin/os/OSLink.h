@@ -24,8 +24,14 @@ struct OSModuleQueue {
     OSModuleInfo* tail;
 };
 
+#ifdef SONAR_PORT
+/* sonarlib port: the console's low memory, which the port's platform layer stands in for */
+extern OSModuleQueue __OSModuleList;
+extern void* __OSStringTable;
+#else
 OSModuleQueue __OSModuleList AT_ADDRESS(0x800030C8);
 void* __OSStringTable AT_ADDRESS(0x800030D0);
+#endif
 
 struct OSModuleLink {
     OSModuleInfo* next;
