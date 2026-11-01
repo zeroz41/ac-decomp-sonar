@@ -2556,7 +2556,7 @@ static u32 Cmd_Printf()
 {
 	char fmtStr[0x80];
 	u8 fmtFlags[4];
-	u32 fmtParms[4];
+	uaddr fmtParms[4];
 	size_t fmtCount;
 	size_t i;
 

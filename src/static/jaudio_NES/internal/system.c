@@ -1850,7 +1850,7 @@ s32 Nas_CheckBgWave(s32 reset_status) {
     smzwavetable* wavetable;
     Bgloadreq* preload;
     uaddr preload_idx;
-    s32 key;
+    saddr_long key;
     s32 n_chunks;
 
     if (AG.num_requested_samples > 0) {

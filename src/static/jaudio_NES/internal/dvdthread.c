@@ -173,7 +173,7 @@ static void __DoError(DVDCall* call, u32 type) {
     }
 }
 
-static void __DoFinish(DVDCall* call, u32 arg) {
+static void __DoFinish(DVDCall* call, uaddr arg) {
     if (call->callbackStatus != nullptr) {
         *call->callbackStatus = arg;
     }

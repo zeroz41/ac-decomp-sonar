@@ -6,7 +6,7 @@
 #include "jaudio_NES/audiowork.h"
 
 static s32 current_sub_track = 0;
-u32 na_melody_id_hist[2];
+uaddr na_melody_id_hist[2];
 
 // clang-format off
 static const s32 melody_seq_size[] = {
@@ -699,7 +699,7 @@ extern s16 Na_MelodyGetSubTrackNum(s16 inst) {
     }
 }
 
-extern void Na_FurnitureInst(u32 id, u8 inst, u8* melody, u16 angle, f32 dist) {
+extern void Na_FurnitureInst(uaddr id, u8 inst, u8* melody, u16 angle, f32 dist) {
     s32 sub_track;
 
     if (id == na_melody_id_hist[current_sub_track]) {

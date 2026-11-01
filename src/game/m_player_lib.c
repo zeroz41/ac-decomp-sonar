@@ -993,7 +993,7 @@ static uaddr mPlib_Get_UseFaceTexRom_p(void) {
 static uaddr mPlib_Get_UseFacePalletRom_p(void) {
     int sunburn_rank = Now_Private->sunburn.rank;
     int decoy_flag = Common_Get(player_decoy_flag);
-    u32 base;
+    uaddr base;
     u32 ofs;
 
     if (sunburn_rank > 0 && decoy_flag == FALSE) {

@@ -49,8 +49,8 @@ static void mTRC_KishaStatusLevel(GAME_PLAY* play, f32 speed, xyz_t pos) {
     xyz_t mic_pos;
     u16 unsigned_angle;
     u16 unsigned_angle2;
-    u32 ongen;
-    u32 ongen2;
+    uaddr ongen;
+    uaddr ongen2;
 
     mTRC_SetMicPos(play, &mic_pos);
 

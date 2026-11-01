@@ -671,7 +671,7 @@ struct note_ {
 
 /* sizeof(Bgloadreq) == 0x14 */
 typedef struct Bgloadreq_ {
-    /* 0x00 */ u32 end_and_medium_key;
+    /* 0x00 */ uaddr end_and_medium_key;
     /* 0x04 */ smzwavetable* sample;
     /* 0x08 */ u8* ram_addr;
     /* 0x0C */ u32 encoded_info;

@@ -164,7 +164,7 @@ static int aFD_OperateWaterSound(xyz_t* center_pos, ACTOR* actorx, s16 ongen_typ
                 aFD_ongen_info2_c* info = &ongen_info[i];
 
                 if (info->sound_source_no != -1) {
-                    u32 ongen_id = (uaddr)actorx + (mFI_GetBlockXMax() * info->bz + info->bx) * mFM_SOUND_SOURCE_NUM +
+                    uaddr ongen_id = (uaddr)actorx + (mFI_GetBlockXMax() * info->bz + info->bx) * mFM_SOUND_SOURCE_NUM +
                                    info->sound_source_no;
                     mFM_bg_sound_source_c* source = mFI_GetSoundSourcePBlockNum(info->bx, info->bz);
 
