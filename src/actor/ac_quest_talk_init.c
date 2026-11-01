@@ -267,7 +267,7 @@ static int aQMgr_actor_get_errand_next_idx(aQMgr_regist_c* regist) {
     return idx;
 }
 
-static int aQMgr_actor_set_errand_next(u8* next, aQMgr_regist_c* regist, u8 kind) {
+static void aQMgr_actor_set_errand_next(u8* next, aQMgr_regist_c* regist, u8 kind) {
     int idx = aQMgr_actor_get_errand_next_idx(regist);
 
     if (idx >= 0 && idx < mPr_ERRAND_QUEST_NUM) {

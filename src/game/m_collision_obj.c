@@ -695,7 +695,7 @@ int ClObjTrisElem_OCCClear(GAME* game, ClObjTrisElem_c* triselem) {
     return 1;
 }
 
-int ClObj_OCCClear(GAME* game, ClObj_c* col) {
+void ClObj_OCCClear(GAME* game, ClObj_c* col) {
     col->collided_actor = NULL;
     col->collision_flags1 &= ~ClObj_FLAG_DONT_UPDATE_POS;
 }
@@ -770,7 +770,7 @@ void CollisionCheck_Status_set3(Status_c* status, StatusData_c* data) {
     status->weight = data->weight;
 }
 
-int CollisionCheck_Uty_ActorWorldPosSetPipeC(ACTOR* actor, ClObjPipe_c* pipe) {
+void CollisionCheck_Uty_ActorWorldPosSetPipeC(ACTOR* actor, ClObjPipe_c* pipe) {
     pipe->attribute.pipe.center.x = actor->world.position.x;
     pipe->attribute.pipe.center.y = actor->world.position.y;
     pipe->attribute.pipe.center.z = actor->world.position.z;

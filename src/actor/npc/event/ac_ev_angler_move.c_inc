@@ -127,7 +127,7 @@ static int get_top_of_angler_size(void) {
     return save_p->size;
 }
 
-static int set_top_of_angler_size(int size) {
+static void set_top_of_angler_size(int size) {
     aEANG_event_data_c* save_p = get_fish_save_area();
 
     save_p->size = size;

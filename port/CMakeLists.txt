@@ -78,7 +78,7 @@ target_compile_options(ac_game PRIVATE ${adapter_includes})
 # The exact-sim profile (porting-model.md, 64-bit and endianness; Floating-point determinism).
 target_compile_options(ac_game PRIVATE -fwrapv -fno-strict-aliasing -fno-delete-null-pointer-checks
                        -ffp-contract=off -Werror=int-to-pointer-cast
-                       $<$<COMPILE_LANGUAGE:C>:-Werror=pointer-to-int-cast>
+                       $<$<COMPILE_LANGUAGE:C>:-Werror=pointer-to-int-cast> -Werror=return-type
                        # C++ treats falling off the end of a function as unreachable, not as an unused result.
                        $<$<COMPILE_LANGUAGE:CXX>:-Werror=return-type>)
 # The original compiler took C++98, which allowed narrowing in braced initializers.

@@ -8,7 +8,7 @@
 static zuru_keycheck zuruKeyCheck;
 s32 zurumode_flag;
 
-static int zerucheck_init(zuru_keycheck* key_check) {
+static void zerucheck_init(zuru_keycheck* key_check) {
     key_check->zurumode_enabled = FALSE;
     key_check->state = ZURUMODE_STAGE_BEGIN_e;
     key_check->progressing = ZURUMODE_RESET;

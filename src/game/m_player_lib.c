@@ -2129,7 +2129,7 @@ extern int mPlib_request_main_hold_type1(GAME* game, int ftr_no, int player_dire
 }
 
 extern int mPlib_request_main_recieve_wait_type1(GAME* game, mActor_name_t item, int counter_flag) {
-    GET_PLAYER_ACTOR_GAME(game)->request_main_recieve_wait_all_proc(
+    return GET_PLAYER_ACTOR_GAME(game)->request_main_recieve_wait_all_proc(
         game, GET_PLAYER_ACTOR_GAME(game)->main_data.talk.talk_actor_p,
         GET_PLAYER_ACTOR_GAME(game)->main_data.talk.turn_flag, GET_PLAYER_ACTOR_GAME(game)->now_main_index, item,
         counter_flag, mPlayer_REQUEST_PRIORITY_19);
@@ -2149,8 +2149,9 @@ extern int mPlib_request_main_give_type1(GAME* game, mActor_name_t item, int mod
         turn_flag = FALSE;
     }
 
-    GET_PLAYER_ACTOR_GAME(game)->request_main_give_all_proc(game, talk_actor_p, turn_flag, return_main_index, item,
-                                                            mode, present, on_surface, mPlayer_REQUEST_PRIORITY_19);
+    return GET_PLAYER_ACTOR_GAME(game)->request_main_give_all_proc(game, talk_actor_p, turn_flag, return_main_index,
+                                                                   item, mode, present, on_surface,
+                                                                   mPlayer_REQUEST_PRIORITY_19);
 }
 
 extern int mPlib_request_main_sitdown_type1(GAME* game, int direct, const xyz_t* pos_p, int ftr_no) {

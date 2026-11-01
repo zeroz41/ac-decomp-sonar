@@ -45,6 +45,9 @@ static int Player_actor_Movement_Reflect_scoop(ACTOR* actor) {
     if (cur_frame < 13.0f) {
         actor->world.angle.y = actor->shape_info.rotation.y;
     }
+#ifdef SONAR_PORT
+    return 0; /* sonarlib port: the caller ignores the result */
+#endif
 }
 
 static int Player_actor_CulcAnimation_Reflect_scoop(ACTOR* actor, f32* frame_calc) {

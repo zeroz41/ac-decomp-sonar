@@ -3060,7 +3060,7 @@ static int mTG_nw_drop_furniture(GAME_PLAY* play, int type, int image_no) {
     return idx;
 }
 
-static int mTG_get_unit_front_player(xyz_t* pos_p, const xyz_t* player_pos, s16 angle_y) {
+static void mTG_get_unit_front_player(xyz_t* pos_p, const xyz_t* player_pos, s16 angle_y) {
     int dir;
     static f32 offset_pos[][2] = {
         // clang-format off

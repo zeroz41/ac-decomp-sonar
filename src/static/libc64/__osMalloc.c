@@ -385,7 +385,7 @@ extern void __osFree(OSArena* arena, void* ptr) {
 }
 
 // @fabricated, most likely suspect from DnM+'s symbol map
-static void* __osFree_NoLock_DEBUG(OSArena* arena, void* ptr) {
+static void __osFree_NoLock_DEBUG(OSArena* arena, void* ptr) {
     // __osFree: irregular deallocation
     OSReport(VT_COL(RED, WHITE) "__osFree:不正解放(%08x) [%s:%d ]\n" VT_RST);
 

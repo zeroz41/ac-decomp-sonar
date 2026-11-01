@@ -1676,7 +1676,7 @@ static int mRF_SetUniqueFlatBlock(u8* blocks) {
     return flags;
 }
 
-static int mRF_SetUniqueRailBlock(u8* blocks) {
+static void mRF_SetUniqueRailBlock(u8* blocks) {
     u8 t0;
     u8 t1;
     int set_t0;

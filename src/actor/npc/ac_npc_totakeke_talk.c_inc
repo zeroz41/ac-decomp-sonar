@@ -19,7 +19,7 @@ static int aNTT_bitcheck_func(int field, u16 flag) {
     }
 }
 
-static int aNTT_enso_init(NPC_TOTAKEKE_ACTOR* totakeke) {
+static void aNTT_enso_init(NPC_TOTAKEKE_ACTOR* totakeke) {
     totakeke->npc_class.request.act_priority = 4;
     totakeke->npc_class.request.act_idx = aNPC_ACT_ENSOU;
     totakeke->npc_class.request.act_type = aNPC_ACT_TYPE_DEFAULT;

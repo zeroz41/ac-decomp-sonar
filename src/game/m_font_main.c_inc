@@ -236,7 +236,7 @@ static Gfx* mFont_gfxSetPrimColor(Gfx* gfx, int r, int g, int b, int a) {
   return gfx;
 }
 
-static Gfx* mFont_gppSetPrimColor(Gfx** gpp, rgba_t* color) {
+static void mFont_gppSetPrimColor(Gfx** gpp, rgba_t* color) {
   Gfx* g = *gpp;
 
   gDPSetPrimColor(

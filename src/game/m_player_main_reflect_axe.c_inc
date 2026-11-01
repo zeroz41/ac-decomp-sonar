@@ -56,6 +56,9 @@ static int Player_actor_Movement_Reflect_axe_common(ACTOR* actor, mPlayer_main_a
     if (cur < 15.0f) {
         actor->world.angle.y = actor->shape_info.rotation.y;
     }
+#ifdef SONAR_PORT
+    return 0; /* sonarlib port: the caller ignores the result */
+#endif
 }
 
 static void Player_actor_Movement_Reflect_axe(ACTOR* actor, mPlayer_main_reflect_axe_c* main_axe, int flag) {

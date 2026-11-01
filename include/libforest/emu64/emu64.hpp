@@ -627,7 +627,7 @@ class emu64 : public emu64_print {
     void tlutconv(u16* src_tlut, u16* dst_tlut, unsigned int count, unsigned int tlut_fmt);
     int replace_combine_to_tev(Gfx* g);
     int combine_auto();
-    int combine_tev();
+    void combine_tev();
     void combine_manual();
     void combine();
     void zmode();

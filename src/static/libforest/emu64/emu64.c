@@ -1295,7 +1295,7 @@ int emu64::combine_auto() {
     return 0;
 }
 
-int emu64::combine_tev() {
+void emu64::combine_tev() {
     
     if ((u8)this->combine_gfx.setcombine.cmd == G_SETCOMBINE_TEV) {
         int two_cycle = (this->othermode_high & G_CYC_2CYCLE) >> G_MDSFT_CYCLETYPE;
@@ -1426,9 +1426,6 @@ int emu64::combine_tev() {
             GXSetTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_KONST);
         }
     }
-#ifdef SONAR_PORT
-    return 0; /* sonarlib port: the caller ignores the result */
-#endif
 }
 
 #define NUM_COMBINER_HIGHLOW_ERRS 10

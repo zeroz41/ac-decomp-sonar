@@ -320,6 +320,8 @@ extern Gfx* gfx_tex_scroll2(Gfx** gfxpp, int x, int y, int width, int height) {
     gDPTileSync(dl);
     gDPSetTileSize(dl + 1, G_TX_RENDERTILE, x, y, x + ((width - 1) << 2), y + ((height - 1) << 2));
     gSPEndDisplayList(dl + 2);
+
+    return dl;
 }
 
 extern Gfx* tex_scroll2(GRAPH* graph, u32 x, u32 y, int width, int height) {

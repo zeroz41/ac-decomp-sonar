@@ -19,7 +19,7 @@ extern int mSN_check_life(mActor_name_t* ac, int idx){
     return ret;
 }
 
-extern int mSN_ClearSnowmanData(mActor_name_t* ac, int idx){
+extern void mSN_ClearSnowmanData(mActor_name_t* ac, int idx){
 
     bzero(Save_GetPointer(snowmen.snowmen_data[idx]), sizeof(mSN_snowman_data_c));
     *ac = 0;

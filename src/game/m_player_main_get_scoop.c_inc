@@ -134,7 +134,7 @@ static void Player_actor_BGcheck_Get_scoop(ACTOR* actor) {
     Player_actor_BGcheck_common_type1(actor);
 }
 
-static int Player_actor_lean_angle_Get_scoop(ACTOR* actor) {
+static void Player_actor_lean_angle_Get_scoop(ACTOR* actor) {
     PLAYER_ACTOR* player = (PLAYER_ACTOR*)actor;
     s16 ang = 0;
     mPlayer_main_get_scoop_c* main_scoop = &player->main_data.get_scoop;

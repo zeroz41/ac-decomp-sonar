@@ -236,13 +236,13 @@ extern void CollisionCheck_OCC_Tris_Vs_Pipe(GAME*, CollisionCheck_c*, ClObjTris_
 extern int CollisionCheck_Check1ClObjNoOCC(ClObj_c*);
 extern void CollisionCheck_OCC(GAME*, CollisionCheck_c*);
 extern int ClObjTrisElem_OCCClear(GAME*, ClObjTrisElem_c*);
-extern int ClObj_OCCClear(GAME*, ClObj_c*);
+extern void ClObj_OCCClear(GAME*, ClObj_c*);
 extern int ClObjTris_OCCClear(GAME*, ClObj_c*);
 extern int CollisionCheck_setOCC(GAME*, CollisionCheck_c*, ClObj_c*);
 extern void CollisionCheck_Status_ct(Status_c*);
 extern void CollisionCheck_Status_Clear(Status_c*);
 extern void CollisionCheck_Status_set3(Status_c*, StatusData_c*);
-extern int CollisionCheck_Uty_ActorWorldPosSetPipeC(ACTOR*, ClObjPipe_c*);
+extern void CollisionCheck_Uty_ActorWorldPosSetPipeC(ACTOR*, ClObjPipe_c*);
 
 #ifdef __cplusplus
 }

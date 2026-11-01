@@ -40,7 +40,7 @@ typedef struct snowman_info_s{
 } mSN_snowman_info_c;
 
 extern int mSN_check_life(mActor_name_t* ac, int idx);
-extern int mSN_ClearSnowmanData(mActor_name_t* ac, int idx);
+extern void mSN_ClearSnowmanData(mActor_name_t* ac, int idx);
 extern int mSN_ClearSnowman(mActor_name_t* ac);
 extern int mSN_MeltSnowman(mActor_name_t* ac, int days);
 extern int mSN_get_free_space();

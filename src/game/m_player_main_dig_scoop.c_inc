@@ -205,7 +205,7 @@ static void Player_actor_BGcheck_Dig_scoop(ACTOR* actor) {
     Player_actor_BGcheck_common_type1(actor);
 }
 
-static int Player_actor_lean_angle_scoop_common(ACTOR* actor, const xyz_t* pos, f32 frame) {
+static void Player_actor_lean_angle_scoop_common(ACTOR* actor, const xyz_t* pos, f32 frame) {
     PLAYER_ACTOR* player = (PLAYER_ACTOR*)actor;
     s16 ang = 0;
 

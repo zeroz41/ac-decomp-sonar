@@ -115,7 +115,7 @@ static void aBridgeA_actor_dt(ACTOR* actorx, GAME* game) {
     sAdo_DeletePlussBridge();
 }
 
-static f32 aBridge_player_check(STRUCTURE_ACTOR* bridge, GAME_PLAY* play) {
+static void aBridge_player_check(STRUCTURE_ACTOR* bridge, GAME_PLAY* play) {
     PLAYER_ACTOR* player = GET_PLAYER_ACTOR(play);
     xyz_t player_pos = player->actor_class.world.position;
     xyz_t bridge_pos = bridge->actor_class.world.position;
@@ -141,11 +141,7 @@ static f32 aBridge_player_check(STRUCTURE_ACTOR* bridge, GAME_PLAY* play) {
         } else if (bridge_run_speed > 0.1f) {
             add_calc(&bridge->arg0_f, bridge_run_speed, 0.1f + (f32)GETREG(TAKREG, 22) * 0.01f, 0.1f, 0.01f);
             add_calc(&bridge->arg1_f, 1.0f, 0.1f + (f32)GETREG(TAKREG, 24) * 0.01f, 0.1f, 0.01f);
-#ifdef SONAR_PORT
-            return 0.0f; /* sonarlib port: the caller ignores the result */
-#else
             return;
-#endif
         }
     }
 

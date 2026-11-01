@@ -268,7 +268,7 @@ extern int mRlib_PSnowmanBreakCheck(ACTOR* actor, GAME_PLAY* play, f32* speed) {
     return FALSE;
 }
 
-extern int mRlib_PSnowmanBreakNeckSwing(s16* head_angle_y, f32 f0, f32 scale) {
+extern void mRlib_PSnowmanBreakNeckSwing(s16* head_angle_y, f32 f0, f32 scale) {
     if (f0 > 20.0f) {
         s16 rot_x;
         s16 rot_z;

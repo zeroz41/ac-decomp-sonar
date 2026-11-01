@@ -133,7 +133,7 @@ ACTOR_PROFILE Shop_Indoor_Profile = {
 };
 // clang-format on
 
-static int aSI_GetShopIndoorBank(ACTOR* actorx, GAME* game) {
+static void aSI_GetShopIndoorBank(ACTOR* actorx, GAME* game) {
     SHOP_INDOOR_ACTOR* shop_indoor = (SHOP_INDOOR_ACTOR*)actorx;
     u8** floor_data_pp = shop_indoor->floor_data_p;
     u8** wall_data_pp = shop_indoor->wall_data_p;

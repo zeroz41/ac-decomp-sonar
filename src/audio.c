@@ -292,11 +292,11 @@ extern void sAdo_LevSeEcho(u8 b) {
 }
 
 extern u8 sAdo_BgmFadeoutCheck() {
-    Na_BgmFadeoutCheck();
+    return Na_BgmFadeoutCheck();
 }
 
 extern u8 sAdo_SeFadeoutCheck() {
-    Na_SeFadeoutCheck();
+    return Na_SeFadeoutCheck();
 }
 
 extern void sAdo_RoomType(u8 type) {
