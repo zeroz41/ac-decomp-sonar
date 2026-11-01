@@ -170,6 +170,25 @@ f32 NOISE_FREQ_TABLE[] = { 4.f,  2.f,   1.f,   0.5f,  0.25f, 0.2f,  0.15f, 0.12f
 // https://www.nesdev.org/wiki/APU_registers
 
 typedef struct _PulseChannel {
+#ifdef SONAR_PORT
+    /* sonarlib port: the host's compilers allocate bit-fields from the least significant bit */
+    // https://www.nesdev.org/wiki/APU_Pulse
+    // $4000/$4004
+    u8 EnvelopePeriod_Volume : 4;
+    u8 ConstantVolume : 1;
+    u8 EnvelopeLoopCounter : 1;
+    u8 Duty : 2;
+    // $4001/$4005
+    u8 SweepUnitShiftCount : 3;
+    u8 SweepUnitNegative : 1;
+    u8 SweepUnitPeriod : 3;
+    u8 SweepUnitEnabled : 1;
+    // $4002/$4006
+    u8 TimerLow : 8;
+    // $4003/$4007
+    u8 TimerHigh : 3;
+    u8 LengthCounterLow : 5;
+#else
     // https://www.nesdev.org/wiki/APU_Pulse
     // $4000/$4004
     u8 Duty : 2;
@@ -186,9 +205,24 @@ typedef struct _PulseChannel {
     // $4003/$4007
     u8 LengthCounterLow : 5;
     u8 TimerHigh : 3;
+#endif
 } PulseChannel;
 
 typedef struct _TriangleChannel {
+#ifdef SONAR_PORT
+    /* sonarlib port: the host's compilers allocate bit-fields from the least significant bit */
+    // https://www.nesdev.org/wiki/APU_Triangle
+    // $4008
+    u8 LinearCounterReloadVaue : 7;
+    u8 LengthCounter : 1;
+    // $4009
+    u8 _unused_4009 : 8;
+    // $400A
+    u8 TimerLow : 8;
+    // $400B
+    u8 TimerHigh : 3;
+    u8 LengthCounterLoad : 5;
+#else
     // https://www.nesdev.org/wiki/APU_Triangle
     // $4008
     u8 LengthCounter : 1;
@@ -200,9 +234,28 @@ typedef struct _TriangleChannel {
     // $400B
     u8 LengthCounterLoad : 5;
     u8 TimerHigh : 3;
+#endif
 } TriangleChannel;
 
 typedef struct _NoiseChannel {
+#ifdef SONAR_PORT
+    /* sonarlib port: the host's compilers allocate bit-fields from the least significant bit */
+    // https://www.nesdev.org/wiki/APU_Noise
+    // $400C
+    u8 EnvelopePeriod_Volume : 4;
+    u8 ConstantVolume : 1;
+    u8 LoopEnvelope : 1;
+    u8 _unused_400C_high2 : 2;
+    // $400D
+    u8 _unused_400D : 8;
+    // $400E
+    u8 Period : 4;
+    u8 _unused_400E_3bits : 3;
+    u8 LoopNoise : 1;
+    // $400F
+    u8 _unused_400F_low3 : 3;
+    u8 LengthCounterLoad : 5;
+#else
     // https://www.nesdev.org/wiki/APU_Noise
     // $400C
     u8 _unused_400C_high2 : 2;
@@ -218,9 +271,26 @@ typedef struct _NoiseChannel {
     // $400F
     u8 LengthCounterLoad : 5;
     u8 _unused_400F_low3 : 3;
+#endif
 } NoiseChannel;
 
 typedef struct _DMCChannel {
+#ifdef SONAR_PORT
+    /* sonarlib port: the host's compilers allocate bit-fields from the least significant bit */
+    // https://www.nesdev.org/wiki/APU_DMC
+    // $4010
+    u8 FrequencyIndex : 4;
+    u8 _unused_4010_middle2 : 2;
+    u8 LoopSample : 1;
+    u8 IRQEnable : 1;
+    // $4011
+    u8 DirectLoad : 7;
+    u8 _unused_4011_heigh : 1;
+    // $4012
+    u8 SampleAddress : 8;
+    // $4013
+    u8 SampleLength : 8;
+#else
     // https://www.nesdev.org/wiki/APU_DMC
     // $4010
     u8 IRQEnable : 1;
@@ -234,14 +304,32 @@ typedef struct _DMCChannel {
     u8 SampleAddress : 8;
     // $4013
     u8 SampleLength : 8;
+#endif
 } DMCChannel;
 
 typedef struct _WaveTableEntry {
+#ifdef SONAR_PORT
+    /* sonarlib port: the host's compilers allocate bit-fields from the least significant bit */
+    u8 Sample : 6;
+    u8 Read : 2;
+#else
     u8 Read : 2;
     u8 Sample : 6;
+#endif
 } WaveTableEntry;
 
 typedef struct _unknown_C0 {
+#ifdef SONAR_PORT
+    /* sonarlib port: the host's compilers allocate bit-fields from the least significant bit */
+    u8 _0_3 : 4; // 00001111
+    u8 _0_6 : 3; // 01100000
+    u8 _0_7 : 1; // 10000000
+    u8 _1;
+    u8 _2;
+    u8 _3_3 : 4; // 00001111
+    u8 _3_6 : 3; // 01110000
+    u8 _3_7 : 1; // 10000000
+#else
     u8 _0_7 : 1; // 10000000
     u8 _0_6 : 3; // 01100000
     u8 _0_3 : 4; // 00001111
@@ -250,9 +338,95 @@ typedef struct _unknown_C0 {
     u8 _3_7 : 1; // 10000000
     u8 _3_6 : 3; // 01110000
     u8 _3_3 : 4; // 00001111
+#endif
 } Unknown_VRC;
 
 typedef struct _APURegisters {
+#ifdef SONAR_PORT
+    /* sonarlib port: the host's compilers allocate bit-fields from the least significant bit */
+    // $4000
+    PulseChannel Pulse1;
+    // $4004
+    PulseChannel Pulse2;
+    // $4008
+    TriangleChannel Triangle;
+    // $400C
+    NoiseChannel Noise;
+    // $4010
+    DMCChannel DMC;
+    // $4014
+    u8 _unused_4014;
+    // https://www.nesdev.org/wiki/APU#Status_($4015)
+    // $4015
+    u8 Pulse1Status : 1;
+    u8 Pulse2Status : 1;
+    u8 TriangleStatus : 1;
+    u8 NoiseStatus : 1;
+    u8 LengthCounterStatus : 1;
+    u8 _unused_4015_1bit : 1;
+    u8 FrameInterrupt : 1;
+    u8 DMCInterrupt : 1;
+    // $4016
+    u8 _unused_4016;
+    // https://www.nesdev.org/wiki/APU#Frame_Counter_($4017)
+    // $4017
+    u8 _unused_4017_low : 6;
+    u8 FrameCounter_DisableFrameInterrupt : 1;
+    u8 FrameCounter_5FrameSequence : 1;
+
+    artificial_padding(0x17, 0x40, u8);
+    // $4040 - $4079 https://www.nesdev.org/wiki/FDS_audio#Wavetable_RAM_($4040-$407F)
+    WaveTableEntry WaveTable[0x40];
+    // $4080 https://www.nesdev.org/wiki/FDS_audio#Volume_envelope_($4080)
+    u8 VolumeEnvelopeGainAndSpeed : 6;
+    u8 VolumeEnvelopeIncreasing : 1;
+    u8 VolumeEnvelopeEnabled : 1;
+    // $4081
+    u8 _unused_4081;
+    // $4082 https://www.nesdev.org/wiki/FDS_audio#Frequency_low_($4082)
+    u8 FrequencyLow;
+    // $4083 https://www.nesdev.org/wiki/FDS_audio#Frequency_high_($4083)
+    u8 FrequencyHigh : 4;
+    u8 _unused_4083_midbits : 2;
+    u8 DisableSweepAndEnvelope : 1;
+    u8 HighSpeedFrequency : 1;
+    // $4084 https://www.nesdev.org/wiki/FDS_audio#Mod_envelope_($4084)
+    u8 ModEnvelopeGainAndSpeed : 6;
+    u8 ModEnvelopeIncreasing : 1;
+    u8 ModEnvelopeEnabled : 1;
+    // $4085 https://www.nesdev.org/wiki/FDS_audio#Mod_counter_($4085)
+    u8 ModCounter : 7;
+    u8 _unused_4085_high : 1;
+    // $4086 https://www.nesdev.org/wiki/FDS_audio#Mod_frequency_low_($4086)
+    u8 ModFrequencyLow;
+    // $4087 https://www.nesdev.org/wiki/FDS_audio#Mod_frequency_high_($4087)
+    u8 ModFrequencyHigh : 4;
+    u8 _unused_4087_mid : 2;
+    u8 ForceAccumulatorStepOut : 1;
+    u8 HaltModTableCounter : 1;
+    // $4088 https://www.nesdev.org/wiki/FDS_audio#Mod_table_write_($4088)
+    // unused in the following code
+    u8 ModulationTableWrite : 3;
+    u8 _unused_4088_high : 5;
+    // $4089 https://www.nesdev.org/wiki/FDS_audio#Wave_write_/_master_volume_($4089)
+    u8 WaveTableMasterVolume : 2;
+    u8 _unused_4089_midbits : 5;
+    u8 WaveTableWriteEnable : 1;
+    // $408A https://www.nesdev.org/wiki/FDS_audio#Envelope_speed_($408A)
+    u8 EnvelopeSpeed;
+
+    artificial_padding(0x8a, 0xc0, u8);
+
+    Unknown_VRC _C0;
+    Unknown_VRC _C4;
+    Unknown_VRC _C8;
+    artificial_padding(0xc8, 0xd5, Unknown_VRC);
+    u8 _D5_0 : 1;
+    u8 _D5_1 : 1;
+    u8 _D5_2 : 1;
+    u8 _unused_D5_high : 5;
+
+#else
     // $4000
     PulseChannel Pulse1;
     // $4004
@@ -335,6 +509,7 @@ typedef struct _APURegisters {
     u8 _D5_1 : 1;
     u8 _D5_0 : 1;
 
+#endif
 } APURegisters;
 
 typedef union _sbufferStruct {

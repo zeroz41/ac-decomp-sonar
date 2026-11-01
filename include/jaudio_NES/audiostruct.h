@@ -1087,9 +1087,17 @@ struct jcs_ {
 typedef union MixConfig {
     u16 whole;
     struct {
+#ifdef SONAR_PORT
+        /* sonarlib port: the host's compilers allocate bit-fields from the least significant bit, and whole is
+           little-endian, so upper is its second byte */
+        u8 lower1 : 4;
+        u8 lower0 : 4;
+        u8 upper;
+#else
         u8 upper;
         u8 lower0 : 4;
         u8 lower1 : 4;
+#endif
     } parts;
 } MixConfig;
 

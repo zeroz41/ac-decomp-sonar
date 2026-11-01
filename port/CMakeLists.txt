@@ -108,3 +108,13 @@ target_compile_options(ac_audio_port_test PRIVATE ${adapter_includes})
 set_target_properties(ac_audio_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
 target_link_libraries(ac_audio_port_test PRIVATE sonar::base)
 add_test(NAME ac_audio_port COMMAND ac_audio_port_test)
+
+# The bit-field views of a whole value: each field on the bits the console's compiler gave it.
+add_executable(ac_bitfield_views_test tests/bitfield_views_test.c)
+target_include_directories(ac_bitfield_views_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include"
+    "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin" "${AC_ROOT}")
+target_compile_definitions(ac_bitfield_views_test PRIVATE SONAR_PORT=1 F3DEX_GBI_2 _LANGUAGE_C)
+target_compile_options(ac_bitfield_views_test PRIVATE ${adapter_includes})
+set_target_properties(ac_bitfield_views_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
+target_link_libraries(ac_bitfield_views_test PRIVATE sonar::base)
+add_test(NAME ac_bitfield_views COMMAND ac_bitfield_views_test)
