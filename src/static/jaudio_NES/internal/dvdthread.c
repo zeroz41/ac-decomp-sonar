@@ -7,10 +7,11 @@
 #include "string.h"
 #include "dolphin/os/OSTime.h"
 
+/* The DRAM side of a transfer is dst; src and dst of a load to ARAM are a file offset and an ARAM address */
 typedef struct DVDCall_ {
-    u32 owner;
+    uaddr owner;
     char fileName[64];
-    u32 dst;
+    uaddr dst;
     u32 src;
     u32 length;
     u32* callbackStatus;
@@ -20,7 +21,12 @@ typedef struct DVDCall_ {
 static char audio_root_path[32] = "";
 static OSMessageQueue mq;
 static s32 msgbuf[0x80];
+#ifdef SONAR_PORT
+/* sonarlib port: each slot holds a task callback and its call, aligned for the host's pointers */
+static u8 CALLSTACK[0x8000] ATTRIBUTE_ALIGN(8);
+#else
 static u8 CALLSTACK[0x8000];
+#endif
 
 static u32 mq_init;
 static size_t buffersize;
@@ -286,7 +292,7 @@ extern s32 DVDT_LoadtoARAM_Main(void* arg) {
     return 0;
 }
 
-extern s32 DVDT_LoadtoARAM(u32 owner, char* name, u32 dst, u32 src, u32 length, u32* status, Jac_DVDCallback callback) {
+extern s32 DVDT_LoadtoARAM(uaddr owner, char* name, u32 dst, u32 src, u32 length, u32* status, Jac_DVDCallback callback) {
     DVDCall call;
     void* cb = (void*)&call;
 
@@ -303,7 +309,7 @@ extern s32 DVDT_LoadtoARAM(u32 owner, char* name, u32 dst, u32 src, u32 length, 
     call.src = src;
     call.length = length;
 
-    DVDT_AddTask(DVDT_LoadtoARAM_Main, cb, 0x58);
+    DVDT_AddTask(DVDT_LoadtoARAM_Main, cb, sizeof(DVDCall));
 
     return 0;
 }
@@ -348,7 +354,7 @@ extern s32 DVDT_DRAMtoARAM_Main(void* arg) {
     return 0;
 }
 
-extern s32 DVDT_ARAMtoDRAM(u32 owner, u32 dst, u32 src, u32 length, u32* status, Jac_DVDCallback callback) {
+extern s32 DVDT_ARAMtoDRAM(uaddr owner, uaddr dst, u32 src, u32 length, u32* status, Jac_DVDCallback callback) {
     DVDCall call;
     void* cb = (void*)&call;
 
@@ -364,12 +370,12 @@ extern s32 DVDT_ARAMtoDRAM(u32 owner, u32 dst, u32 src, u32 length, u32* status,
     call.src = src;
     call.length = length;
 
-    DVDT_AddTaskHigh(DVDT_ARAMtoDRAM_Main, cb, 0x58);
+    DVDT_AddTaskHigh(DVDT_ARAMtoDRAM_Main, cb, sizeof(DVDCall));
 
     return 0;
 }
 
-extern s32 DVDT_DRAMtoARAM(u32 owner, u32 dst, u32 src, u32 length, u32* status, Jac_DVDCallback callback) {
+extern s32 DVDT_DRAMtoARAM(uaddr owner, uaddr dst, u32 src, u32 length, u32* status, Jac_DVDCallback callback) {
     DVDCall call;
     void* cb = (void*)&call;
 
@@ -385,7 +391,7 @@ extern s32 DVDT_DRAMtoARAM(u32 owner, u32 dst, u32 src, u32 length, u32* status,
     call.src = src;
     call.length = length;
 
-    DVDT_AddTaskHigh(DVDT_DRAMtoARAM_Main, cb, 0x58);
+    DVDT_AddTaskHigh(DVDT_DRAMtoARAM_Main, cb, sizeof(DVDCall));
 
     return 0;
 }
@@ -406,7 +412,7 @@ extern s32 DVDT_CheckFile(char* file) {
     return len;
 }
 
-extern s32 DVDT_CheckPass(u32 owner, u32* status, Jac_DVDCallback callback) {
+extern s32 DVDT_CheckPass(uaddr owner, u32* status, Jac_DVDCallback callback) {
     DVDCall call;
     void* cb = (void*)&call;
 
@@ -414,7 +420,7 @@ extern s32 DVDT_CheckPass(u32 owner, u32* status, Jac_DVDCallback callback) {
     call.callbackStatus = status;
     call.callback = callback;
 
-    return DVDT_AddTask((TaskCallback)__DVDT_CheckBack, cb, 0x58);
+    return DVDT_AddTask((TaskCallback)__DVDT_CheckBack, cb, sizeof(DVDCall));
 }
 
 extern s32 Jac_CheckFile(char* file) {

@@ -17,14 +17,14 @@
 #define BGLOAD_ID(v) ((v >> 8) & 0xFF)
 #define BGLOAD_LOAD_STATUS(v) ((v >> 0) & 0xFF)
 
-static s32 Nas_GetSyncDummy(u8* param0, s32 param1);
+static uaddr Nas_GetSyncDummy(u8* param0, s32 param1);
 
 BOOL AUDIO_SYSTEM_READY = FALSE;
 static void* FASTDMA_BUFFER = NULL;
 Na_DmaProc NA_DMA_PROC = Z_osEPiStartDma;
 Na_SyncProc NA_SYNC_PROC = Nas_GetSyncDummy;
 
-static s32 Nas_StartDma(OSIoMesg* ioMsg, s32 priority, s32 direction, u32 device_addr, void* dram_addr, u32 size,
+static s32 Nas_StartDma(OSIoMesg* ioMsg, s32 priority, s32 direction, uaddr device_addr, void* dram_addr, u32 size,
                         OSMesgQueue* mq, s32 medium, s8* dma_type);
 s32 Nas_BankOfsToAddr(s32 bank_id, u8* ctrl_p, WaveMedia* wave_media, s32 async);
 
@@ -36,7 +36,7 @@ static s32 __Kill_Bank(s32 bank_id);
 static ArcHeader* __Get_ArcHeader(s32 table_type);
 static s32 __Nas_StartSeq(s32 group_idx, s32 seq_id, s32 param);
 static u8* __Load_Bank(s32 table_type, s32 id, s32* did_alloc);
-static u32 __Load_Wave(s32 wave_id, u32* medium, s32 no_load);
+static uaddr __Load_Wave(s32 wave_id, u32* medium, s32 no_load);
 static void* __Check_Cache(s32 table_type, s32 id);
 static void __WaveTouch(wtstr* wavetouch_str, u32 ram_addr, WaveMedia* wave_media);
 static Bgload* Nas_BgCopyDisk(s32 dev_medium, u8* src, u8* dst, u32 size, s32 medium, s32 n_chunks, OSMesgQueue* mq,
@@ -502,13 +502,13 @@ static s32 __Kill_Bank(s32 bank_id) {
     return 0;
 }
 
-void Nas_SetExtPointer(s32 table_type, s32 idx, s32 param_3, s32 data) {
+void Nas_SetExtPointer(s32 table_type, s32 idx, s32 param_3, saddr_long data) {
     ArcHeader* header = __Get_ArcHeader(table_type);
 
     if (header->entries[idx].medium == MEDIUM_RAM_UNLOADED) {
         switch (param_3) {
             case EXT_TYPE_DATA:
-                header->entries[idx].addr = (u32)data;
+                header->entries[idx].addr = (uaddr)data;
                 break;
             case EXT_TYPE_SIZE:
                 header->entries[idx].size = data;
@@ -588,11 +588,11 @@ static u8* __Load_Seq(s32 seq_id) {
     return (u8*)__Load_Bank(SEQUENCE_TABLE, seq_id, &did_alloc);
 }
 
-static u32 __Load_Wave_Check(s32 wave_id, u32* medium) {
+static uaddr __Load_Wave_Check(s32 wave_id, u32* medium) {
     return __Load_Wave(wave_id, medium, TRUE);
 }
 
-static u32 __Load_Wave(s32 wave_id, u32* medium, s32 no_load) {
+static uaddr __Load_Wave(s32 wave_id, u32* medium, s32 no_load) {
     void* ram_p;
     s32 link_id = __Link_BankNum(WAVE_TABLE, wave_id);
     ArcHeader* header = __Get_ArcHeader(WAVE_TABLE);
@@ -987,7 +987,7 @@ extern void Nas_FastDiskCopy(u8* SrcAddr, u8* DestAdd, size_t Length, s32 medium
     // empty
 }
 
-static s32 Nas_StartDma(OSIoMesg* ioMsg, s32 priority, s32 direction, u32 device_addr, void* dram_addr, u32 size,
+static s32 Nas_StartDma(OSIoMesg* ioMsg, s32 priority, s32 direction, uaddr device_addr, void* dram_addr, u32 size,
                         OSMesgQueue* mq, s32 medium, s8* dma_type) {
     OSPiHandle* handle;
 
@@ -1035,7 +1035,7 @@ static u8* __Load_Bank_BG(s32 table_type, s32 id, s32 n_chunks, s32 ret_data, OS
     ArcHeader* header;
     u8* ramAddr;
     s32 medium;
-    u32 devAddr;
+    uaddr devAddr;
     s32 loadStatus;
     s8 cachePolicy;
     s32 asyncLoadStatus;
@@ -1163,7 +1163,7 @@ void Nas_BgDmaFrameWork(s32 reset_status) {
 // @unused Nas_SetDiskHandler__FPFv_l -> void Nas_SetRomHandler(void (*disk_handler)(s32));
 // @unused Nas_SetRomHandler__FPFv_l -> void Nas_SetSyncHandler__FPFv_PUc(void (*rom_handler)(u8*));
 
-static s32 Nas_GetSyncDummy(u8* param0, s32 param1) {
+static uaddr Nas_GetSyncDummy(u8* param0, s32 param1) {
     return 0;
 }
 

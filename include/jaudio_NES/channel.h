@@ -4,7 +4,7 @@
 #include "types.h"
 #include "jaudio_NES/audiowork.h"
 
-extern s32 OverwriteBank(s32 type, s32 bankId, s32 idx, s32 voicetable);
+extern s32 OverwriteBank(s32 type, s32 bankId, s32 idx, saddr_long voicetable);
 extern channel* Nas_AllocationOnRequest(note* n);
 
 extern wtstr* NoteToVoice(voicetable* voicetbl, s32 note);

@@ -455,7 +455,7 @@ extern percvoicetable* VpercToVep(s32 prog, s32 sfx) {
     return vtbl;
 }
 
-extern s32 OverwriteBank(s32 type, s32 bankId, s32 idx, s32 table) {
+extern s32 OverwriteBank(s32 type, s32 bankId, s32 idx, saddr_long table) {
     if (bankId == 0xFF) {
         return -1;
     }

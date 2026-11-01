@@ -40,11 +40,11 @@ extern u32 SetPreCopy_NeosRom(u8* load_addr, u32 load_size, BOOL cut_flag) {
 #endif
 }
 
-extern void mesg_finishcall(u32 mq) {
+extern void mesg_finishcall(uaddr mq) {
     Z_osSendMesg((OSMesgQueue*)mq, NULL, OS_MESSAGE_NOBLOCK);
 }
 
-extern BOOL ARAMStartDMAmesg(u32 dir, u32 dramAddr, u32 aramAddr, u32 size, s32 unused, OSMesgQueue* mq) {
+extern BOOL ARAMStartDMAmesg(u32 dir, uaddr dramAddr, u32 aramAddr, u32 size, s32 unused, OSMesgQueue* mq) {
     aramAddr += AUDIO_ARAM_TOP;
 
     if (dir == DUMMYROM_ARAM_TO_DRAM) {
@@ -88,9 +88,9 @@ extern void Jac_InitARAM(u32 loadAudiorom) {
 
     CARD_SECURITY_BUFFER = 0x40;
     audiorom_size += AUDIO_ARAM_TOP;
-    JAC_ARAM_DMA_BUFFER_TOP = (u8*)audiorom_size;
+    JAC_ARAM_DMA_BUFFER_TOP = (u8*)(uaddr)audiorom_size;
     audiorom_size += AUDIO_ARAM_HEAP_SIZE;
-    Nas_HeapInit(&aram_hp, (u8*)audiorom_size, aram_size - audiorom_size);
+    Nas_HeapInit(&aram_hp, (u8*)(uaddr)audiorom_size, aram_size - audiorom_size);
 
     /* Probably leftovers from some debug print statement */
     (void)audiorom_size;

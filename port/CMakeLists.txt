@@ -81,14 +81,10 @@ target_compile_options(ac_game PRIVATE -fwrapv -fno-strict-aliasing -fno-delete-
                        $<$<COMPILE_LANGUAGE:C>:-Werror=pointer-to-int-cast>
                        # C++ treats falling off the end of a function as unreachable, not as an unused result.
                        $<$<COMPILE_LANGUAGE:CXX>:-Werror=return-type>)
-# Units that still keep host pointers in 32-bit fields: the audio driver's sound tables, command stacks and DMA
-# requests.
+# Units that relocate the audio driver's bank and wave data in place, turning its 32-bit offsets into pointers; they
+# need a loader that builds the host's structures.
 set(narrow_pointer_sources
-    jaudio_NES/game/melody.c
-    jaudio_NES/internal/bankread.c jaudio_NES/internal/channel.c jaudio_NES/internal/cmdstack.c
-    jaudio_NES/internal/driver.c jaudio_NES/internal/dspdriver.c jaudio_NES/internal/dummyrom.c
-    jaudio_NES/internal/heapctrl.c jaudio_NES/internal/memory.c jaudio_NES/internal/oneshot.c
-    jaudio_NES/internal/seqsetup.c jaudio_NES/internal/sub_sys.c jaudio_NES/internal/system.c
+    jaudio_NES/internal/bankread.c jaudio_NES/internal/oneshot.c jaudio_NES/internal/system.c
     jaudio_NES/internal/waveread.c)
 list(TRANSFORM narrow_pointer_sources PREPEND "${AC_ROOT}/src/static/")
 set_source_files_properties(${narrow_pointer_sources} TARGET_DIRECTORY ac_game
@@ -110,3 +106,13 @@ set_target_properties(ac_gbi_views_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON
 target_link_libraries(ac_gbi_views_test PRIVATE sonar::base)
 add_test(NAME ac_gbi_views COMMAND ac_gbi_views_test)
 add_test(NAME ac_gbi_views_current COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/gbi_views.py" --check)
+
+# The audio driver's command: each byte where the console read it from a big-endian word, and a whole host address.
+add_executable(ac_audio_port_test tests/audio_port_test.c)
+target_include_directories(ac_audio_port_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include"
+    "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin" "${AC_ROOT}")
+target_compile_definitions(ac_audio_port_test PRIVATE SONAR_PORT=1 F3DEX_GBI_2 _LANGUAGE_C)
+target_compile_options(ac_audio_port_test PRIVATE ${adapter_includes})
+set_target_properties(ac_audio_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
+target_link_libraries(ac_audio_port_test PRIVATE sonar::base)
+add_test(NAME ac_audio_port COMMAND ac_audio_port_test)

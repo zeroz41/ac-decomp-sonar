@@ -58,12 +58,12 @@ static void ARAM_TO_ARAM_DMA(u32 src, u32 dst, u32 totalSize)
  * Address:	8000EB00
  * Size:	0000FC
  */
-static void DRAM_TO_DRAM_DMA(u32 src, u32 dst, u32 totalSize)
+static void DRAM_TO_DRAM_DMA(uaddr src, uaddr dst, u32 totalSize)
 {
 	ARQRequest request;
 	OSMessageQueue msgQueue;
 	OSMessage msg;
-	u32 dma_buffer_top;
+	uaddr dma_buffer_top;
 	u32 burstSize;
 
 	dma_buffer_top = (uaddr)JAC_ARAM_DMA_BUFFER_TOP;
@@ -130,7 +130,7 @@ void Jac_InitHeap(jaheap_* heap)
  * Address:	8000EC60
  * Size:	000038
  */
-void Jac_SelfInitHeap(jaheap_* heap, u32 startAddr, u32 size, u32 memType)
+void Jac_SelfInitHeap(jaheap_* heap, uaddr startAddr, u32 size, u32 memType)
 {
 	heap->startAddress     = startAddr;
 	heap->size             = size;
@@ -151,7 +151,7 @@ void Jac_SelfInitHeap(jaheap_* heap, u32 startAddr, u32 size, u32 memType)
  * Address:	8000ECA0
  * Size:	000100
  */
-BOOL Jac_SelfAllocHeap(jaheap_* parent, jaheap_* heap, u32 size, u32 startAddr)
+BOOL Jac_SelfAllocHeap(jaheap_* parent, jaheap_* heap, u32 size, uaddr startAddr)
 {
 	if (parent->startAddress && parent->startAddress != -1) {
 		return FALSE;
@@ -230,7 +230,7 @@ void Jac_CutdownHeap(jaheap_*)
  * Address:	8000EDE0
  * Size:	00005C
  */
-void Jac_InitMotherHeap(jaheap_* heap, u32 startAddr, u32 size, u8 memType)
+void Jac_InitMotherHeap(jaheap_* heap, uaddr startAddr, u32 size, u8 memType)
 {
 	heap->startAddress     = startAddr + 0x1f & 0xffffffe0;
 	heap->usedSize         = 0;
@@ -472,8 +472,8 @@ static void Jac_Move_Children(jaheap_* heap, s32 flag)
 void Jac_GarbageCollection_St(jaheap_* heap)
 {
 	jaheap_* heap_00;
-	u32 src;
-	u32 dst;
+	uaddr src;
+	uaddr dst;
 
 	dst     = heap->startAddress;
 	heap_00 = heap->firstChild;
@@ -536,7 +536,7 @@ void Jac_ShowHeap(jaheap_* heap, u32 flag)
 
 	// STACK_PAD_VAR(3);
 	char unused[] = "        ";
-	(void*)unused[0];
+	(void*)(uaddr)unused[0];
 
 	c     = heap->firstChild;
 	REF_c = &c;

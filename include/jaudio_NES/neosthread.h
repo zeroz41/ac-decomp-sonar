@@ -5,7 +5,7 @@
 #include "jaudio_NES/audiostruct.h"
 
 extern u32 Neos_Update(s16* dst);
-extern void ImageLoaded(u32 param);
+extern void ImageLoaded(uaddr param);
 extern BOOL Neos_CheckBoot(void);
 extern void* neosproc(void* param);
 

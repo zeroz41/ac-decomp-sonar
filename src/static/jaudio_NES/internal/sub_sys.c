@@ -129,22 +129,22 @@ static void Nap_AudioSysProcess(AudioPort* port) {
             AG.main_group.subtracks[0]->changes.flags.volume = TRUE;
             break;
         case AUDIOCMD_SET_VFRAME_CALLBACK:
-            NA_VFRAME_CALLBACK = (VFRAME_CALLBACK)port->param.asU32;
+            NA_VFRAME_CALLBACK = (VFRAME_CALLBACK)port->param.asAddr;
             break;
         case AUDIOCMD_SET_CALLBACK:
             if (port->command.arg2 == AUDIO_CALLBACK_SOUND) {
-                NA_SOUND_CALLBACK = (SOUND_CALLBACK)port->param.asU32;
+                NA_SOUND_CALLBACK = (SOUND_CALLBACK)port->param.asAddr;
             } else if (port->command.arg2 == AUDIO_CALLBACK_DACOUT) {
-                NA_DACOUT_CALLBACK = (DACOUT_CALLBACK)port->param.asU32;
+                NA_DACOUT_CALLBACK = (DACOUT_CALLBACK)port->param.asAddr;
             } else {
-                AG.seq_callbacks[port->command.arg2] = (SequenceCallback)port->param.asU32;
+                AG.seq_callbacks[port->command.arg2] = (SequenceCallback)port->param.asAddr;
             }
             break;
         case AUDIOCMD_SET_PERC_BANK:
         case AUDIOCMD_SET_EFFECT_BANK:
         case AUDIOCMD_SET_VOICE_BANK:
             OverwriteBank(port->command.opcode - AUDIOCMD_SET_PERC_BANK, port->command.arg1, port->command.arg2,
-                          port->param.asS32);
+                          port->param.asAddr);
             break;
         case AUDIOCMD_FORCE_STOP_ALL_GROUPS:
             flags = port->param.asS32;
@@ -163,10 +163,10 @@ static void Nap_AudioSysProcess(AudioPort* port) {
             Nas_SzStayDelete(port->param.asS32);
             break;
         case AUDIOCMD_SET_EXTERNAL_POINTER:
-            Nas_SetExtPointer(port->command.arg0, port->command.arg1, port->command.arg2, port->param.asS32);
+            Nas_SetExtPointer(port->command.arg0, port->command.arg1, port->command.arg2, port->param.asAddr);
             break;
         case AUDIOCMD_SET_DELAY_LINE_PARAM:
-            Nas_SetDelayLineParam(port->command.arg1, port->command.arg0, port->param.asS32, FALSE);
+            Nas_SetDelayLineParam(port->command.arg1, port->command.arg0, port->param.asAddr, FALSE);
             break;
         default:
             break;
@@ -216,7 +216,12 @@ static void Nap_PortSet(u32 data, s32* param_p) {
     AudioPort* port_p = &AG.audio_port_cmds[AG.thread_cmd_write_pos & 0xFF];
 
     port_p->raw_cmd = data;
+#ifdef SONAR_PORT
+    /* sonarlib port: the whole parameter, so a reader of asAddr sees the value as the console's s32 */
+    port_p->param.asAddr = (uaddr)(saddr)*param_p;
+#else
     port_p->param.asS32 = *param_p;
+#endif
 
     AG.thread_cmd_write_pos++;
     if (AG.thread_cmd_write_pos == AG.thread_cmd_read_pos) {
@@ -231,6 +236,20 @@ extern void Nap_SetF32(u32 cmd, f32 param) {
 extern void Nap_SetS32(u32 cmd, s32 param) {
     Nap_PortSet(cmd, (s32*)&param);
 }
+
+#ifdef SONAR_PORT
+extern void Nap_SetPtr(u32 cmd, const void* param) {
+    AudioPort* port_p = &AG.audio_port_cmds[AG.thread_cmd_write_pos & 0xFF];
+
+    port_p->raw_cmd = cmd;
+    port_p->param.asAddr = (uaddr)param;
+
+    AG.thread_cmd_write_pos++;
+    if (AG.thread_cmd_write_pos == AG.thread_cmd_read_pos) {
+        AG.thread_cmd_write_pos--;
+    }
+}
+#endif
 
 extern void Nap_SetS8(u32 cmd, s8 param) {
     u32 mod_param = (param << 24);
@@ -564,7 +583,11 @@ static void __SetSubParam(sub* subtrack, AudioPort* port) {
             break;
         case AUDIOCMD_OP_SUB_SET_FILTER:
             filter_cutoff = port->command.arg2;
+#ifdef SONAR_PORT
+            if (port->param.asAddr != 0) {
+#else
             if (port->param.asS32 != 0) {
+#endif
                 subtrack->filter = (s16*)port->param.asVoidPtr;
             }
 

@@ -34,8 +34,8 @@ extern void Na_RhythmInit() {
         rhythm_buffer[i].current_subtrack = i;
     }
 
-    Nap_SetS32(NA_MAKE_COMMAND(228, 0, 0, 0), (saddr)Na_GetRhythmSeNum);
-    Nap_SetS32(NA_MAKE_COMMAND(228, 0, 0, 1), (saddr)Na_RhythmGrpProcess);
+    NAP_SET_PTR(NA_MAKE_COMMAND(228, 0, 0, 0), Na_GetRhythmSeNum);
+    NAP_SET_PTR(NA_MAKE_COMMAND(228, 0, 0, 1), Na_RhythmGrpProcess);
 }
 
 static NA_RHYTHM_BUFFER* rhythm_buffer_alloc() {

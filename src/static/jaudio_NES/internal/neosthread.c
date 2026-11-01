@@ -34,7 +34,7 @@ extern u32 Neos_Update(s16* dst) {
     return FALSE;
 }
 
-extern void ImageLoaded(u32 param) {
+extern void ImageLoaded(uaddr param) {
     OSSendMessage(&neosproc_mq, (OSMessage)NEOSTHREAD_IMAGE_LOADED_MSG, OS_MESSAGE_BLOCK);
 }
 

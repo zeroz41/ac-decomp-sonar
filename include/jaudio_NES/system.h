@@ -15,7 +15,7 @@ typedef enum SET_EXT_POINTER_TYPE {
 } SET_EXT_POINTER_TYPE;
 
 typedef s32 (*Na_DmaProc)(OSPiHandle* handle, OSIoMesg* mb, s32 direction);
-typedef s32 (*Na_SyncProc)(u8* param0, s32 param1);
+typedef uaddr (*Na_SyncProc)(u8* param0, s32 param1);
 
 extern void* Nas_WaveDmaCallBack(u32 device_addr, u32 size, s32 arg2, u8* waveload_idx, s32 medium);
 extern void Nas_InitAudio(u64* acmdBuf, s32 acmdBufSize);
@@ -34,7 +34,7 @@ extern s32 Nas_PreLoadSeq_BG(s32 seqId, s32 param2, s32 param3, OSMesgQueue* mq)
 
 extern void Nas_FlushBank(s32 seqId);
 
-extern void Nas_SetExtPointer(s32 type, s32 idx, s32 set_type, s32 param);
+extern void Nas_SetExtPointer(s32 type, s32 idx, s32 set_type, saddr_long param);
 
 extern void Nas_WaveDmaFrameWork(void);
 extern void Nas_BgDmaFrameWork(s32 reset_status);

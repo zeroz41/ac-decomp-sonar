@@ -1501,7 +1501,7 @@ int __Nas_GetCompressBuffer(delay* a) {
  * Address:	........
  * Size:	00028C
  */
-void Nas_SetDelayLineParam(s32 a, s32 b, s32 c, s32 d) {
+void Nas_SetDelayLineParam(s32 a, s32 b, saddr_long c, s32 d) {
     delay* delay = &AG.synth_delay[a];
     switch (b) {
         case 0: {

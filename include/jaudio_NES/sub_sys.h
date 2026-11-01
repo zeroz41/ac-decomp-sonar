@@ -10,6 +10,13 @@ extern void Nap_SetF32(u32 cmd, f32 param);
 extern void Nap_SetS32(u32 cmd, s32 param);
 extern void Nap_SetS8(u32 cmd, s8 param);
 extern void Nap_SetU16(u32 cmd, u16 param);
+/* Sends an address: a whole host pointer in the sonarlib port */
+#ifdef SONAR_PORT
+extern void Nap_SetPtr(u32 cmd, const void* param);
+#define NAP_SET_PTR(cmd, param) Nap_SetPtr(cmd, (const void*)(param))
+#else
+#define NAP_SET_PTR(cmd, param) Nap_SetS32(cmd, (saddr)(param))
+#endif
 extern s32 Nap_SendStart(void);
 extern void Nap_FlushPort(void);
 extern void Nap_Process1Command(AudioPort* port);

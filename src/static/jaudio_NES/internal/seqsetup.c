@@ -167,7 +167,7 @@ seqp_* Jaq_HandleToSeq(u32 handle)
  * Address:	80014040
  * Size:	000368
  */
-static void Init_Track(seqp_* track, u32 dataAddress, seqp_* parent)
+static void Init_Track(seqp_* track, uaddr dataAddress, seqp_* parent)
 {
 	int i;
 

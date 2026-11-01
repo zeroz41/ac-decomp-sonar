@@ -86,7 +86,7 @@ int Bank_GetInstKeymap(Inst_* inst, u8 param_2)
  * Address:	8000D0A0
  * Size:	000090
  */
-int Bank_GetInstVmap(Inst_* inst, u8 param_2, u8 param_3)
+saddr Bank_GetInstVmap(Inst_* inst, u8 param_2, u8 param_3)
 {
 
 	if (!inst) {

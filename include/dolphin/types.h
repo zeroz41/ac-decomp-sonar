@@ -32,6 +32,12 @@ typedef intptr_t saddr;
 typedef u32 uaddr;
 typedef int saddr;
 #endif
+/* saddr where the console's signature took an s32, so its mangled name keeps the long */
+#ifdef SONAR_PORT
+typedef intptr_t saddr_long;
+#else
+typedef s32 saddr_long;
+#endif
 #endif
 
 typedef int BOOL;

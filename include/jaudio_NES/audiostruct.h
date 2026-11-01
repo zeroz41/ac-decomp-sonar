@@ -38,6 +38,45 @@ typedef struct note_ note;
 typedef struct channel_ channel;
 typedef struct group_ group;
 
+#ifdef SONAR_PORT
+/* sonarlib port: a command is built as a big-endian word (NA_MAKE_COMMAND) and Nap_SetS8 and Nap_SetU16 shift a
+   parameter into the top of its word, so on the little-endian host each byte and half sits where the console read
+   it. A pointer (Nap_SetPtr) takes the whole parameter. */
+typedef struct AudioPort_ {
+    union {
+        struct {
+            u8 arg2;
+            u8 arg1;
+            u8 arg0;
+            u8 opcode;
+        } command;
+        u32 raw_cmd;
+    };
+    union audioparam_ {
+        struct {
+            u8 pad_s8_[3];
+            s8 asS8;
+        };
+        struct {
+            u8 pad_u8_[3];
+            u8 asU8;
+        };
+        struct {
+            u16 pad_s16_;
+            s16 asS16;
+        };
+        struct {
+            u16 pad_u16_;
+            u16 asU16;
+        };
+        u32 asU32;
+        s32 asS32;
+        f32 asF32;
+        void* asVoidPtr;
+        uaddr asAddr;
+    } param;
+} AudioPort;
+#else
 /* sizeof(struct AudioPort_) == 0x8 */
 typedef struct AudioPort_ {
     union {
@@ -58,8 +97,10 @@ typedef struct AudioPort_ {
         /* 0x04 */ s32 asS32;
         /* 0x04 */ f32 asF32;
         /* 0x04 */ void* asVoidPtr;
+        /* 0x04 */ uaddr asAddr;
     } param;
 } AudioPort;
+#endif /* SONAR_PORT */
 
 /* sizeof(ALHeap) == 0x14 */
 typedef struct ALHeap {
@@ -72,7 +113,7 @@ typedef struct ALHeap {
 
 /* sizeof(ArcEntry) == 0x10 */
 typedef struct ArcEntry_ {
-    /* 0x00 */ u32 addr;
+    /* 0x00 */ uaddr addr;
     /* 0x04 */ s32 size;
     /* 0x08 */ s8 medium;
     /* 0x09 */ s8 cacheType;
@@ -643,7 +684,7 @@ typedef struct Bgload_ {
     /* 0x01 */ s8 delay;
     /* 0x02 */ s8 medium;
     /* 0x04 */ u8* ram_addr;
-    /* 0x08 */ u32 current_device_addr;
+    /* 0x08 */ uaddr current_device_addr;
     /* 0x0C */ u8* current_ram_addr;
     /* 0x10 */ size_t bytes_remaining;
     /* 0x14 */ size_t chunk_size;
@@ -661,7 +702,7 @@ typedef struct lpscache_ {
     /* 0x01 */ u8 seq_or_bank_id;
     /* 0x02 */ u16 inst_id;
     /* 0x04 */ s32 unk_medium_param;
-    /* 0x08 */ u32 current_device_addr;
+    /* 0x08 */ uaddr current_device_addr;
     /* 0x0C */ u8* current_ram_addr;
     /* 0x10 */ u8* ram_addr;
     /* 0x14 */ s32 status;
