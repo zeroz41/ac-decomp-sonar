@@ -11,6 +11,7 @@ static int YearDays[MONTH_MAX]
 static int LeapYearDays[MONTH_MAX]
     = { 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335 };
 
+#ifndef SONAR_PORT /* sonarlib port: the time base is sonarlib's (port/adapter/dolphin_os.c) */
 asm long long OSGetTime(void)
 {
 #ifdef __MWERKS__ // clang-format off
@@ -52,6 +53,7 @@ long long __OSGetSystemTime()
 	OSRestoreInterrupts(enabled);
 	return result;
 }
+#endif
 
 static int IsLeapYear(int year)
 {

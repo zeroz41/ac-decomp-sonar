@@ -102,9 +102,11 @@ void __OSSetTick(register unsigned long newTicks);
 extern u32 __OSGetDIConfig(void);
 
 // ppc_eabi_init.c
+#ifndef SONAR_PORT /* sonarlib port: the console's boot code is not built */
 __declspec(section ".init") asm void __init_hardware(void);
 __declspec(section ".init") asm void __flush_cache(void* address,
                                                    unsigned int size);
+#endif
 void __init_user(void);
 void __init_cpp(void);
 void __fini_cpp(void);
