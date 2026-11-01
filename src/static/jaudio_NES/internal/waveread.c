@@ -17,7 +17,7 @@ CtrlGroup_* CGRP_ARRAY[16];
  * Size:	000038
  */
 
-static void PTconvert(void** pointer, u32 base_address)
+static void PTconvert(void** pointer, uaddr base_address)
 {
 	if (*pointer == NULL) {
 		*pointer = NULL;
@@ -36,7 +36,7 @@ static void PTconvert(void** pointer, u32 base_address)
  */
 CtrlGroup_* Wave_Test(u8* data)
 {
-    u32 base_addr = (uaddr)data;
+    uaddr base_addr = (uaddr)data;
 	CtrlGroup_* group;
 	SCNE_* scene;
 	Ctrl_* cst;
@@ -49,8 +49,13 @@ CtrlGroup_* Wave_Test(u8* data)
 
 	PTconvert((void**)&((Wsys_*)data)->waveArcBank, base_addr);
 	PTconvert((void**)&((Wsys_*)data)->ctrlGroup, base_addr);
+#ifdef SONAR_PORT
+	arcBank       = ((Wsys_*)data)->waveArcBank;
+	group         = ((Wsys_*)data)->ctrlGroup;
+#else
 	arcBank       = *(WaveArchiveBank_**)(data + 0x10);
 	group         = *(CtrlGroup_**)(data + 0x14);
+#endif
 	CGRP_ARRAY[0] = group;
 
 	if (arcBank->magic != 'WINF') {

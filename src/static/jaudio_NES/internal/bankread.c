@@ -11,7 +11,7 @@ static Bank_* bankp[BANKP_SIZE];
  * Address:	8000BE00
  * Size:	000024
  */
-static void PTconvert(void** pointer, u32 base_address)
+static void PTconvert(void** pointer, uaddr base_address)
 {
 	if (*pointer >= (void*)base_address || *pointer == NULL) {
 		return;
@@ -27,8 +27,8 @@ static void PTconvert(void** pointer, u32 base_address)
 Bank_* Bank_Test(u8* ibnk_address)
 {
 	u32 i, j, k;
-	u32 base_addr    = (uaddr)ibnk_address;
-	Bank_* startBank = (Bank_*)(ibnk_address + 0x20);
+	uaddr base_addr  = (uaddr)ibnk_address;
+	Bank_* startBank = &((Ibnk_*)ibnk_address)->bank;
 	if (startBank->mMagic != 'BANK') {
 		return NULL;
 	}

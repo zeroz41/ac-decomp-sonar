@@ -253,7 +253,7 @@ static jc_* __Oneshot_Play_Start(jcs_* jcs, jc_* jc, u32 id)
  */
 static jc_* __Oneshot_GetLogicalChannel(jcs_* jcs, CtrlWave_* wave)
 {
-	if (wave && wave->_0C == NULL) {
+	if (wave && wave->heap.startAddress == 0) {
 		return FALSE;
 	}
 
@@ -291,8 +291,8 @@ static jc_* __Oneshot_GetLogicalChannel(jcs_* jcs, CtrlWave_* wave)
 	}
 	Channel_Init(chan);
 	if (wave) {
-		chan->waveData        = (Wave_*)wave->_34;
-		chan->_14             = wave->_0C;
+		chan->waveData        = wave->data;
+		chan->_14             = wave->heap.startAddress;
 		chan->logicalChanType = 0;
 	}
 	chan->_18 = 0;

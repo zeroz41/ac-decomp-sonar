@@ -81,14 +81,6 @@ target_compile_options(ac_game PRIVATE -fwrapv -fno-strict-aliasing -fno-delete-
                        $<$<COMPILE_LANGUAGE:C>:-Werror=pointer-to-int-cast>
                        # C++ treats falling off the end of a function as unreachable, not as an unused result.
                        $<$<COMPILE_LANGUAGE:CXX>:-Werror=return-type>)
-# Units that relocate the audio driver's bank and wave data in place, turning its 32-bit offsets into pointers; they
-# need a loader that builds the host's structures.
-set(narrow_pointer_sources
-    jaudio_NES/internal/bankread.c jaudio_NES/internal/oneshot.c jaudio_NES/internal/system.c
-    jaudio_NES/internal/waveread.c)
-list(TRANSFORM narrow_pointer_sources PREPEND "${AC_ROOT}/src/static/")
-set_source_files_properties(${narrow_pointer_sources} TARGET_DIRECTORY ac_game
-                            PROPERTIES COMPILE_OPTIONS -Wno-error=int-to-pointer-cast)
 # The original compiler took C++98, which allowed narrowing in braced initializers.
 target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>)
 target_link_libraries(ac_game PRIVATE sonar::base)

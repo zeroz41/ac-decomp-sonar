@@ -2,6 +2,7 @@
 #define _JAUDIO_ONESHOT_H
 
 #include "types.h"
+#include "jaudio_NES/heapctrl.h"
 
 typedef struct jc_ jc_;
 typedef struct Inst_ Inst_;
@@ -10,14 +11,14 @@ typedef struct Pmap_ Pmap_;
 typedef struct Osc_ Osc_;
 typedef struct jcs_ jcs_;
 typedef struct Vmap_ Vmap_;
+typedef struct Wave_ Wave_;
 
+/* A WaveID_ (bx.h), named CtrlWave_ because __Oneshot_GetLogicalChannel's mangled symbol uses that name */
 typedef struct CtrlWave_ {
-	int _00;             // _00
-	int _04;             // _04
-	int _08;             // _08
-	u32 _0C;             // _0C
-	u8 _10[0x34 - 0x10]; // _10, unknown
-	u32 _34;             // _34, unknown
+	u32 id;         // _00
+	jaheap_ heap;   // _04, the wave's ARAM, from heap.startAddress at _0C
+	u32 loadStatus; // _30
+	Wave_* data;    // _34
 } CtrlWave_;
 typedef union SOUNDID_ SOUNDID_;
 

@@ -38,7 +38,7 @@ static s32 __Nas_StartSeq(s32 group_idx, s32 seq_id, s32 param);
 static u8* __Load_Bank(s32 table_type, s32 id, s32* did_alloc);
 static uaddr __Load_Wave(s32 wave_id, u32* medium, s32 no_load);
 static void* __Check_Cache(s32 table_type, s32 id);
-static void __WaveTouch(wtstr* wavetouch_str, u32 ram_addr, WaveMedia* wave_media);
+static void __WaveTouch(wtstr* wavetouch_str, uaddr ram_addr, WaveMedia* wave_media);
 static Bgload* Nas_BgCopyDisk(s32 dev_medium, u8* src, u8* dst, u32 size, s32 medium, s32 n_chunks, OSMesgQueue* mq,
                               s32 msg);
 static Bgload* Nas_BgCopyReq(u8* src, u8* dst, u32 size, s32 medium, s32 n_chunks, OSMesgQueue* mq, s32 msg);
@@ -808,12 +808,12 @@ static ArcHeader* __Get_ArcHeader(s32 table_type) {
     }
 }
 
-#define OFS2RAM(base, ofs) ((u32)(ofs) + (uaddr)base)
-#define BANK_ENTRY(ctrl, idx) (((u32*)((uaddr)ctrl)) + idx)
+#define OFS2RAM(base, ofs) ((uaddr)(ofs) + (uaddr)base)
+#define BANK_ENTRY(ctrl, idx) (((uaddr*)((uaddr)ctrl)) + idx)
 
 static void Nas_BankOfsToAddr_Inner(s32 bank_id, u8* ctrl_p, WaveMedia* wave_media) {
-    u32 ofs;
-    u32 inst_ofs;
+    uaddr ofs;
+    uaddr inst_ofs;
     voicetable* inst;
     perctable* percvt;
     percvoicetable* sfx;
@@ -1689,7 +1689,7 @@ static void __Nas_BgDiskCopy(u8* src, u8* dst, u32 size, s32 param) {
     // nothing
 }
 
-static void __WaveTouch(wtstr* wavetouch_str, u32 ram_addr, WaveMedia* wave_media) {
+static void __WaveTouch(wtstr* wavetouch_str, uaddr ram_addr, WaveMedia* wave_media) {
     smzwavetable* wavetable;
     void* reloc;
 
