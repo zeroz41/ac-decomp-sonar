@@ -5,12 +5,17 @@
 #include "dolphin/os/OSAlarm.h"
 #include "dolphin/os/OSMessage.h"
 #include "dolphin/os/OSMutex.h"
+#include "dolphin/os/OSReset.h"
+#include "dolphin/os/OSRtc.h"
 #include "dolphin/os/OSThread.h"
 #include "dolphin/os/OSTime.h"
+#include "boot.h"
 
+#include <sonar/base/log.h>
 #include <sonar/dolphin_os/os.h>
 
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define SAME_FIELD(game, kit, game_field, kit_field)                                                                  \
@@ -209,3 +214,44 @@ void OSSetPeriodicAlarm(OSAlarm* alarm, OSTime start, OSTime period, OSAlarmHand
 }
 
 void OSCancelAlarm(OSAlarm* alarm) { sl_dolphin_os_alarm_cancel(KIT_ALARM(alarm)); }
+
+/* ---- Settings */
+
+_Static_assert(OS_SOUND_MODE_MONO == SL_DOLPHIN_OS_SOUND_MONO && OS_SOUND_MODE_STEREO == SL_DOLPHIN_OS_SOUND_STEREO,
+               "the SDK's sound modes");
+_Static_assert(OS_FONT_ENCODE_ANSI == SL_DOLPHIN_OS_FONT_ANSI && OS_FONT_ENCODE_SJIS == SL_DOLPHIN_OS_FONT_SJIS,
+               "the SDK's font encodings");
+
+u32 OSGetSoundMode(void) { return sl_dolphin_os_sound_mode(); }
+void OSSetSoundMode(u32 mode) { sl_dolphin_os_set_sound_mode(mode); }
+u32 OSGetProgressiveMode(void) { return sl_dolphin_os_progressive_mode(); }
+void OSSetProgressiveMode(u32 on) { sl_dolphin_os_set_progressive_mode(on); }
+u16 OSGetFontEncode(void) { return sl_dolphin_os_font_encode(); }
+
+/* A retail console: the game checks only the development bit, which turns on its debug modes. */
+u32 OSGetConsoleType(void) { return OS_CONSOLE_RETAIL1; }
+
+/* ---- Reset */
+
+_Static_assert(OS_RESET_RESTART == SL_DOLPHIN_OS_RESET_RESTART && OS_RESET_HOTRESET == SL_DOLPHIN_OS_RESET_HOTRESET &&
+                   OS_RESET_SHUTDOWN == SL_DOLPHIN_OS_RESET_SHUTDOWN &&
+                   OS_RESETCODE_RESTART == SL_DOLPHIN_OS_RESETCODE_RESTART,
+               "the SDK's resets");
+
+u8 ac_nmi_save_area[0x40];
+
+/* The reset button stays released until the port's input reaches it. */
+BOOL OSGetResetSwitchState(void) { return FALSE; }
+
+u32 OSGetResetCode(void) { return sl_dolphin_os_reset_code(); }
+
+/* The console kept NMISaveArea across a restart, and the game copies it back at boot. The console never returned
+   from a restart or hot reset, so neither does the port: one that cannot reset stops. The menu is the console's and
+   is not forced. */
+void OSResetSystem(int reset, u32 resetCode, BOOL forceMenu) {
+    sl_result result;
+    (void)forceMenu;
+    result = sl_dolphin_os_reset_system(reset, resetCode, ac_nmi_save_area, sizeof ac_nmi_save_area);
+    SL_ERROR("dolphin_os", "OSResetSystem(%d, 0x%08x) failed: %d", reset, (unsigned)resetCode, (int)result);
+    abort();
+}

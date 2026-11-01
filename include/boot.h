@@ -26,7 +26,13 @@ extern u8 boot_sound_initializing;
 
 typedef void(*HotStartProc)();
 
+#ifdef SONAR_PORT
+/* sonarlib port: the memory a restart keeps, which the console kept at a fixed address (port/adapter/dolphin_os.c) */
+extern u8 ac_nmi_save_area[0x40];
+#define NMISaveArea ((void*)ac_nmi_save_area)
+#else
 #define NMISaveArea (void*)0x811FFFC0
+#endif
 #ifdef SONAR_PORT
 /* sonarlib port: the console's low memory, which the port's platform layer stands in for */
 extern OSModuleHeader* BaseModule;
