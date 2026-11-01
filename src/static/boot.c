@@ -464,7 +464,7 @@ void adjustOSArena() {
   OSSetArenaHi(arenahi);
   OSReport("ARENA %08x-%08x" VT_RST "\n", arenalo, arenahi);
 
-  bzero(arenalo, ((u32)arenahi - (u32)arenalo));
+  bzero(arenalo, ((uaddr)arenahi - (uaddr)arenalo));
 }
 
 /**
@@ -532,7 +532,7 @@ int main(int argc, const char** argv) {
   if ((u8*)base < var2->stackBase) {
     basenext = (u32*)var2->stackEnd + 1;
     if (base > basenext) {
-      memset(basenext, 0xfd, (u32)base - (u32)basenext);
+      memset(basenext, 0xfd, (uaddr)base - (uaddr)basenext);
     }
   }
 

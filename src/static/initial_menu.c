@@ -345,7 +345,7 @@ static OSMessage commandMsgBuf[2];
 static OSMessage statusMsgBuf[1];
 
 extern void proc(void* arg) {
-  u32 msg;
+  uaddr msg;
   int proc_done;
   OSTimer timer;
 
@@ -425,7 +425,7 @@ extern void initial_menu_init() {
   else {
     osCreateMesgQueue(&commandQ, commandMsgBuf, 2);
     osCreateMesgQueue(&statusQ, statusMsgBuf, 1);
-    osCreateThread2(Thread_p, 1, &proc, NULL, (void*)((int)initialMenuStack + INITIAL_MENU_STACK_SIZE), INITIAL_MENU_STACK_SIZE, 1);
+    osCreateThread2(Thread_p, 1, &proc, NULL, (void*)((saddr)initialMenuStack + INITIAL_MENU_STACK_SIZE), INITIAL_MENU_STACK_SIZE, 1);
     osStartThread(Thread_p);
     JC_JFWDisplay_startFadeIn(JC_JFWDisplay_getManager(), 32);
     osSendMesg(&commandQ, (OSMessage)INITIAL_MENU_OSMESG_INIT_DONE, OS_MESSAGE_NOBLOCK);
@@ -433,7 +433,7 @@ extern void initial_menu_init() {
 }
 
 extern void initial_menu_cleanup() {
-  int msg;
+  saddr msg;
 
   if (Thread_p != NULL) {
     if (!osRecvMesg(&commandQ, (OSMessage*)&msg, OS_MESSAGE_NOBLOCK)) {

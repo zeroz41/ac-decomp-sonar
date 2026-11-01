@@ -36,7 +36,7 @@ void _unresolved() {
   OSReport(VT_COL(RED, WHITE) "\nError: A called an unlinked function.\n");
   OSReport("Address:      Back Chain    LR Save\n");
 
-  for (i = 0, p = (u32*)OSGetStackPointer(); p && (u32)p != 0xffffffff && i++ < 16; p = (u32*)*p) {
+  for (i = 0, p = (u32*)OSGetStackPointer(); p && (uaddr)p != 0xffffffff && i++ < 16; p = (u32*)*p) {
     OSReport("0x%08x:   0x%08x    0x%08x\n", p, p[0], p[1]);
   }
 

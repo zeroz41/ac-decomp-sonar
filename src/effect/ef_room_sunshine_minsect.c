@@ -7,12 +7,12 @@
 #include "sys_matrix.h"
 #include "m_rcp.h"
 
-void Ef_Room_Sunshine_Minsect_actor_ct(ACTOR* actor, GAME* play);
+static void Ef_Room_Sunshine_Minsect_actor_ct(ACTOR* actor, GAME* play);
 void Ef_Room_Sunshine_Minsect_actor_dt(ACTOR* actor, GAME* play);
-void Ef_Room_Sunshine_MinsectL_actor_draw(ACTOR* actor, GAME* play);
-void Ef_Room_Sunshine_MinsectL_actor_move(ACTOR* actor, GAME* play);
-void Ef_Room_Sunshine_MinsectR_actor_draw(ACTOR* actor, GAME* play);
-void Ef_Room_Sunshine_MinsectR_actor_move(ACTOR* actor, GAME* play);
+static void Ef_Room_Sunshine_MinsectL_actor_draw(ACTOR* actor, GAME* play);
+static void Ef_Room_Sunshine_MinsectL_actor_move(ACTOR* actor, GAME* play);
+static void Ef_Room_Sunshine_MinsectR_actor_draw(ACTOR* actor, GAME* play);
+static void Ef_Room_Sunshine_MinsectR_actor_move(ACTOR* actor, GAME* play);
 
 extern Gfx rom_museum4_ue_model[];
 extern Gfx rom_museum4_model[];

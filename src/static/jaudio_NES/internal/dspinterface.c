@@ -33,6 +33,9 @@ DSPchannel_* GetDspHandle(u8 idx)
 DSPchannel_* GetDspHandleNc(u8)
 {
 	// UNUSED FUNCTION
+#ifdef SONAR_PORT
+	return 0; /* sonarlib port: an empty stub on the console */
+#endif
 }
 
 /*
@@ -53,6 +56,9 @@ FXBuffer* GetFxHandle(u8 idx)
 FXBuffer* GetFxHandleNc(u8 idx)
 {
 	// UNUSED FUNCTION
+#ifdef SONAR_PORT
+	return 0; /* sonarlib port: an empty stub on the console */
+#endif
 }
 
 /*
@@ -459,7 +465,7 @@ static u32 DSPRES_FILTER[] ATTRIBUTE_ALIGN(32) = {
  */
 void DSP_SetupBuffer()
 {
-	DsetupTable((u32)CH_BUF_LENGTH, (u32)CH_BUF, (u32)DSPRES_FILTER, (u32)DSPADPCM_FILTER, (u32)FX_BUF);
+	DsetupTable((u32)CH_BUF_LENGTH, (uaddr)CH_BUF, (uaddr)DSPRES_FILTER, (uaddr)DSPADPCM_FILTER, (uaddr)FX_BUF);
 }
 
 /*

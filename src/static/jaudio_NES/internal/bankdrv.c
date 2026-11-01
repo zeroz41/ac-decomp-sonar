@@ -100,7 +100,7 @@ int Bank_GetInstVmap(Inst_* inst, u8 param_2, u8 param_3)
 		for (u32 i = 0; i < key->mVelocityCount; i++) {
 			Vmap_* vmap = key->mVelocities[i];
 			if (param_3 <= vmap->mBaseVelocity) {
-				return (int)vmap;
+				return (saddr)vmap;
 			}
 		}
 
@@ -142,6 +142,9 @@ Vmap_* Bank_GetPercVmap(Perc_* perc, u8 keyIdx, u8 vel)
 int Bank_GetVoiceMap(Voice_* voice, u16 id)
 {
 	// UNUSED FUNCTION
+#ifdef SONAR_PORT
+	return 0; /* sonarlib port: an empty stub on the console */
+#endif
 }
 
 /*

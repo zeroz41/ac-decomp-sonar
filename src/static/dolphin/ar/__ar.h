@@ -5,7 +5,7 @@
 
 void __ARQPopTaskQueueHi(void);
 void __ARQServiceQueueLo(void);
-void __ARQCallbackHack(u32 pointerToARQRequest);
+void __ARQCallbackHack(uaddr pointerToARQRequest);
 void __ARQInterruptServiceRoutine(void);
 void __ARQInitTempQueue(void);
 void __ARQPushTempQueue(struct ARQRequest* task);

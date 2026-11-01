@@ -11,7 +11,7 @@ JKRAramHeap::JKRAramHeap(u32 baseAddress, u32 size) : JKRDisposer() {
     this->mHeadAddress = ALIGN_NEXT(baseAddress, 0x20);
     this->mTailAddress = this->mHeadAddress + this->mSize;
     this->mGroupID = 0xFF;
-    JKRAramBlock* block = new (this->mHeap, nullptr) JKRAramBlock(this->mHeadAddress, 0, this->mSize, 0xFF, false);
+    JKRAramBlock* block = new (this->mHeap, 0) JKRAramBlock(this->mHeadAddress, 0, this->mSize, 0xFF, false);
     sAramList.append(&block->mLink);
 }
 

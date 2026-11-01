@@ -7,7 +7,7 @@
 #include "jaudio_NES/audiowork.h"
 #include "jaudio_NES/track.h"
 #include "jaudio_NES/system.h"
-#include "os/OSCache.h"
+#include "dolphin/os/OSCache.h"
 #include "types.h"
 
 #define DMEM_TEMP 0x380
@@ -334,17 +334,17 @@ static Acmd* Nas_SaveAuxBufferCH(Acmd* cmd, delay* del_p, s16 update_idx) {
     aDMEMMove(cmd++, 0xC40, 0x3A0, size);
     aSetBuffer(cmd++, 0, 0x3A0, 0x6E0, param->save_resample_num_samples * SAMPLE_SIZE);
     aResample(cmd++, del_p->resample_flags, param->save_resample_pitch, del_p->left_save_resample_buf);
-    cmd = Nas_SaveBufferAuto(cmd, 0x6E0, param->size, (s32)&del_p->left_reverb_buf[param->start_pos]);
+    cmd = Nas_SaveBufferAuto(cmd, 0x6E0, param->size, (saddr)&del_p->left_reverb_buf[param->start_pos]);
     if (param->wrapped_size != 0) {
-        cmd = Nas_SaveBufferAuto(cmd, 0x6E0 + param->size, param->wrapped_size, (s32)&del_p->left_reverb_buf[0]);
+        cmd = Nas_SaveBufferAuto(cmd, 0x6E0 + param->size, param->wrapped_size, (saddr)&del_p->left_reverb_buf[0]);
     }
 
     aDMEMMove(cmd++, 0xDE0, 0x3A0, size);
     aSetBuffer(cmd++, 0, 0x3A0, 0x6E0, param->save_resample_num_samples * SAMPLE_SIZE);
     aResample(cmd++, del_p->resample_flags, param->save_resample_pitch, del_p->right_save_resample_buf);
-    cmd = Nas_SaveBufferAuto(cmd, 0x6E0, param->size, (s32)&del_p->right_reverb_buf[param->start_pos]);
+    cmd = Nas_SaveBufferAuto(cmd, 0x6E0, param->size, (saddr)&del_p->right_reverb_buf[param->start_pos]);
     if (param->wrapped_size != 0) {
-        cmd = Nas_SaveBufferAuto(cmd, 0x6E0 + param->size, param->wrapped_size, (s32)&del_p->right_reverb_buf[0]);
+        cmd = Nas_SaveBufferAuto(cmd, 0x6E0 + param->size, param->wrapped_size, (saddr)&del_p->right_reverb_buf[0]);
     }
 
     return cmd;
@@ -511,13 +511,13 @@ static Acmd* Nas_SaveAuxBuffer(Acmd* cmd, delay* del_p, s16 update_idx) {
             }
 
             if (param->size != 0) {
-                cmd = Nas_SaveBufferAuto(cmd, 0xC40, (u16)param->size, (s32)&del_p->left_reverb_buf[param->start_pos]);
-                cmd = Nas_SaveBufferAuto(cmd, 0xDE0, (u16)param->size, (s32)&del_p->right_reverb_buf[param->start_pos]);
+                cmd = Nas_SaveBufferAuto(cmd, 0xC40, (u16)param->size, (saddr)&del_p->left_reverb_buf[param->start_pos]);
+                cmd = Nas_SaveBufferAuto(cmd, 0xDE0, (u16)param->size, (saddr)&del_p->right_reverb_buf[param->start_pos]);
             }
 
             if (param->wrapped_size != 0) {
-                cmd = Nas_SaveBufferAuto(cmd, 0xC40 + param->size, (u16)param->wrapped_size, (s32)&del_p->left_reverb_buf[0]);
-                cmd = Nas_SaveBufferAuto(cmd, 0xDE0 + param->size, (u16)param->wrapped_size, (s32)&del_p->right_reverb_buf[0]);
+                cmd = Nas_SaveBufferAuto(cmd, 0xC40 + param->size, (u16)param->wrapped_size, (saddr)&del_p->left_reverb_buf[0]);
+                cmd = Nas_SaveBufferAuto(cmd, 0xDE0 + param->size, (u16)param->wrapped_size, (saddr)&del_p->right_reverb_buf[0]);
             }
             break;
     }
@@ -652,7 +652,7 @@ extern Acmd* Nas_DriveRsp(s16* aiBuf, s32 aiBufLen, Acmd* cmd, s32 updateIndex) 
     aInterleave2(cmd++, DMEM_TEMP, DMEM_LEFT_CH, DMEM_RIGHT_CH, size);
 
     if (NA_DACOUT_CALLBACK != NULL) {
-        cmd = (Acmd*)((u32)NA_DACOUT_CALLBACK(cmd, 2 * size, updateIndex) & 0xFF); // ?? what is this? this has to be a bug
+        cmd = (Acmd*)((uaddr)NA_DACOUT_CALLBACK(cmd, 2 * size, updateIndex) & 0xFF); // ?? what is this? this has to be a bug
     }
 
     aSaveBuffer2(cmd++, aiBuf, DMEM_TEMP, JAC_FRAMESAMPLES);
@@ -919,17 +919,17 @@ extern Acmd* Nas_SynthMain(s32 chan_id, commonch* common, driverch* driver, s16*
                         reverbAddrSrc = (void*)0xFFFFFFFF;
                         if (NA_SOUND_CALLBACK != NULL) {
                             // ???
-                            reverbAddrSrc = (void*)((u32)NA_SOUND_CALLBACK(sample, numSamplesToLoadAdj, flags, chan_id) & 0xFF);
+                            reverbAddrSrc = (void*)((uaddr)NA_SOUND_CALLBACK(sample, numSamplesToLoadAdj, flags, chan_id) & 0xFF);
                         }
 
-                        if ((s32)reverbAddrSrc == 0xFFFFFFFF) {
+                        if ((saddr)reverbAddrSrc == 0xFFFFFFFF) {
                             sampleFinished = true;
-                        } else if ((s32)reverbAddrSrc == 0) {
+                        } else if ((saddr)reverbAddrSrc == 0) {
                             return cmd;
                         } else {
                             Nas_LoadBuffer2(cmd++, DMEM_UNCOMPRESSED_NOTE,
                                 numSamplesToLoadAdj * SAMPLE_SIZE + SAMPLES_PER_FRAME * SAMPLE_SIZE,
-                                (s32)reverbAddrSrc);
+                                (saddr)reverbAddrSrc);
                             // deviation from MM:
                             goto codec_continue_and_skip;
                             // flags = A_CONTINUE;
@@ -990,7 +990,7 @@ codec_continue_and_skip:
                         return cmd;
                     } else {
                         // This medium is not in ram, so dma the requested sample into ram
-                        samplesToLoadAddr = (u8*)Nas_WaveDmaCallBack((u32)(tmpSamplesToLoadAddr),
+                        samplesToLoadAddr = (u8*)Nas_WaveDmaCallBack((uaddr)(tmpSamplesToLoadAddr),
                         sampleDataChunkSize, flags,
                             &driver->sample_dma_idx, sample->medium);
                     }
@@ -1002,7 +1002,7 @@ codec_continue_and_skip:
 
                     // Move the raw sample chunk from ram to the rsp
                     // DMEM at the addresses before DMEM_COMPRESSED_ADPCM_DATA
-                    sampleDataChunkAlignPad = (u32)samplesToLoadAddr & 0xF;
+                    sampleDataChunkAlignPad = (uaddr)samplesToLoadAddr & 0xF;
                     aLoadCache(cmd++, samplesToLoadAddr - sampleDataChunkAlignPad, sampleDataDmemAddr,
                                 sampleDataChunkSize);
                 } else {
@@ -1047,7 +1047,7 @@ codec_continue_and_skip:
                         Nas_SetBuffer(cmd++, 0, sampleDataDmemAddr + sampleDataChunkAlignPad,
                                                 DMEM_UNCOMPRESSED_NOTE + dmemUncompressedAddrOffset2,
                                                 numSamplesToDecode * SAMPLE_SIZE);
-                        Nas_PCM8dec(cmd++, flags, (s32)driver->synth_params->adpcm_state);
+                        Nas_PCM8dec(cmd++, flags, (saddr)driver->synth_params->adpcm_state);
                         break;
 
                     case CODEC_UNK7:
@@ -1179,7 +1179,7 @@ codec_continue_and_skip:
         if (!STOP_VELOCONV) {
             // Load the velocity convolution table into DMEM_0x800
             s32 vel_conv_idx = driver->vel_conv_table_idx;
-            aLoadBuffer2(cmd++, (u32)VELOCONV_TABLE[vel_conv_idx], 0x800, sizeof(VELOCONV_TABLE[vel_conv_idx]));
+            aLoadBuffer2(cmd++, (uaddr)VELOCONV_TABLE[vel_conv_idx], 0x800, sizeof(VELOCONV_TABLE[vel_conv_idx]));
             aUnkCmd3(cmd++, DMEM_TEMP, 0x800, samples_per_update);
         }
 
@@ -1202,9 +1202,9 @@ codec_continue_and_skip:
                 Nas_ClearBuffer(cmd++, DMEM_COMB_TEMP - combFilterSize, combFilterSize);
                 driver->comb_filter_needs_init = false;
             } else {
-                Nas_LoadBuffer2(cmd++, DMEM_COMB_TEMP - combFilterSize, combFilterSize, (s32)combFilterState);
+                Nas_LoadBuffer2(cmd++, DMEM_COMB_TEMP - combFilterSize, combFilterSize, (saddr)combFilterState);
             }
-            Nas_SaveBuffer2(cmd++, DMEM_TEMP - combFilterSize + size, combFilterSize, (s32)combFilterState);
+            Nas_SaveBuffer2(cmd++, DMEM_TEMP - combFilterSize + size, combFilterSize, (saddr)combFilterState);
             Nas_Mix(cmd++, size >> 4, combFilterGain, DMEM_COMB_TEMP, DMEM_COMB_TEMP - combFilterSize);
             Nas_DMEMMove(cmd++, DMEM_COMB_TEMP - combFilterSize, DMEM_TEMP, size);
         } else {

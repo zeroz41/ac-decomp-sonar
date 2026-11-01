@@ -5,7 +5,6 @@
 #include "ac_npc.h"
 #include "ef_effect_control.h"
 
-extern Vtx act_m_tukutuku_v[];
 static Vtx act_m_tukutuku_v[] = {
 #include "assets/act_m_tukutuku2/act_m_tukutuku_v.inc"
 };

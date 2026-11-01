@@ -254,7 +254,7 @@ extern s32 Nap_SendStart(void) {
     }
 
     msg = ((AG.thread_cmd_read_pos & 0xFF) << 8) | (AG.thread_cmd_write_pos & 0xFF);
-    res = Z_osSendMesg(AG.thread_cmd_proc_mq_p, (OSMesg)msg, OS_MESG_NOBLOCK);
+    res = Z_osSendMesg(AG.thread_cmd_proc_mq_p, (OSMesg)(uaddr)msg, OS_MESG_NOBLOCK);
 
     if (res != -1) {
         AG.thread_cmd_read_pos = AG.thread_cmd_write_pos;
@@ -334,7 +334,7 @@ extern void Nap_AudioPortProcess(u32 msg) {
 }
 
 extern s32 Nap_CheckSpecChange(void) {
-    s32 msg;
+    saddr msg;
     s32 res = Z_osRecvMesg(AG.spec_change_mq_p, (OSMesg*)&msg, OS_MESG_NOBLOCK);
 
     if (res == -1) {
@@ -347,7 +347,7 @@ extern s32 Nap_CheckSpecChange(void) {
 }
 
 static void __ClearSpecChangeQ(void) {
-    s32 msg;
+    saddr msg;
     s32 res;
 
     do {
@@ -648,7 +648,7 @@ extern s32 CreateAudioTask(Acmd* cmds, s16* pSamples, u32 nSamples, s32 param_4)
     AG.audio_random_seed = (AG.audio_random_seed + AG.frame_audio_task_count) * OSGetTick();
     AG.frame_audio_task_count++;
 
-    Z_osSendMesg(AG.task_start_mq_p, (OSMesg)AG.frame_audio_task_count, OS_MESG_NOBLOCK);
+    Z_osSendMesg(AG.task_start_mq_p, (OSMesg)(saddr)AG.frame_audio_task_count, OS_MESG_NOBLOCK);
 
     if (NA_VFRAME_CALLBACK != nullptr) {
         (*NA_VFRAME_CALLBACK)();
@@ -672,7 +672,7 @@ extern s32 CreateAudioTask(Acmd* cmds, s16* pSamples, u32 nSamples, s32 param_4)
 
     if (AG.reset_status != 0 && Nas_SpecChange() == 0) {
         if (AG.reset_status == 0) {
-            Z_osSendMesg(AG.spec_change_mq_p, (OSMesg)AG.spec_id, OS_MESG_NOBLOCK);
+            Z_osSendMesg(AG.spec_change_mq_p, (OSMesg)(uaddr)AG.spec_id, OS_MESG_NOBLOCK);
         }
 
         return 0;
@@ -688,7 +688,7 @@ extern s32 CreateAudioTask(Acmd* cmds, s16* pSamples, u32 nSamples, s32 param_4)
 
         port_cmds = 0;
         if (AG.reset_status == 0) {
-            u32 msg;
+            uaddr msg;
 
             while (Z_osRecvMesg(AG.thread_cmd_proc_mq_p, (OSMesg*)&msg, OS_MESG_NOBLOCK) != -1) {
                 Nap_AudioPortProcess(msg);

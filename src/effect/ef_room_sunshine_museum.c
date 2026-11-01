@@ -6,11 +6,11 @@
 #include "m_collision_bg.h"
 #include "sys_matrix.h"
 
-void Ef_Room_Sunshine_Museum_actor_ct(ACTOR* actorx, GAME* game);
-void Ef_Room_Sunshine_MuseumL_actor_draw(ACTOR* actorx, GAME* game);
-void Ef_Room_Sunshine_MuseumL_actor_move(ACTOR* actorx, GAME* game);
-void Ef_Room_Sunshine_MuseumR_actor_draw(ACTOR* actorx, GAME* game);
-void Ef_Room_Sunshine_MuseumR_actor_move(ACTOR* actorx, GAME* game);
+static void Ef_Room_Sunshine_Museum_actor_ct(ACTOR* actorx, GAME* game);
+static void Ef_Room_Sunshine_MuseumL_actor_draw(ACTOR* actorx, GAME* game);
+static void Ef_Room_Sunshine_MuseumL_actor_move(ACTOR* actorx, GAME* game);
+static void Ef_Room_Sunshine_MuseumR_actor_draw(ACTOR* actorx, GAME* game);
+static void Ef_Room_Sunshine_MuseumR_actor_move(ACTOR* actorx, GAME* game);
 
 extern Gfx obj_museum1_shine_model[];
 extern Gfx obj_museum1_shine_modelT[];

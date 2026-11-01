@@ -165,6 +165,37 @@ typedef union scene_word_u {
     Scene_Word_Data_ArrangeFurniture_ct_c arrange_ftr_ct;
 } Scene_Word_u;
 
+#ifdef SONAR_PORT
+/* sonarlib port: each entry initializes its own member, so pointers stay whole and the field data reads back the
+   same on a little-endian host */
+#define mSc_DATA_PLAYER(actor_data_p) \
+    { .actor = { mSc_SCENE_DATA_TYPE_PLAYER_PTR, 1, (Actor_data*)(actor_data_p) } }
+
+#define mSc_DATA_CTRL_ACTORS(n_actors, ctrl_actor_list_p) \
+    { .control_actor = { mSc_SCENE_DATA_TYPE_CTRL_ACTOR_PTR, n_actors, (s16*)(ctrl_actor_list_p) } }
+
+#define mSc_DATA_ACTORS(n_actors, actor_data_p) \
+    { .actor = { mSc_SCENE_DATA_TYPE_ACTOR_PTR, n_actors, (Actor_data*)(actor_data_p) } }
+
+#define mSc_DATA_OBJ_BANK(n_banks, bank_list_p) \
+    { .object_bank = { mSc_SCENE_DATA_TYPE_OBJECT_EXCHANGE_BANK_PTR, n_banks, (s16*)(bank_list_p) } }
+
+#define mSc_DATA_DOOR_DATA(n_doors, door_data_list_p) \
+    { .door_data = { mSc_SCENE_DATA_TYPE_DOOR_DATA_PTR, n_doors, (Door_data_c*)(door_data_list_p) } }
+
+#define mSc_DATA_FIELDCT(item_type, bg_num, bg_disp_size, room_type, draw_type) \
+    { .field_ct = { mSc_SCENE_DATA_TYPE_FIELD_CT, item_type, bg_num, bg_disp_size, room_type, draw_type } }
+
+#define mSc_DATA_MY_ROOM_CT() { .misc = { mSc_SCENE_DATA_TYPE_MY_ROOM_CT, 0, 0, 0, 0 } }
+
+#define mSc_DATA_ARRANGE_ROOM_CT() { .misc = { mSc_SCENE_DATA_TYPE_ARRANGE_ROOM_CT, 0, 0, 0, 0 } }
+
+#define mSc_DATA_ARRANGE_FTR(ftr_num) { .arrange_ftr_ct = { mSc_SCENE_DATA_TYPE_ARRANGE_FURNITURE_CT, ftr_num } }
+
+#define mSc_DATA_SOUND(p0, p1) { .misc = { mSc_SCENE_DATA_TYPE_SOUND, p0, p1, 0, 0 } }
+
+#define mSc_DATA_END() { .misc = { mSc_SCENE_DATA_TYPE_END, 0, 0, 0, 0 } }
+#else
 #define mSc_DATA_PLAYER(actor_data_p)                               \
     {                                                               \
         mSc_SCENE_DATA_TYPE_PLAYER_PTR, 1, 0, 0, (u32)actor_data_p, \
@@ -223,6 +254,7 @@ typedef union scene_word_u {
     {                                        \
         mSc_SCENE_DATA_TYPE_END, 0, 0, 0, 0, \
     }
+#endif
 
 typedef struct door_info_s {
     /* 0x00 */ u8 num_doors;

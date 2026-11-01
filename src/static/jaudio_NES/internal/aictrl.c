@@ -58,7 +58,7 @@ extern void Jac_Init(void) {
     }
 
     AIInit(nullptr);
-    AIInitDMA((u32)dac[2], DAC_SIZE * 2);
+    AIInitDMA((uaddr)dac[2], DAC_SIZE * 2);
 }
 
 static void MixMonoTrack(s16* track, s32 nSamples, MixCallback callback) {
@@ -269,7 +269,7 @@ extern void Jac_UpdateDAC(void) {
     }
 
     if (use_rsp_madep != nullptr) {
-        AIInitDMA((u32)use_rsp_madep, DAC_SIZE * 2);
+        AIInitDMA((uaddr)use_rsp_madep, DAC_SIZE * 2);
         use_rsp_madep = nullptr;
     } else {
         UNIVERSAL_DACCOUNTER++;

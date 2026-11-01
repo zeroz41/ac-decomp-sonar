@@ -567,7 +567,7 @@ static void Debug_mode_output_sub(gfxprint_t* gfxprint) {
 }
 
 static void Debug_mode_zelda_malloc_info_output(gfxprint_t* gfxprint) {
-    u32 max, free, alloc;
+    size_t max, free, alloc;
     u32 graph_alloc;
 
     if (zelda_MallocIsInitalized()) {
@@ -737,7 +737,7 @@ extern void Debug_mode_output(GRAPH* graph) {
         last_gfx = gfxprint_close(print_p);
         gSPEndDisplayList(last_gfx++);
 
-        glist_used_bytes = (int)last_gfx - (int)start_gfx;
+        glist_used_bytes = (saddr)last_gfx - (saddr)start_gfx;
         gfxclose(start_gfx, last_gfx);
         SET_POLY_OPA_DISP(last_gfx);
         gfxprint_cleanup(print_p);

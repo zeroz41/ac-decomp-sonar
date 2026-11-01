@@ -266,8 +266,8 @@ void Nas_HeapInit(ALHeap* heap, u8* p2, s32 p3) {
         heap->current = NULL;
         heap->last = NULL;
     } else {
-        length = p3 - ((u32)p2 & 0x1F);
-        heap->base = (u8*)ALIGN_NEXT((u32)p2, 32);
+        length = p3 - ((uaddr)p2 & 0x1F);
+        heap->base = (u8*)ALIGN_NEXT((uaddr)p2, 32);
         heap->current = heap->base;
         heap->length = length;
         heap->last = NULL;
@@ -1155,6 +1155,9 @@ int Nas_Init_Single(s32 a, s32 b) {
     }
     AG.emem_persistent_wave_heap.num_entries = 0;
     AG.emem_temporary_wave_heap.num_entries = 0;
+#ifdef SONAR_PORT
+    return 0; /* sonarlib port: the caller ignores the result */
+#endif
 }
 
 /*
@@ -1361,7 +1364,7 @@ void __RestoreAddr(Wavelookuptable* a, smzwavetable* b) {
         u8* o = a_sample + a->_08;
         if (b_sample >= a_sample && b_sample < o) {
             // fakematch?
-            b->sample = (u8*)((u32)a->_04 + (b->sample - (u32)a->sample));
+            b->sample = (u8*)((uaddr)a->_04 + (b->sample - (uaddr)a->sample));
             if (EXGTYPE == 0) {
                 b->medium = a->medium;
             } else {

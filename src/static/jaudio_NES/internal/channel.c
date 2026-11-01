@@ -189,7 +189,7 @@ extern void Nas_UpdateChannel(void) {
         playback_chan = &chan->playback_ch;
 
         if (playback_chan->current_parent_note != NA_NO_NOTE) {
-            if ((u32)playback_chan->current_parent_note < 0x7FFFFFFF) {
+            if ((uaddr)playback_chan->current_parent_note < 0x7FFFFFFF) {
                 continue;
             }
 
@@ -408,7 +408,7 @@ extern perctable* PercToPp(s32 prog, s32 drum) {
         return NULL;
     }
 
-    if ((u32)AG.voice_info[prog].percussion < OS_BASE_CACHED) {
+    if ((uaddr)AG.voice_info[prog].percussion < OS_BASE_CACHED) {
         return NULL;
     }
 
@@ -438,7 +438,7 @@ extern percvoicetable* VpercToVep(s32 prog, s32 sfx) {
         return NULL;
     }
 
-    if ((u32)AG.voice_info[prog].effects < OS_BASE_CACHED) {
+    if ((uaddr)AG.voice_info[prog].effects < OS_BASE_CACHED) {
         return NULL;
     }
 
@@ -668,7 +668,7 @@ extern void Nas_DeAllocAllVoices(chnode* node) {
 
         while (TRUE) {
             cur = src->next;
-            if ((s32)cur == (s32)src || cur == NULL) {
+            if ((saddr)cur == (saddr)src || cur == NULL) {
                 break;
             }
 

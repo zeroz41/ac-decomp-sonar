@@ -290,7 +290,7 @@ static void aIHD_setupAction(aINS_INSECT_ACTOR* insect, int action, GAME* game) 
 
 static void aIHD_actor_move(ACTOR* actorx, GAME* game) {
     aINS_INSECT_ACTOR* insect = (aINS_INSECT_ACTOR*)actorx;
-    u32 label;
+    uaddr label;
 
     aIHD_light_proc(actorx, game);
     if (mPlib_get_player_actor_main_index(game) != mPlayer_INDEX_PUTAWAY_NET) {
@@ -298,7 +298,7 @@ static void aIHD_actor_move(ACTOR* actorx, GAME* game) {
     }
 
     label = mPlib_Get_item_net_catch_label();
-    if (label == (u32)actorx) {
+    if (label == (uaddr)actorx) {
         aIHD_setupAction(insect, aIHD_ACTION_LET_ESCAPE, game);
     } else {
         if (mEv_check_status(mEv_EVENT_GHOST, mEv_STATUS_RUN) == FALSE) {

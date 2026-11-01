@@ -292,7 +292,7 @@ struct JKRCompArchive : public JKRArchive {
 
     // _00     = VTBL
     // _00-_5C = JKRArchive
-    u32 _60;                 // _60
+    uaddr _60;               // _60
     JKRAramBlock* mAramPart; // _64
     u32 _68;                 // _68
     JKRFile* mDvdFile;       // _6C

@@ -2287,7 +2287,7 @@ static void ksnes_thread_kill(OSAlarm* alarm, OSContext* context) {
 }
 
 static int ksnes_thread_exec(u32 flags) {
-    int res;
+    saddr res;
     u8* ksnes_emu_stack = (u8*)my_malloc(KS_NES_EMU_STACK_SIZE, 32);
 
     if (ksnes_emu_stack != nullptr) {

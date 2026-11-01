@@ -27,7 +27,7 @@ static void PTconvert(void** pointer, u32 base_address)
 Bank_* Bank_Test(u8* ibnk_address)
 {
 	u32 i, j, k;
-	u32 base_addr    = (u32)ibnk_address;
+	u32 base_addr    = (uaddr)ibnk_address;
 	Bank_* startBank = (Bank_*)(ibnk_address + 0x20);
 	if (startBank->mMagic != 'BANK') {
 		return NULL;

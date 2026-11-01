@@ -110,7 +110,7 @@ extern void StreamMain(void) {
 
         case JSTREAM_STATE_CANCELLED:
         case JSTREAM_STATE_FADEOUT:
-            u32 streamed_samples = AIGetStreamSampleCount();
+            u32 streamed_samples; streamed_samples = AIGetStreamSampleCount();
             if (J_STREAM.fadeout_timer != 0 && (J_STREAM.total_samples - streamed_samples) != 0) {
                 f32 vol = -J_STREAM.stream_vol;
                 vol /= (f32)J_STREAM.fadeout_timer;

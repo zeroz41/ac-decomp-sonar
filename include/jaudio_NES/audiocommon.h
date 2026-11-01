@@ -97,7 +97,7 @@ extern "C" {
 	Acmd *_a = (Acmd *)pkt;						\
 									\
 	_a->words.w0 = _SHIFTL(A_CMD_LOADCACHE, 24, 8) | _SHIFTL((len) >> 4, 16, 8) | _SHIFTL(src, 0, 16);    		\
-	_a->words.w1 = (u32)(dst);		\
+	_a->words.w1 = (uaddr)(dst);		\
 }
 
 #define	aLoadBuffer2(pkt, dst, src, len)						\
@@ -105,7 +105,7 @@ extern "C" {
 	Acmd *_a = (Acmd *)pkt;						\
 									\
 	_a->words.w0 = _SHIFTL(A_CMD_LOADBUFFER2, 24, 8) | _SHIFTL((len) >> 4, 16, 8) | _SHIFTL(src, 0, 16);    		\
-	_a->words.w1 = (u32)(dst);		\
+	_a->words.w1 = (uaddr)(dst);		\
 }
 
 #define	aSaveBuffer2(pkt, dst, src, len)						\
@@ -113,7 +113,7 @@ extern "C" {
 	Acmd *_a = (Acmd *)pkt;						\
 									\
 	_a->words.w0 = _SHIFTL(A_CMD_SAVEBUFFER2, 24, 8) | _SHIFTL((len) >> 4, 16, 8) | _SHIFTL(src, 0, 16);    		\
-	_a->words.w1 = (u32)(dst);		\
+	_a->words.w1 = (uaddr)(dst);		\
 }
 
 #define	aInterleave2(pkt, o, l, r, c)						\
@@ -163,7 +163,7 @@ extern "C" {
                                                                         \
         _a->words.w0 = _SHIFTL(A_CMD_FIRFILTER, 24, 8) | _SHIFTL(f, 16, 8) |   \
                     _SHIFTL(bufSize, 0, 16);                         \
-        _a->words.w1 = (unsigned int)(addr);                            \
+        _a->words.w1 = (uaddr)(addr);                            \
 }
 
 #define aFirLoadTable(pkt, size, addr) aFirFilter(pkt, 2, size, addr)
@@ -970,7 +970,7 @@ typedef enum NASubtrack {
     Nap_SetU16(NA_MAKE_COMMAND(AUDIOCMD_SET_GROUP_MASK, group, 0, 0), mask)
 
 #define NA_COMMAND_AUDIO_SUBTRACK_SET_FILTER(group, subtrack, filterCutoff, pFilter) \
-    Nap_SetS32(NA_MAKE_COMMAND(AUDIOCMD_OP_SUB_SET_FILTER, group, subtrack, filterCutoff), (s32)pFilter)
+    Nap_SetS32(NA_MAKE_COMMAND(AUDIOCMD_OP_SUB_SET_FILTER, group, subtrack, filterCutoff), (saddr)pFilter)
 
 #ifdef __cplusplus
 }

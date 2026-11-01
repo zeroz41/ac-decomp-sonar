@@ -1559,6 +1559,14 @@ void HS_Event_Reset() {
 }
 
 void HS_Event_Update() {
+#ifdef SONAR_PORT
+    /* The console read the message's first two bytes: the top two of the big-endian word sent */
+    OSMessage message;
+
+    while (OSReceiveMessage(&SoundQ, &message, 0)) {
+        __Sound_Write_HVC(((uaddr)message >> 24) & 0xFF, ((uaddr)message >> 16) & 0xFF);
+    }
+#else
     //! TODO: this has to be wrong
     typedef struct {
         u8 a, b;
@@ -1572,6 +1580,7 @@ void HS_Event_Update() {
         }
         __Sound_Write_HVC(message.a, message.b);
     }
+#endif
 }
 
 void HS_Event_Write(u16 a, u8 b) {
@@ -1579,7 +1588,7 @@ void HS_Event_Write(u16 a, u8 b) {
         a = (a - 0xf40);
     }
 
-    OSSendMessage(&SoundQ, (OSMessage)((a - 0x4000) << 0x18 | b << 0x10), 0);
+    OSSendMessage(&SoundQ, (OSMessage)(uaddr)((a - 0x4000) << 0x18 | b << 0x10), 0);
     switch (a & 0xff) {
         case 3: {
             DUMMY_ACTIVE[0] = 2;
@@ -1691,6 +1700,9 @@ int Sound_Make_HVC(s32 count, s16* v) {
     DUMMY_ACTIVE[6] = 0;
     DUMMY_ACTIVE[7] = 0;
     DUMMY_ACTIVE[8] = 0;
+#ifdef SONAR_PORT
+    return 0; /* sonarlib port: the caller ignores the result */
+#endif
 }
 
 s16 sound_loop_buffer[0x2000];

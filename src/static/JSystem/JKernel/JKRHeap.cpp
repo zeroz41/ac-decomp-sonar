@@ -70,7 +70,7 @@ bool JKRHeap::initArena(char** outUserRamStart, u32* outUserRamSize, int numHeap
     OSSetArenaLo(arenaHi);
     OSSetArenaHi(arenaHi);
     *outUserRamStart = (char*)arenaLo;
-    *outUserRamSize = (u32)arenaHi - (u32)arenaLo;
+    *outUserRamSize = (uaddr)arenaHi - (uaddr)arenaLo;
     return true;
 }
 
@@ -207,7 +207,7 @@ JKRHeap* JKRHeap::findAllHeap(void* memory) const {
 }
 
 // generates __as__25JSUTreeIterator<7JKRHeap>FP17JSUTree<7JKRHeap> and __ct__25JSUTreeIterator<7JKRHeap>Fv, remove this
-void JKRHeap::dispose_subroutine(u32 begin, u32 end) {
+void JKRHeap::dispose_subroutine(uaddr begin, uaddr end) {
     JSUListIterator<JKRDisposer> last_iterator;
     JSUListIterator<JKRDisposer> next_iterator;
     JSUListIterator<JKRDisposer> iterator;
@@ -231,14 +231,14 @@ void JKRHeap::dispose_subroutine(u32 begin, u32 end) {
 }
 
 bool JKRHeap::dispose(void* memory, u32 size) {
-    u32 begin = (u32)memory;
-    u32 end = (u32)memory + size;
+    uaddr begin = (uaddr)memory;
+    uaddr end = (uaddr)memory + size;
     dispose_subroutine(begin, end);
     return false;
 }
 
 void JKRHeap::dispose(void* begin, void* end) {
-    dispose_subroutine((u32)begin, (u32)end);
+    dispose_subroutine((uaddr)begin, (uaddr)end);
 }
 
 void JKRHeap::dispose() {
@@ -296,23 +296,23 @@ bool JKRHeap::isSubHeap(JKRHeap* heap) const {
     return false;
 }
 
-void* operator new(u32 byteCount) {
+void* operator new(size_t byteCount) {
     return JKRHeap::alloc(byteCount, 4, nullptr);
 }
-void* operator new(u32 byteCount, int alignment) {
+void* operator new(size_t byteCount, int alignment) {
     return JKRHeap::alloc(byteCount, alignment, nullptr);
 }
-void* operator new(u32 byteCount, JKRHeap* heap, int alignment) {
+void* operator new(size_t byteCount, JKRHeap* heap, int alignment) {
     return JKRHeap::alloc(byteCount, alignment, heap);
 }
 
-void* operator new[](u32 byteCount) {
+void* operator new[](size_t byteCount) {
     return JKRHeap::alloc(byteCount, 4, nullptr);
 }
-void* operator new[](u32 byteCount, int alignment) {
+void* operator new[](size_t byteCount, int alignment) {
     return JKRHeap::alloc(byteCount, alignment, nullptr);
 }
-void* operator new[](u32 byteCount, JKRHeap* heap, int alignment) {
+void* operator new[](size_t byteCount, JKRHeap* heap, int alignment) {
     return JKRHeap::alloc(byteCount, alignment, heap);
 }
 

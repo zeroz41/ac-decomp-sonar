@@ -1,0 +1,21 @@
+/* The C library as the game's code sees it, forced into every game unit after intrinsics.h. The game defines
+   functions whose names the host's C library already declares, so those names are renamed here, after the host
+   headers that declare them, and the game's definitions and calls agree on the new names. The decompilation's
+   libc headers add a few macros of their own, defined here because the port takes the host's headers. */
+#ifndef AC_PORT_NAMES_H
+#define AC_PORT_NAMES_H
+
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+#if __has_include(<strings.h>)
+#include <strings.h>
+#endif
+
+#define bcmp ac_bcmp
+#define bcopy ac_bcopy
+#define bzero ac_bzero
+
+#define membersize(type, member) (sizeof(((type*)0)->member))
+
+#endif

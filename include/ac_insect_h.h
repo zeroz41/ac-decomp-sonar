@@ -154,7 +154,7 @@ typedef struct insect_actor_s {
     int s32_work0;
     int s32_work1;
     int s32_work2;
-    int s32_work3;
+    saddr s32_work3;
 
     f32 f32_work0;
     f32 f32_work1;

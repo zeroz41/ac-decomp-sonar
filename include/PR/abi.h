@@ -212,7 +212,11 @@ typedef struct {
 
 typedef struct {
 	unsigned int w0;
+#ifdef SONAR_PORT
+	uintptr_t w1; /* sonarlib port: holds a whole host pointer */
+#else
 	unsigned int w1;
+#endif
 } Awords;
 
 typedef union {
@@ -274,7 +278,7 @@ typedef short ENVMIX_STATE[40];
 	Acmd *_a = (Acmd *)pkt;						\
 									\
 	_a->words.w0 = _SHIFTL(A_ADPCM, 24, 8) | _SHIFTL(f, 16, 8);     \
-	_a->words.w1 = (unsigned int)(s);				\
+	_a->words.w1 = (uaddr)(s);				\
 }
 
 #define	aPoleFilter(pkt, f, g, s)					\
@@ -342,7 +346,7 @@ typedef short ENVMIX_STATE[40];
 									\
 	_a->words.w0 = (_SHIFTL(A_RESAMPLE, 24, 8) | _SHIFTL(f, 16, 8) |\
 			_SHIFTL(p, 0, 16)); 				\
-	_a->words.w1 = (unsigned int)(s);				\
+	_a->words.w1 = (uaddr)(s);				\
 }
 
 #define	aSaveBuffer(pkt, s)						\
@@ -383,7 +387,7 @@ typedef short ENVMIX_STATE[40];
 {                                                                       \
         Acmd *_a = (Acmd *)pkt;                                         \
         _a->words.w0 = _SHIFTL(A_SETLOOP, 24, 8);                       \
-        _a->words.w1 = (unsigned int)(a);                               \
+        _a->words.w1 = (uaddr)(a);                               \
 }
     
 #define	aDMEMMove(pkt, i, o, c)						\
@@ -399,7 +403,7 @@ typedef short ENVMIX_STATE[40];
 	Acmd *_a = (Acmd *)pkt;						\
 									\
 	_a->words.w0 = _SHIFTL(A_LOADADPCM, 24, 8) | _SHIFTL(c, 0, 24);	\
-        _a->words.w1 = (unsigned int) d;                                \
+        _a->words.w1 = (uaddr) d;                                \
 }
 
 #endif /* _LANGUAGE_C */

@@ -5,7 +5,6 @@
 #include "ac_npc.h"
 #include "ef_effect_control.h"
 
-extern Vtx act_m_ohmurasaki_v[];
 static Vtx act_m_ohmurasaki_v[] = {
 #include "assets/act_m_ohmurasaki2/act_m_ohmurasaki_v.inc"
 };

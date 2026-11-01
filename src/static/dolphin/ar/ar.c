@@ -35,7 +35,7 @@ ARQCallback ARRegisterDMACallback(ARQCallback callback)
 	return old_callback;
 }
 
-void ARStartDMA(u32 type, u32 mainmem_addr, u32 aram_addr, u32 length)
+void ARStartDMA(u32 type, uaddr mainmem_addr, u32 aram_addr, u32 length)
 {
 	int old;
 

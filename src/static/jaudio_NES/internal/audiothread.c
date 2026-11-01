@@ -21,10 +21,15 @@
 #define AUDIO_STACK_SIZE 0x1000
 #define AUDIOPROC_MQ_BUF_COUNT 16
 
-#define AUDIOPROC_MESSAGE_UPDATE_DAC ((OSMessage)0)
-#define AUDIOPROC_MESSAGE_DSP_SYNC ((OSMessage)1)
-#define AUDIOPROC_MESSAGE_NEOS_SYNC ((OSMessage)2)
-#define AUDIOPROC_MESSAGE_3 ((OSMessage)3)
+#define AUDIOPROC_MESSAGE_UPDATE_DAC_NO 0
+#define AUDIOPROC_MESSAGE_DSP_SYNC_NO 1
+#define AUDIOPROC_MESSAGE_NEOS_SYNC_NO 2
+#define AUDIOPROC_MESSAGE_3_NO 3
+
+#define AUDIOPROC_MESSAGE_UPDATE_DAC ((OSMessage)AUDIOPROC_MESSAGE_UPDATE_DAC_NO)
+#define AUDIOPROC_MESSAGE_DSP_SYNC ((OSMessage)AUDIOPROC_MESSAGE_DSP_SYNC_NO)
+#define AUDIOPROC_MESSAGE_NEOS_SYNC ((OSMessage)AUDIOPROC_MESSAGE_NEOS_SYNC_NO)
+#define AUDIOPROC_MESSAGE_3 ((OSMessage)AUDIOPROC_MESSAGE_3_NO)
 
 OSThread jac_audioThread;
 OSThread jac_neosThread;
@@ -115,13 +120,17 @@ static void* audioproc(void* param) {
         OSMessage msg;
 
         OSReceiveMessage(&audioproc_mq, &msg, OS_MESSAGE_BLOCK);
-        switch ((int)msg) {
-            case (int)AUDIOPROC_MESSAGE_UPDATE_DAC:
+        switch ((saddr)msg) {
+            case AUDIOPROC_MESSAGE_UPDATE_DAC_NO:
                 Jac_UpdateDAC();
                 break;
-            case (int)AUDIOPROC_MESSAGE_DSP_SYNC:
+            case AUDIOPROC_MESSAGE_DSP_SYNC_NO:
                 if (intcount == 0) {
+#ifdef SONAR_PORT
+                    return NULL;
+#else
                     return;
+#endif
                 }
 
                 intcount--;
@@ -135,10 +144,10 @@ static void* audioproc(void* param) {
                 }
 
                 break;
-            case (int)AUDIOPROC_MESSAGE_NEOS_SYNC:
+            case AUDIOPROC_MESSAGE_NEOS_SYNC_NO:
                 CpuFrameEnd();
                 break;
-            case (int)AUDIOPROC_MESSAGE_3:
+            case AUDIOPROC_MESSAGE_3_NO:
                 OSExitThread(NULL);
                 break;
         }

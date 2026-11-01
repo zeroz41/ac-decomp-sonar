@@ -13,7 +13,7 @@ OSMessageQueue JKRAramStream::sMessageQueue = { 0 };
 
 JKRAramStream* JKRAramStream::sAramStreamObject = nullptr;
 u8* JKRAramStream::transBuffer = nullptr;
-u32 JKRAramStream::transSize = nullptr;
+u32 JKRAramStream::transSize = 0;
 JKRHeap* JKRAramStream::transHeap = nullptr;
 
 JKRAramStream* JKRAramStream::create(s32 param) {
@@ -61,12 +61,12 @@ s32 JKRAramStream::writeToAram(JKRAramStreamCommand* command) {
     u32 bufferSize = command->mTransferBufferSize;
     JKRHeap* heap = command->mHeap;
     if (buffer) {
-        bufferSize = (bufferSize == nullptr) ? 0x8000 : bufferSize;
+        bufferSize = (bufferSize == 0) ? 0x8000 : bufferSize;
 
         command->mTransferBufferSize = bufferSize;
         command->mAllocatedTransferBuffer = false;
     } else {
-        bufferSize = (bufferSize == nullptr) ? 0x8000 : bufferSize;
+        bufferSize = (bufferSize == 0) ? 0x8000 : bufferSize;
 
         if (heap) {
             buffer = (u8*)JKRAllocFromHeap(heap, bufferSize, -0x20);
@@ -96,7 +96,7 @@ s32 JKRAramStream::writeToAram(JKRAramStreamCommand* command) {
 
             s32 readLength = command->mStream->read(buffer, length);
 
-            JKRAramPcs(0, (u32)buffer, destination, length, nullptr);
+            JKRAramPcs(0, (uaddr)buffer, destination, length, nullptr);
             dstSize -= length;
             writtenLength += length;
             destination += length;
@@ -108,7 +108,7 @@ s32 JKRAramStream::writeToAram(JKRAramStreamCommand* command) {
         }
     }
 
-    OSSendMessage(&command->mMessageQueue, (OSMessage)writtenLength, OS_MESSAGE_NOBLOCK);
+    OSSendMessage(&command->mMessageQueue, (OSMessage)(uaddr)writtenLength, OS_MESSAGE_NOBLOCK);
     return writtenLength;
 };
 
@@ -122,7 +122,7 @@ JKRAramStreamCommand* JKRAramStream::write_StreamToAram_Async(JSUFileInputStream
                                                               u32 offset) {
     JKRAramStreamCommand* command = new (JKRGetSystemHeap(), -4) JKRAramStreamCommand();
     command->type = JKRAramStreamCommand::ECT_WRITE;
-    command->mAddress = (u32)addr;
+    command->mAddress = (uaddr)addr;
     command->mSize = size;
     command->mStream = stream;
     command->_28 = stream->getAvailable();
@@ -184,7 +184,7 @@ void JKRAramStream::setTransBuffer(u8* buffer, u32 bufferSize, JKRHeap* heap) {
     transHeap = nullptr;
 
     if (buffer) {
-        transBuffer = (u8*)ALIGN_NEXT((u32)buffer, 0x20);
+        transBuffer = (u8*)ALIGN_NEXT((uaddr)buffer, 0x20);
     }
 
     if (bufferSize) {

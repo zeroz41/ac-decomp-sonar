@@ -36,7 +36,7 @@ static void PTconvert(void** pointer, u32 base_address)
  */
 CtrlGroup_* Wave_Test(u8* data)
 {
-    u32 base_addr = (u32)data;
+    u32 base_addr = (uaddr)data;
 	CtrlGroup_* group;
 	SCNE_* scene;
 	Ctrl_* cst;

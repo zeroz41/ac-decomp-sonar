@@ -1845,7 +1845,7 @@ void Na_InitAudio(void (*fatal_callback)(), u8* load_addr, size_t load_size, u8*
     u32 unused = SetPreCopy_NeosRom(load_addr, load_size, cut_flag);
     Jac_RegisterDVDErrorCallback(Sou_DVD_Error);
     Jac_Start(audiomemory, sizeof(audiomemory), v);
-    BootSound((u32)bootsound, bootsound_size);
+    BootSound((uaddr)bootsound, bootsound_size);
     sou_NeosBootCheck_ok = 1;
 }
 
@@ -3357,7 +3357,11 @@ extern void Na_SysLevStart(u8 id) {
     for (j = 0; j < ARRAY_COUNT(sou_sys_lev); j++) {
         //! @BUG: `i` will be ARRAY_COUNT(sou_sys_lev) if we get to this point,
         // and we will be incrementing out of bounds
+#ifndef SONAR_PORT
+        /* sonarlib port: on the console this wrote byte 1 of the next object, the pointer SOU_FIR_STATE, moving
+           it 128 KiB, and the filter later read whatever memory that was; the host has no such neighbour */
         sou_sys_lev[i]._1++;
+#endif
     }
 
 offset_jmp:

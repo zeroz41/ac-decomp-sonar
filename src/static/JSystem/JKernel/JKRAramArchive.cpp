@@ -119,7 +119,7 @@ void JKRAramArchive::unmountFixed() {
 CW_FORCE_STRINGS(JKRAramArchive_cpp, __FILE__, "isMounted()", "mMountCount == 1")
 #endif
 
-bool JKRAramArchive::open(long entryNum) {
+bool JKRAramArchive::open(s32 entryNum) {
     mArcInfoBlock = nullptr;
     mDirectories = nullptr;
     mFileEntries = nullptr;
@@ -276,9 +276,9 @@ u32 JKRAramArchive::fetchResource_subroutine(u32 srcAram, u32 size, JKRHeap* hea
             return size;
         case JKRCOMPRESSION_YAY0:
         case JKRCOMPRESSION_YAZ0:
-            u8* header = (u8*)JKRAllocFromHeap(heap, 0x20, 0x20);
+            u8* header; header = (u8*)JKRAllocFromHeap(heap, 0x20, 0x20);
             JKRAramToMainRam(srcAram, header, 0x20, EXPAND_SWITCH_DEFAULT, 0, nullptr, -1, nullptr);
-            u32 expandSize = JKRDecompExpandSize(header);
+            u32 expandSize; expandSize = JKRDecompExpandSize(header);
             JKRFreeToHeap(heap, header);
             expandSize = ALIGN_NEXT(expandSize, 32);
             buffer = (u8*)JKRAllocFromHeap(heap, expandSize, 0x20);

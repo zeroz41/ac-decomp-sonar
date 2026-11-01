@@ -63,16 +63,29 @@ static s32 DVDReadMutex(DVDFileInfo* fileInfo, void* addr, s32 len, s32 offs, ch
         OSSleepThread(&dvdt_sleep);
     }
 
+#ifdef SONAR_PORT
+    /* sonarlib port: the console returned the last read's result, still in r3; the callers use it */
+    s32 result;
+    while (true) {
+        result = DVDReadPrio(fileInfo, addr, len, offs, 2);
+        if (result != -1 || error_callback == nullptr) {
+            break;
+        }
+        error_callback(arg4, (u8*)addr);
+    }
+    return result;
+#else
     while (true) {
         if (DVDReadPrio(fileInfo, addr, len, offs, 2) != -1 || error_callback == nullptr) {
             break;
         }
         error_callback(arg4, (u8*)addr);
     }
+#endif
 }
 
 extern void DVDT_ExtendPath(char* dst, char* ext) {
-    if (*audio_root_path != nullptr) {
+    if (*audio_root_path != '\0') {
         strcpy(dst, audio_root_path);
         if (*ext == '/') {
             strcat(dst, ext + 1);
@@ -202,7 +215,7 @@ static void __UpdateBuffer() {
 
 static vu32 buffer_full;
 
-static void ARAM_DMAfinish(u32 arg0) {
+static void ARAM_DMAfinish(uaddr arg0) {
     buffer_full -= 1;
 }
 
@@ -253,7 +266,7 @@ extern s32 DVDT_LoadtoARAM_Main(void* arg) {
             call->length -= buffersize;
         }
 
-        ARQPostRequest(&req[arq_index], 0x12345678, ARQ_TYPE_MRAM_TO_ARAM, ARQ_PRIORITY_HIGH, (u32)buf, call->dst,
+        ARQPostRequest(&req[arq_index], 0x12345678, ARQ_TYPE_MRAM_TO_ARAM, ARQ_PRIORITY_HIGH, (uaddr)buf, call->dst,
                        readSize, ARAM_DMAfinish);
         buffer_full++;
         arq_index++;
@@ -297,7 +310,7 @@ extern s32 DVDT_LoadtoARAM(u32 owner, char* name, u32 dst, u32 src, u32 length, 
 
 static vu32 buffer_full2;
 
-static void ARAM_DMAfinish2(u32) {
+static void ARAM_DMAfinish2(uaddr) {
     buffer_full2 -= 1;
 }
 
@@ -307,7 +320,7 @@ extern s32 DVDT_ARAMtoDRAM_Main(void* arg) {
 
     buffer_full2++;
 
-    ARQPostRequest(&req, (u32)call, ARQ_TYPE_ARAM_TO_MRAM, ARQ_PRIORITY_HIGH, call->src, call->dst, call->length,
+    ARQPostRequest(&req, (uaddr)call, ARQ_TYPE_ARAM_TO_MRAM, ARQ_PRIORITY_HIGH, call->src, call->dst, call->length,
                    ARAM_DMAfinish2);
 
     while (buffer_full2 != 0)
@@ -324,7 +337,7 @@ extern s32 DVDT_DRAMtoARAM_Main(void* arg) {
 
     buffer_full2++;
 
-    ARQPostRequest(&req, (u32)call, ARQ_TYPE_MRAM_TO_ARAM, ARQ_PRIORITY_HIGH, call->dst, call->src, call->length,
+    ARQPostRequest(&req, (uaddr)call, ARQ_TYPE_MRAM_TO_ARAM, ARQ_PRIORITY_HIGH, call->dst, call->src, call->length,
                    ARAM_DMAfinish2);
 
     while (buffer_full2 != 0)

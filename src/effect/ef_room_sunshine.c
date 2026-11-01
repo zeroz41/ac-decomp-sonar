@@ -6,11 +6,11 @@
 #include "m_collision_bg.h"
 #include "sys_matrix.h"
 
-void Ef_Room_Sunshine_actor_ct(ACTOR* actor, GAME* play);
-void Ef_Room_SunshineL_actor_move(ACTOR* actor, GAME* play);
-void Ef_Room_SunshineL_actor_draw(ACTOR* actor, GAME* play);
-void Ef_Room_SunshineR_actor_move(ACTOR* actor, GAME* play);
-void Ef_Room_SunshineR_actor_draw(ACTOR* actor, GAME* play);
+static void Ef_Room_Sunshine_actor_ct(ACTOR* actor, GAME* play);
+static void Ef_Room_SunshineL_actor_move(ACTOR* actor, GAME* play);
+static void Ef_Room_SunshineL_actor_draw(ACTOR* actor, GAME* play);
+static void Ef_Room_SunshineR_actor_move(ACTOR* actor, GAME* play);
+static void Ef_Room_SunshineR_actor_draw(ACTOR* actor, GAME* play);
 
 extern Gfx light_floor01_mode[];
 extern Vtx light_floorL01_vtx[];

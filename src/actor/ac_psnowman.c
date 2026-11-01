@@ -149,6 +149,6 @@ static void aPSM_actor_draw(ACTOR* actor, GAME* game) {
     gSPMatrix(gfx++, _Matrix_to_Mtx_new(graph), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
     gSPDisplayList(gfx++, act_darumaA_model);
 
-    NOW_POLY_OPA_DISP = gfx;
+    SET_POLY_OPA_DISP(gfx);
     CLOSE_DISP(graph);
 }

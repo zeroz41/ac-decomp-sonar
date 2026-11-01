@@ -226,7 +226,7 @@ void _Putfld(_Pft* px, va_list ap, u8 code, u8* ac) {
             break;
 
         case 'p':
-            px->v.ll = (s32)va_arg(ap, void*);
+            px->v.ll = (saddr)va_arg(ap, void*);
             px->s = (char*)&ac[px->n0];
             _Litob(px, 'x');
             break;

@@ -54,7 +54,11 @@ static u8 SEQ_CMD;
 static u32 SEQ_ARG[8];
 
 // predeclare this so Jam_UpdateTrackAll can use this stupid function.
+#ifdef SONAR_PORT
+static void OSf32tos8(f32* in, volatile s8* out);
+#else
 extern "C" static void OSf32tos8(f32* in, s8* out);
+#endif
 
 /*
  * --INFO--
@@ -1878,7 +1882,11 @@ static u32 Cmd_Jmp()
  */
 static u32 Cmd_JmpF()
 {
+#ifdef SONAR_PORT
+	return Cmd_CallF(); /* sonarlib port: the console returned Cmd_CallF's result, still in r3 */
+#else
 	Cmd_CallF();
+#endif
 }
 
 /*
@@ -2610,7 +2618,7 @@ static u32 Cmd_Printf()
 	for (i = 0; i < fmtCount; ++i) {
 		fmtParms[i] = __ByteRead(SEQ_P);
 		if (fmtFlags[i] == 2) {
-			fmtParms[i] = (u32)Jam_OfsToAddr(SEQ_P, fmtParms[i]);
+			fmtParms[i] = (uaddr)Jam_OfsToAddr(SEQ_P, fmtParms[i]);
 		// } else if (fmtFlags[i] == 5) {
 		// 	fmtParms[i] = SEQ_P->trackId;
 		}

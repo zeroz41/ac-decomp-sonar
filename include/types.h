@@ -20,6 +20,9 @@
 #define FRAMERATE_SELECT(f60, f50) (f60)
 #endif
 
+#ifdef SONAR_PORT
+#include <sonar/legacy_types.h>
+#else
 typedef signed char s8;
 typedef signed short s16;
 typedef signed long s32;
@@ -32,7 +35,6 @@ typedef unsigned long u32;
 typedef unsigned long size_t;
 #endif
 typedef unsigned long long u64;
-typedef unsigned int uint;
 
 typedef volatile u8 vu8;
 typedef volatile u16 vu16;
@@ -47,6 +49,8 @@ typedef float f32;
 typedef double f64;
 typedef volatile f32 vf32;
 typedef volatile f64 vf64;
+#endif
+typedef unsigned int uint;
 
 typedef int BOOL;
 
@@ -64,7 +68,9 @@ typedef u32 unknown;
 #define NULL 0
 #endif
 #endif
+#if !defined(SONAR_PORT) || !defined(__cplusplus)
 #define nullptr 0
+#endif
 
 // #ifdef __MWERKS__
 // #define AT_ADDRESS(x) : (x)
@@ -165,7 +171,7 @@ typedef u32 unknown;
 #define BSS_ORDER_ITEM(v)
 #endif
 
-#ifndef __cplusplus
+#if !defined(__cplusplus) && !defined(SONAR_PORT)
 // Some definitions rely on wchar_t being defined
 typedef unsigned short wchar_t;
 #endif

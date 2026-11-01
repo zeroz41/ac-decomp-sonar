@@ -334,7 +334,7 @@ void Nas_BankHeaderInit(ArcHeader* header, u8* data, u16 medium) {
 
     for (i = 0; i < header->numEntries; i++) {
         if (header->entries[i].size != 0 && header->entries[i].medium == MEDIUM_CART) {
-            header->entries[i].addr += (u32)data;
+            header->entries[i].addr += (uaddr)data;
         }
     }
 }
@@ -368,7 +368,7 @@ void Nas_PreLoadSeq(s32 seq_id, s32 flags, s32 cmd, OSMesgQueue* mq) {
     }
 
     if (cmd != 0) {
-        Z_osSendMesg(mq, (void*)(cmd << 24), OS_MESG_NOBLOCK);
+        Z_osSendMesg(mq, (void*)(uaddr)(cmd << 24), OS_MESG_NOBLOCK);
     }
 }
 
@@ -604,7 +604,7 @@ static u32 __Load_Wave(s32 wave_id, u32* medium, s32 no_load) {
         }
 
         *medium = MEDIUM_RAM;
-        return (u32)ram_p;
+        return (uaddr)ram_p;
     }
 
     if (header->entries[wave_id].cacheType == CACHE_LOAD_EITHER_NOSYNC || no_load == TRUE) {
@@ -615,7 +615,7 @@ static u32 __Load_Wave(s32 wave_id, u32* medium, s32 no_load) {
     ram_p = __Load_Bank(WAVE_TABLE, wave_id, &no_load);
     if (ram_p != NULL) {
         *medium = MEDIUM_RAM;
-        return (u32)ram_p;
+        return (uaddr)ram_p;
     }
 
     *medium = header->entries[wave_id].medium;
@@ -808,8 +808,8 @@ static ArcHeader* __Get_ArcHeader(s32 table_type) {
     }
 }
 
-#define OFS2RAM(base, ofs) ((u32)(ofs) + (u32)base)
-#define BANK_ENTRY(ctrl, idx) (((u32*)((u32)ctrl)) + idx)
+#define OFS2RAM(base, ofs) ((u32)(ofs) + (uaddr)base)
+#define BANK_ENTRY(ctrl, idx) (((u32*)((uaddr)ctrl)) + idx)
 
 static void Nas_BankOfsToAddr_Inner(s32 bank_id, u8* ctrl_p, WaveMedia* wave_media) {
     u32 ofs;
@@ -829,12 +829,12 @@ static void Nas_BankOfsToAddr_Inner(s32 bank_id, u8* ctrl_p, WaveMedia* wave_med
         *BANK_ENTRY(ctrl_p, 0) = OFS2RAM(ctrl_p, ofs);
 
         for (i = 0; i < n_perc_inst; i++) {
-            inst_ofs = (u32)((perctable**)*BANK_ENTRY(ctrl_p, 0))[i];
+            inst_ofs = (uaddr)((perctable**)*BANK_ENTRY(ctrl_p, 0))[i];
             if (inst_ofs == 0) {
                 continue; // empty percussion/drum entry
             }
 
-            inst_ofs += (u32)ctrl_p; // OFS2RAM(ctrl_p, ofs);
+            inst_ofs += (uaddr)ctrl_p; // OFS2RAM(ctrl_p, ofs);
             percvt = (perctable*)inst_ofs;
             ((perctable**)*BANK_ENTRY(ctrl_p, 0))[i] = percvt;
 
@@ -844,8 +844,8 @@ static void Nas_BankOfsToAddr_Inner(s32 bank_id, u8* ctrl_p, WaveMedia* wave_med
                 continue;
             }
 
-            __WaveTouch(&percvt->tuned_sample, (u32)ctrl_p, wave_media);
-            inst_ofs = (u32)percvt->envelope;
+            __WaveTouch(&percvt->tuned_sample, (uaddr)ctrl_p, wave_media);
+            inst_ofs = (uaddr)percvt->envelope;
             percvt->envelope = (envdat*)OFS2RAM(ctrl_p, inst_ofs);
             percvt->is_relocated = TRUE;
         }
@@ -857,7 +857,7 @@ static void Nas_BankOfsToAddr_Inner(s32 bank_id, u8* ctrl_p, WaveMedia* wave_med
         *BANK_ENTRY(ctrl_p, 1) = OFS2RAM(ctrl_p, ofs);
 
         for (i = 0; i < n_sfx_inst; i++) {
-            inst_ofs = (u32)(((percvoicetable*)*BANK_ENTRY(ctrl_p, 1)) + i);
+            inst_ofs = (uaddr)(((percvoicetable*)*BANK_ENTRY(ctrl_p, 1)) + i);
             sfx = (percvoicetable*)inst_ofs;
 
             // check for null sfx or null sample wave table pointer
@@ -865,7 +865,7 @@ static void Nas_BankOfsToAddr_Inner(s32 bank_id, u8* ctrl_p, WaveMedia* wave_med
                 continue;
             }
 
-            __WaveTouch(&sfx->tuned_sample, (u32)ctrl_p, wave_media);
+            __WaveTouch(&sfx->tuned_sample, (uaddr)ctrl_p, wave_media);
         }
     }
 
@@ -884,18 +884,18 @@ static void Nas_BankOfsToAddr_Inner(s32 bank_id, u8* ctrl_p, WaveMedia* wave_med
             if (!inst->is_relocated) {
                 // Optional low pitch sample
                 if (inst->normal_range_low != 0) {
-                    __WaveTouch(&inst->low_pitch_tuned_sample, (u32)ctrl_p, wave_media);
+                    __WaveTouch(&inst->low_pitch_tuned_sample, (uaddr)ctrl_p, wave_media);
                 }
 
                 // Standard sample, required by all instruments
-                __WaveTouch(&inst->normal_pitch_tuned_sample, (u32)ctrl_p, wave_media);
+                __WaveTouch(&inst->normal_pitch_tuned_sample, (uaddr)ctrl_p, wave_media);
 
                 // Optional high pitch sample
                 if (inst->normal_range_high != 0x7F) {
-                    __WaveTouch(&inst->high_pitch_tuned_sample, (u32)ctrl_p, wave_media);
+                    __WaveTouch(&inst->high_pitch_tuned_sample, (uaddr)ctrl_p, wave_media);
                 }
 
-                inst_ofs = (u32)inst->envelope;
+                inst_ofs = (uaddr)inst->envelope;
                 inst->envelope = (envdat*)OFS2RAM(ctrl_p, inst_ofs);
 
                 inst->is_relocated = TRUE;
@@ -923,30 +923,30 @@ void Nas_FastCopy(u8* SrcAddr, u8* DestAdd, size_t Length, s32 medium) {
         OSReport("DMA Warning: Length  %d is not align32\n", Length);
     }
 
-    if ((((u32)SrcAddr) & 0x1F) != 0) {
+    if ((((uaddr)SrcAddr) & 0x1F) != 0) {
         OSReport("DMA Warning: SrcAddr %d is not align32\n", SrcAddr);
     }
 
-    if ((((u32)DestAdd) & 0x1F) != 0) {
+    if ((((uaddr)DestAdd) & 0x1F) != 0) {
         OSReport("DMA Warning: DestAdd %d is not align32\n", DestAdd);
     }
 
-    if ((((u32)SrcAddr) & 0x1F) != 0) {
+    if ((((uaddr)SrcAddr) & 0x1F) != 0) {
         unalign_src_copy = (u8*)FASTDMA_BUFFER;
 
         // DMA the first non-align32 bytes
         // @BUG - FASTDMA_BUFFER is always NULL
-        Nas_StartDma(&AG.sync_dma_io_mesg, 1, 0, (u32)SrcAddr - (((u32)SrcAddr) & 0x1F), FASTDMA_BUFFER, 0x20,
+        Nas_StartDma(&AG.sync_dma_io_mesg, 1, 0, (uaddr)SrcAddr - (((uaddr)SrcAddr) & 0x1F), FASTDMA_BUFFER, 0x20,
                      &AG.sync_dma_queue, medium, (s8*)"FastCopy");
         Z_osRecvMesg(&AG.sync_dma_queue, NULL, OS_MESG_BLOCK);
-        unalign_copy_len = 32 - (((u32)SrcAddr) & 0x1F);
-        Z_bcopy(unalign_src_copy + (((u32)SrcAddr) & 0x1F), DestAdd, 32 - (((u32)SrcAddr) & 0x1F));
+        unalign_copy_len = 32 - (((uaddr)SrcAddr) & 0x1F);
+        Z_bcopy(unalign_src_copy + (((uaddr)SrcAddr) & 0x1F), DestAdd, 32 - (((uaddr)SrcAddr) & 0x1F));
         SrcAddr += unalign_copy_len;
         DestAdd += unalign_copy_len;
         Length -= unalign_copy_len;
 
         while (Length != 0) {
-            Nas_StartDma(&AG.sync_dma_io_mesg, 1, 0, (u32)SrcAddr, unalign_src_copy, 0x400, &AG.sync_dma_queue, medium,
+            Nas_StartDma(&AG.sync_dma_io_mesg, 1, 0, (uaddr)SrcAddr, unalign_src_copy, 0x400, &AG.sync_dma_queue, medium,
                          (s8*)"FastCopy");
             Z_osRecvMesg(&AG.sync_dma_queue, NULL, OS_MESG_BLOCK);
 
@@ -967,7 +967,7 @@ void Nas_FastCopy(u8* SrcAddr, u8* DestAdd, size_t Length, s32 medium) {
                 break;
             }
 
-            Nas_StartDma(&AG.sync_dma_io_mesg, 1, 0, (u32)SrcAddr, DestAdd, 0x400, &AG.sync_dma_queue, medium,
+            Nas_StartDma(&AG.sync_dma_io_mesg, 1, 0, (uaddr)SrcAddr, DestAdd, 0x400, &AG.sync_dma_queue, medium,
                          (s8*)"FastCopy");
             Z_osRecvMesg(&AG.sync_dma_queue, NULL, OS_MESG_BLOCK);
             Length -= 0x400;
@@ -976,7 +976,7 @@ void Nas_FastCopy(u8* SrcAddr, u8* DestAdd, size_t Length, s32 medium) {
         }
 
         if (Length != 0) {
-            Nas_StartDma(&AG.sync_dma_io_mesg, 1, 0, (u32)SrcAddr, DestAdd, Length, &AG.sync_dma_queue, medium,
+            Nas_StartDma(&AG.sync_dma_io_mesg, 1, 0, (uaddr)SrcAddr, DestAdd, Length, &AG.sync_dma_queue, medium,
                          (s8*)"FastCopy");
             Z_osRecvMesg(&AG.sync_dma_queue, NULL, OS_MESG_BLOCK);
         }
@@ -1065,7 +1065,7 @@ static u8* __Load_Bank_BG(s32 table_type, s32 id, s32 n_chunks, s32 ret_data, OS
     ramAddr = (u8*)__Check_Cache(table_type, link_id);
     if (ramAddr != NULL) {
         loadStatus = LOAD_STATUS_COMPLETE;
-        Z_osSendMesg(ret_queue, (OSMesg)MK_BGLOAD_MSG(ret_data, SEQUENCE_TABLE, 0, LOAD_STATUS_NOT_LOADED),
+        Z_osSendMesg(ret_queue, (OSMesg)(uaddr)MK_BGLOAD_MSG(ret_data, SEQUENCE_TABLE, 0, LOAD_STATUS_NOT_LOADED),
                      OS_MESG_NOBLOCK);
     } else {
         header = __Get_ArcHeader(table_type);
@@ -1220,7 +1220,7 @@ void Nas_InitAudio(u64* heap_p, s32 heap_size) {
 
     AG.audio_heap_p = heap_p;
     AG.audio_heap_size = heap_size;
-    OSReport("AUDIOHEAP SET ADDR %xh (SIZE %xh) \n", (u32)heap_p, heap_size);
+    OSReport("AUDIOHEAP SET ADDR %xh (SIZE %xh) \n", (uaddr)heap_p, heap_size);
     OSReport(" FIXSIZE  %x \n", AGC.fixSize);
     OSReport(" EMEMSIZE %x \n", AGC.ememSize);
     OSReport(" MAXCHAN  %d \n", AGC.maxChan);
@@ -1276,7 +1276,7 @@ void Nas_InitAudio(u64* heap_p, s32 heap_size) {
     Nas_HeapInit(&AG.emem_heap, emem_heap, AGC.ememSize);
 
     AUDIO_SYSTEM_READY = TRUE;
-    Z_osSendMesg(AG.task_start_mq_p, (OSMesg)AG.frame_audio_task_count, OS_MESG_NOBLOCK);
+    Z_osSendMesg(AG.task_start_mq_p, (OSMesg)(saddr)AG.frame_audio_task_count, OS_MESG_NOBLOCK);
 }
 
 void LpsInit(void) {
@@ -1320,7 +1320,7 @@ s32 VoiceLoad(s32 bank_id, u32 inst_id, s8* done_p) {
     cache->status = LPS_CACHE_STATE_START;
     cache->bytes_remaining = ALIGN_NEXT(wavetable->size, 32);
     cache->ram_addr = cache->current_ram_addr;
-    cache->current_device_addr = (u32)wavetable->sample;
+    cache->current_device_addr = (uaddr)wavetable->sample;
     cache->medium = wavetable->medium;
     cache->seq_or_bank_id = bank_id;
     cache->inst_id = inst_id;
@@ -1504,7 +1504,7 @@ static Bgload* Nas_BgCopyReq(u8* src, u8* dst, u32 size, s32 medium, s32 n_chunk
     }
 
     bgload->status = LOAD_STATUS_IN_PROGRESS;
-    bgload->current_device_addr = (u32)src;
+    bgload->current_device_addr = (uaddr)src;
     bgload->ram_addr = dst;
     bgload->current_ram_addr = dst;
     bgload->bytes_remaining = size;
@@ -1615,7 +1615,7 @@ static void __BgCopyFinishProcess(Bgload* bgload) {
     }
 
     bgload->status = LOAD_STATUS_NOT_LOADED;
-    ret_msg = (OSMesg)bgload->ret_msg;
+    ret_msg = (OSMesg)(uaddr)bgload->ret_msg;
     Z_osSendMesg(bgload->ret_mq, ret_msg, OS_MESG_NOBLOCK);
 }
 
@@ -1693,27 +1693,27 @@ static void __WaveTouch(wtstr* wavetouch_str, u32 ram_addr, WaveMedia* wave_medi
     smzwavetable* wavetable;
     void* reloc;
 
-    if ((u32)wavetouch_str->wavetable <= OS_BASE_CACHED) {
+    if ((uaddr)wavetouch_str->wavetable <= OS_BASE_CACHED) {
         // wave is not relocated
-        reloc = (void*)((u32)wavetouch_str->wavetable + ram_addr);
+        reloc = (void*)((uaddr)wavetouch_str->wavetable + ram_addr);
         wavetouch_str->wavetable = (smzwavetable*)reloc;
         wavetable = wavetouch_str->wavetable;
 
         if (wavetable->size != 0 && wavetable->is_relocated != TRUE) {
-            reloc = (void*)((u32)wavetable->loop + ram_addr);
+            reloc = (void*)((uaddr)wavetable->loop + ram_addr);
             wavetable->loop = (adpcmloop*)reloc;
 
-            reloc = (void*)((u32)wavetable->book + ram_addr);
+            reloc = (void*)((uaddr)wavetable->book + ram_addr);
             wavetable->book = (adpcmbook*)reloc;
 
             switch (wavetable->medium) {
                 case MEDIUM_RAM:
-                    reloc = (void*)((u32)wavetable->sample + (u32)wave_media->wave0_p);
+                    reloc = (void*)((uaddr)wavetable->sample + (uaddr)wave_media->wave0_p);
                     wavetable->sample = (u8*)reloc;
                     wavetable->medium = wave_media->wave0_media;
                     break;
                 case MEDIUM_DISK:
-                    reloc = (void*)((u32)wavetable->sample + (u32)wave_media->wave1_p);
+                    reloc = (void*)((uaddr)wavetable->sample + (uaddr)wave_media->wave1_p);
                     wavetable->sample = (u8*)reloc;
                     wavetable->medium = wave_media->wave1_media;
                     break;
@@ -1821,7 +1821,7 @@ s32 Nas_BankOfsToAddr(s32 bank_id, u8* ctrl_p, WaveMedia* wave_media, s32 async)
                 preload->ram_addr = wave_ram_p;
                 preload->encoded_info = (AG.num_requested_samples << 24) | 0x00FFFFFF;
                 preload->is_free = FALSE;
-                preload->end_and_medium_key = (u32)wavetable->sample + wavetable->size + wavetable->medium;
+                preload->end_and_medium_key = (uaddr)wavetable->sample + wavetable->size + wavetable->medium;
                 AG.num_requested_samples++;
                 break;
         }
@@ -1841,12 +1841,15 @@ s32 Nas_BankOfsToAddr(s32 bank_id, u8* ctrl_p, WaveMedia* wave_media, s32 async)
     // @BUG - this function clearly has no return value
     // it must have been declared with a return value because
     // mwcceppc has prevented r3 as a temp where possible
+#ifdef SONAR_PORT
+    return 0; /* sonarlib port: the callers ignore the result */
+#endif
 }
 
 s32 Nas_CheckBgWave(s32 reset_status) {
     smzwavetable* wavetable;
     Bgloadreq* preload;
-    u32 preload_idx;
+    uaddr preload_idx;
     s32 key;
     s32 n_chunks;
 
@@ -1866,7 +1869,7 @@ s32 Nas_CheckBgWave(s32 reset_status) {
 
         if (!preload->is_free) {
             wavetable = preload->sample;
-            key = (u32)wavetable->sample + wavetable->size + wavetable->medium;
+            key = (uaddr)wavetable->sample + wavetable->size + wavetable->medium;
 
             if (preload->end_and_medium_key == key) {
                 wavetable->sample = preload->ram_addr;
@@ -1890,7 +1893,7 @@ s32 Nas_CheckBgWave(s32 reset_status) {
             wavetable = preload->sample;
             n_chunks = 1;
             n_chunks += (wavetable->size / 0x1000);
-            key = (u32)wavetable->sample + wavetable->size + wavetable->medium;
+            key = (uaddr)wavetable->sample + wavetable->size + wavetable->medium;
             if (preload->end_and_medium_key != key) {
                 preload->is_free = TRUE;
                 AG.num_requested_samples--;
@@ -2037,7 +2040,7 @@ void WaveReload(s32 bank_id, s32 async, WaveMedia* wavemedia) {
                 preload->ram_addr = addr;
                 preload->encoded_info = (AG.num_requested_samples << 24) | 0x00FFFFFF;
                 preload->is_free = FALSE;
-                preload->end_and_medium_key = (u32)wavetable->sample + wavetable->size + wavetable->medium;
+                preload->end_and_medium_key = (uaddr)wavetable->sample + wavetable->size + wavetable->medium;
                 AG.num_requested_samples++;
                 break;
         }
@@ -2108,7 +2111,7 @@ void MK_load(s32 table_type, s32 id, u8* done_p) {
 
 void MK_FrameWork(void) {
     s32 idx;
-    u32 ret;
+    uaddr ret;
     u8* rmes;
 
     if (Z_osRecvMesg(&MK_QUEUE, (OSMesg*)&ret, OS_MESG_NOBLOCK) != -1) {

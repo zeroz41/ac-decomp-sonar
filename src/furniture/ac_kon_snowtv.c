@@ -133,7 +133,7 @@ static void aKonsnowtv_mv(FTR_ACTOR* ftr_actor, ACTOR* my_room_actor, GAME* game
 
     if (ftr_actor->switch_bit != FALSE) {
         if (aFTR_CAN_PLAY_SE(ftr_actor)) {
-            sAdo_OngenPos((u32)ftr_actor, 0x2B, &ftr_actor->position);
+            sAdo_OngenPos((uaddr)ftr_actor, 0x2B, &ftr_actor->position);
         }
         ftr_actor->tex_animation.frame++;
 

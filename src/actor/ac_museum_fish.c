@@ -112,7 +112,7 @@ ACTOR_PROFILE Museum_Fish_Profile = {
     NULL
 };
 
-static xyz_t suisou_pos[5] = { 
+xyz_t suisou_pos[5] = { 
     { 220.0f, 40.0f, 220.0f }, 
     { 420.0f, 40.0f, 220.0f }, 
     { 220.0f, 40.0f, 460.0f }, 

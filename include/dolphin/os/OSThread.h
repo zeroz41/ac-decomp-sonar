@@ -126,7 +126,7 @@ enum OS_THREAD_STATE
                                 u32 stackSize);
     OSThread *OSGetIdleFunction(void);
 
-    long OSCheckActiveThreads(void);
+    s32 OSCheckActiveThreads(void);
 
 #ifdef __cplusplus
 }

@@ -392,13 +392,13 @@ s32 Jaq_SetSeqData_Limit(seqp_* track, u8* param_2, u32 param_3, u32 param_4, u8
 		puVar2 = NULL;
 		break;
 	case 2:
-		track->fileHandle = (u8)param_2;
+		track->fileHandle = (u8)(uaddr)param_2;
 		puVar2            = NULL;
 		break;
 	}
 	track->trackId = root;
 	track->flags   = 3;
-	Init_Track(track, (u32)puVar2, NULL);
+	Init_Track(track, (uaddr)puVar2, NULL);
 	Jam_InitExtBuffer(&ROOT_OUTER[root]);
 	Jam_AssignExtBuffer(track, &ROOT_OUTER[root]);
 	Init_1shot(&track->parentController, param_5);

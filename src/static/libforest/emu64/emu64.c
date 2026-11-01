@@ -394,7 +394,7 @@ static u32 texture_cache_get_heap_size(texture_cache_t* cache) {
 
 static void* texture_cache_alloc(texture_cache_t* cache, u32 size) {
     cache->last_alloc_start = cache->buffer_current;
-    cache->last_alloc_end = (u8*)ALIGN_NEXT((u32)cache->buffer_current + size, 32);
+    cache->last_alloc_end = (u8*)ALIGN_NEXT((uaddr)cache->buffer_current + size, 32);
 
     if (cache->buffer_pos < cache->last_alloc_end - cache->buffer_start) {
         cache->buffer_pos = cache->last_alloc_end - cache->buffer_start;
@@ -1426,6 +1426,9 @@ int emu64::combine_tev() {
             GXSetTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_KONST);
         }
     }
+#ifdef SONAR_PORT
+    return 0; /* sonarlib port: the caller ignores the result */
+#endif
 }
 
 #define NUM_COMBINER_HIGHLOW_ERRS 10
@@ -3247,10 +3250,10 @@ void emu64::dirty_check(int tile, int n_tiles, int do_texture_matrix) {
                     img_addr = tex_info_p->img_addr;
 
                     dol_fmt.raw = cvtN64ToDol(tex_info_p->format, tex_info_p->size);
-                    if (((u32)img_addr & 0x1F) != 0) {
+                    if (((uaddr)img_addr & 0x1F) != 0) {
                         /* Translation: Texture (%08x) alignment isn't 32 bytes */
                         this->Printf0("テクスチャ(%08x)のアライメントが３２バイトになっていません\n", img_addr);
-                        img_addr = (void*)((u32)img_addr & ~0x1F);
+                        img_addr = (void*)((uaddr)img_addr & ~0x1F);
                     }
 
                     if ((this->geometry_mode & G_TEXTURE_GEN_LINEAR) != 0 &&
@@ -3343,16 +3346,16 @@ void emu64::dl_G_DL(void) {
             }
 
             if (this->DL_stack_level < DL_MAX_STACK_LEVEL) {
-                this->DL_stack[this->DL_stack_level++] = (u32)(this->gfx_p + 1);
+                this->DL_stack[this->DL_stack_level++] = (uaddr)(this->gfx_p + 1);
             } else {
                 this->err_count++;
                 this->Printf0("*** DL stack overflow ***\n");
             }
 
-            this->gfx_p = (Gfx*)((int)this->work_ptr - sizeof(Gfx));
+            this->gfx_p = (Gfx*)((saddr)this->work_ptr - sizeof(Gfx));
             break;
         case G_DL_NOPUSH:
-            this->gfx_p = (Gfx*)((u32)this->work_ptr - sizeof(Gfx));
+            this->gfx_p = (Gfx*)((uaddr)this->work_ptr - sizeof(Gfx));
             break;
         default:
             if (this->disable_polygons == false) {
@@ -3670,13 +3673,13 @@ void emu64::dl_G_LOADTLUT() {
 
                 this->tlut_addresses[tlut_name] = tlut_addr;
                 if (tlut_addr != nullptr) {
-                    if (((u32)tlut_addr & (0x1F)) != 0) {
+                    if (((uaddr)tlut_addr & (0x1F)) != 0) {
                         /* The alignment of the palette (%08x) is not 32 bytes. */
                         EMU64_PRINTF(
                             VT_COL(RED, WHITE) "パレット(%08x)のアライメントが３２バイトになっていません\n" VT_RST,
                             tlut_addr)
 
-                        aligned_addr = (void*)((u32)tlut_addr & (~0x1F));
+                        aligned_addr = (void*)((uaddr)tlut_addr & (~0x1F));
                     }
 
                     GXInitTlutObj(&this->tlut_objs[tlut_name], aligned_addr, GX_TL_RGB5A3, count);
@@ -3699,7 +3702,7 @@ void emu64::dl_G_LOADTLUT() {
             u32 addr = this->now_setimg.setimg2.imgaddr;
             u32 tlut_name = (settile_p->tmem / 16) & 0xF;
 
-            if (addr == (u32)this->tlut_addresses[tlut_name]) {
+            if (addr == (uaddr)this->tlut_addresses[tlut_name]) {
                 /* Translation: ### Same TLUT address %08x %d */
                 EMU64_INFOF("### 同じTLUTアドレスです %08x %d\n", addr, tlut_name);
             } else {
@@ -4951,7 +4954,7 @@ void emu64::dl_G_BRANCH_Z() {
     EMU64_WARNF("gsSPBranchLessZraw(%s, %d, 0x%08x),", this->segchk(this->rdpHalf_1), (this->gfx.words.w0 / 2) & 0x7FF,
                 this->gfx.words.w1);
 
-    this->gfx_p = (Gfx*)((int)this->work_ptr - sizeof(Gfx));
+    this->gfx_p = (Gfx*)((saddr)this->work_ptr - sizeof(Gfx));
     /* Translation: gsSPBranchLessZraw isn't implemented yet */
     this->Printf0("gsSPBranchLessZrawはまだインプリメントされていません\n");
 }
@@ -5082,7 +5085,7 @@ void emu64::dl_G_MOVEWORD() {
                 (moveword->data != 0 && (moveword->data < 0x80000000 || moveword->data > 0x83000000))) {
                 sprintf(s1, "gsSPSegmentA no=%d", segment);
                 sprintf(s2, "base=%s", this->segchk(moveword->data));
-                sprintf(s3, "gfxp=%s", this->segchk((u32)this->gfx_p));
+                sprintf(s3, "gfxp=%s", this->segchk((uaddr)this->gfx_p));
                 emu64::warningString[0] = "SPSegment found Illigal Address.";
                 emu64::warningString[1] = s1;
                 emu64::warningString[2] = s2;

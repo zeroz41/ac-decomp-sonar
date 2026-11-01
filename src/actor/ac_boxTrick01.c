@@ -2,9 +2,9 @@
 
 #include "m_name_table.h"
 
-extern void BoxTrick01_Actor_ct(ACTOR* actor, GAME* game);
-extern void BoxTrick01_Actor_dt(ACTOR* actor, GAME* game);
-extern void BoxTrick01_Actor_move(ACTOR* actor, GAME* game);
+static void BoxTrick01_Actor_ct(ACTOR* actor, GAME* game);
+static void BoxTrick01_Actor_dt(ACTOR* actor, GAME* game);
+static void BoxTrick01_Actor_move(ACTOR* actor, GAME* game);
 
 ACTOR_PROFILE BoxTrick01_Profile = {
     mAc_PROFILE_BOXTRICK01,

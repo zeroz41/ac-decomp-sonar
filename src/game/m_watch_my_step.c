@@ -286,11 +286,11 @@ extern void watch_my_step_draw(GAME_PLAY* play) {
     }
 }
 
-static void navigate_camera_ct() {
+void navigate_camera_ct() {
     bzero(&S_navigate, sizeof(mWt_navigate_c));
 }
 
-static void navigate_camera_move(GAME_PLAY* play) {
+void navigate_camera_move(GAME_PLAY* play) {
     S_navigate.draw_type = 0;
 
     switch (S_navigate.mode) {
@@ -339,7 +339,7 @@ static void navigate_camera_move(GAME_PLAY* play) {
     }
 }
 
-static void navigate_camera_draw(GAME_PLAY* play) {
+void navigate_camera_draw(GAME_PLAY* play) {
     GRAPH* g = play->game.graph;
     Gfx* font_gfx;
     Mtx* font_mtx;
@@ -418,14 +418,14 @@ static void mWt_set_coin_se(int play_flag) {
 
 static u32 get_all_money();
 
-static void mWt_mybell_confirmation_ct() {
+void mWt_mybell_confirmation_ct() {
     bzero(&S_mybell_conf, sizeof(S_mybell_conf));
 
     S_mybell_conf.all_money = get_all_money();
     mWt_set_coin_se(FALSE);
 }
 
-static void mWt_mybell_confirmation_move(GAME_PLAY* play) {
+void mWt_mybell_confirmation_move(GAME_PLAY* play) {
     static int place_chk[8] = {
         SCENE_SHOP0,    SCENE_CONVENI,     SCENE_SUPER,       SCENE_DEPART,
         SCENE_DEPART_2, SCENE_BROKER_SHOP, SCENE_POST_OFFICE, SCENE_NEEDLEWORK,
@@ -514,7 +514,7 @@ static void mWt_mybell_confirmation_move(GAME_PLAY* play) {
     }
 }
 
-static void mWt_mybell_confirmation_draw(GAME_PLAY* play) {
+void mWt_mybell_confirmation_draw(GAME_PLAY* play) {
     GAME* game = (GAME*)play;
     GRAPH* g = play->game.graph;
     Mtx* font_mtx;

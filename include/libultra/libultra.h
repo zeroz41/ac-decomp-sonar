@@ -22,7 +22,7 @@ extern "C" {
 
 typedef u64 Z_OSTime;
 
-int bcmp(void* v1, void* v2, u32 size);
+int bcmp(void* v1, void* v2, size_t size);
 void bcopy(void* src, void* dst, size_t n);
 void bzero(void* ptr, size_t size);
 void osSyncPrintf(const char* fmt, ...);

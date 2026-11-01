@@ -359,6 +359,7 @@ extern void debug_hayakawa_move(pad_t* pad) {
             hreg_init_check(666);
 
             switch (GETREG(HREG, HREG_STATE_ARGS_START)) {
+#ifndef SONAR_PORT /* sonarlib port: the console's memory map is not the host's */
                 /* Load */
                 case 1: {
                     SETREG(HREG, 83, *(u8*)(GETREG(HREG, 82) * 0x100000 - 0x80000000));
@@ -368,6 +369,7 @@ extern void debug_hayakawa_move(pad_t* pad) {
                 case 2: {
                     *(u8*)(GETREG(HREG, 82) * 0x100000 - 0x80000000) = (u8)GETREG(HREG, 83);
                 } break;
+#endif
             }
         } break;
     }

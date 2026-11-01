@@ -27,7 +27,7 @@ extern u32 GetNeosRomTop(void) {
 }
 
 extern u32 GetNeosRom_PreLoaded(void) {
-    DVDT_DRAMtoARAM(0, (u32)init_load_addr, AUDIO_ARAM_TOP, init_load_size, nullptr, nullptr);
+    DVDT_DRAMtoARAM(0, (uaddr)init_load_addr, AUDIO_ARAM_TOP, init_load_size, nullptr, nullptr);
     return init_load_size;
 }
 
@@ -35,6 +35,9 @@ extern u32 SetPreCopy_NeosRom(u8* load_addr, u32 load_size, BOOL cut_flag) {
     init_load_size = load_size;
     init_load_addr = load_addr;
     init_cut_flag = cut_flag;
+#ifdef SONAR_PORT
+    return 0; /* sonarlib port: the caller ignores the result */
+#endif
 }
 
 extern void mesg_finishcall(u32 mq) {
@@ -45,9 +48,9 @@ extern BOOL ARAMStartDMAmesg(u32 dir, u32 dramAddr, u32 aramAddr, u32 size, s32 
     aramAddr += AUDIO_ARAM_TOP;
 
     if (dir == DUMMYROM_ARAM_TO_DRAM) {
-        DVDT_ARAMtoDRAM((u32)mq, dramAddr, aramAddr, size, nullptr, &mesg_finishcall);
+        DVDT_ARAMtoDRAM((uaddr)mq, dramAddr, aramAddr, size, nullptr, &mesg_finishcall);
     } else {
-        DVDT_DRAMtoARAM((u32)mq, dramAddr, aramAddr, size, nullptr, &mesg_finishcall);
+        DVDT_DRAMtoARAM((uaddr)mq, dramAddr, aramAddr, size, nullptr, &mesg_finishcall);
     }
 
     return FALSE;
@@ -58,7 +61,7 @@ extern void Jac_SetAudioARAMSize(u32 size) {
 }
 
 extern void* ARAllocFull(u32* outSize) {
-    u32 freeSize = aram_hp.length - ((int)aram_hp.current - (int)aram_hp.base);
+    u32 freeSize = aram_hp.length - ((saddr)aram_hp.current - (saddr)aram_hp.base);
     void* alloc = Nas_HeapAlloc(&aram_hp, freeSize - 32);
     *outSize = freeSize - 32;
     return alloc;

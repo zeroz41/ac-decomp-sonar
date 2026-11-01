@@ -44,7 +44,7 @@ void aRSV_actor_draw(ACTOR* actor, GAME* game) {
         gSPMatrix(disp++, mtx, G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
         gSPDisplayList(disp++, gfx);
 
-        NOW_POLY_OPA_DISP = disp;
+        SET_POLY_OPA_DISP(disp);
 
         if (check != 0) {
             Common_Get(clip).bg_item_clip->draw_shadow_proc(game, data, 1);

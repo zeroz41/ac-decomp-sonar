@@ -46,7 +46,7 @@ JUTErrorHandler JUTException::sPreUserCallback;
 JUTErrorHandler JUTException::sPostUserCallback;
 static CallbackObject exCallbackObject;
 void* JUTException::sConsoleBuffer;
-u32 JUTException::sConsoleBufferSize;
+size_t JUTException::sConsoleBufferSize;
 JUTConsole* JUTException::sConsole;
 u32 JUTException::msr;
 u32 JUTException::fpscr;
@@ -173,6 +173,10 @@ bool JUTException::searchPartialModule(u32 address, u32* module_id, u32* section
         return false;
     }
 
+#ifdef SONAR_PORT
+    /* sonarlib port: the console's module list is at a fixed address the host does not have */
+    return false;
+#else
     OSModuleInfo* module = *(OSModuleInfo**)0x800030C8;
     for (; module != nullptr; module = module->link.next) {
         OSSectionInfo* section = OSGetSectionInfo(module);
@@ -195,6 +199,7 @@ bool JUTException::searchPartialModule(u32 address, u32* module_id, u32* section
     }
 
     return false;
+#endif
 }
 
 void search_name_part(u8* src, u8* dst, int dst_length) {
@@ -228,6 +233,7 @@ void JUTException::showStack(OSContext* context) {
     sConsole->print("-------------------------------- TRACE\n");
     sConsole->print_f("Address:   BackChain   LR save\n");
 
+#ifndef SONAR_PORT /* sonarlib port: the context's stack pointer is the console's, not the host's */
     for (i = 0, stackPointer = (u32*)context->gpr[1];
          (stackPointer != nullptr) && (stackPointer != (u32*)0xFFFFFFFF) && (i++ < 0x10);) {
         if (i > mTraceSuppress) {
@@ -242,6 +248,7 @@ void JUTException::showStack(OSContext* context) {
         waitTime(mPrintWaitTime1);
         stackPointer = (u32*)stackPointer[0];
     }
+#endif
 }
 
 void JUTException::showMainInfo(u16 error, OSContext* context, u32 dsisr, u32 dar) {
@@ -285,7 +292,7 @@ bool JUTException::showMapInfo_subroutine(u32 address, bool begin_with_newline) 
 
     bool result = searchPartialModule(address, &module_id, &section_id, &section_offset, &name_offset);
     if (result == true) {
-        search_name_part((u8*)name_offset, name_part, 32);
+        search_name_part((u8*)(uaddr)name_offset, name_part, 32);
         sConsole->print_f("%s %s:%x section:%d\n", new_line, name_part, section_offset, section_id);
         begin_with_newline = false;
     }
@@ -610,8 +617,8 @@ void JUTException::createFB() {
     u32 pixel_count = width * height;
     u32 size = pixel_count * 2;
 
-    void* begin = (void*)ALIGN_PREV((u32)end - size, 32);
-    void* object = (void*)ALIGN_PREV((s32)begin - sizeof(JUTExternalFB), 32);
+    void* begin = (void*)ALIGN_PREV((uaddr)end - size, 32);
+    void* object = (void*)ALIGN_PREV((saddr)begin - sizeof(JUTExternalFB), 32);
     JUTExternalFB* fb = new (object) JUTExternalFB(renderMode, GX_GM_1_7, begin, size);
 
     mDirectPrint->changeFrameBuffer(object);
@@ -622,6 +629,12 @@ void JUTException::createFB() {
 
     mFrameMemory = (JUTExternalFB*)object;
 }
+#ifdef SONAR_PORT
+/* sonarlib port: the host has no FPSCR, so the exception report shows it as zero */
+u32 JUTException::getFpscr() {
+    return 0;
+}
+#else
 // clang-format off
 asm u32 JUTException::getFpscr() { // TODO: figure out if this is possible with asm
     fralloc
@@ -636,6 +649,7 @@ asm u32 JUTException::getFpscr() { // TODO: figure out if this is possible with 
     blr
 }
 // clang-format on
+#endif
 
 JUTErrorHandler JUTException::setPreUserCallback(JUTErrorHandler callback) {
     JUTErrorHandler previous = sPreUserCallback;

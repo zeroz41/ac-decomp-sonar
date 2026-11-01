@@ -34,7 +34,7 @@ extern s16* CpubufProcess(DSPBUF_EVENTS event) {
             dspstatus = 0;
             break;
         case DSPBUF_EVENT_FRAME_END:
-            u8 write = write_buffer + 1;
+            u8 write; write = write_buffer + 1;
 
             if (write == DSPBUF_NUM) {
                 write = 0;

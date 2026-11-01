@@ -47,7 +47,7 @@ extern void* __osMalloc(OSArena* arena, u32 size);
 extern void* __osMallocR(OSArena* arena, u32 size);
 extern void __osFree(OSArena* arena, void* ptr);
 extern void* __osRealloc(OSArena* arena, void* ptr, u32 size);
-extern void __osGetFreeArena(OSArena* arena, u32* max_free_block_size, u32* free_blocks_size, u32* used_blocks_size);
+extern void __osGetFreeArena(OSArena* arena, size_t* max_free_block_size, size_t* free_blocks_size, size_t* used_blocks_size);
 extern u32 __osGetTotalFreeSize(OSArena* arena);
 extern u32 __osGetFreeSize(OSArena* arena);
 extern s32 __osGetMemBlockSize(OSArena* arena, void* ptr);

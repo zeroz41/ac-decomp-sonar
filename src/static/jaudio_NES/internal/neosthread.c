@@ -82,7 +82,11 @@ extern void* neosproc(void* param) {
 
         tmp = (cur + 1) & 1;
         if (tasks[tmp]) {
+#ifdef SONAR_PORT
+            RspStart2(task_buf[tmp], tasks[tmp], 0);
+#else
             RspStart2((u32*)task_buf[tmp], tasks[tmp], 0);
+#endif
             tasks[tmp] = 0;
             Jac_bcopy(tmp_buf, samples_dst, DAC_SIZE * 2);
         } else {

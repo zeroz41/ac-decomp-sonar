@@ -76,6 +76,9 @@ bool JKRDvdFile::close() {
             OSErrorLine(212, "cannot close DVD file\n"); /* JKRDvdFile.cpp line 212 */
         }
     }
+#ifdef SONAR_PORT
+    return false; /* sonarlib port: the callers ignore the result */
+#endif
 }
 
 int JKRDvdFile::readData(void* data, s32 length, s32 ofs) {
@@ -110,9 +113,9 @@ s32 JKRDvdFile::sync() {
     OSReceiveMessage(&this->mDvdMessageQueue, &m, OS_MESSAGE_BLOCK);
     this->mDvdThread = nullptr;
     OSUnlockMutex(&this->mDvdMutex);
-    return (s32)m;
+    return (saddr)m;
 }
 
 void JKRDvdFile::doneProcess(s32 result, DVDFileInfo* info) {
-    OSSendMessage(&static_cast<JKRDvdFileInfo*>(info)->mFile->mDvdMessageQueue, (OSMessage)result, OS_MESSAGE_NOBLOCK);
+    OSSendMessage(&static_cast<JKRDvdFileInfo*>(info)->mFile->mDvdMessageQueue, (OSMessage)(saddr)result, OS_MESSAGE_NOBLOCK);
 }

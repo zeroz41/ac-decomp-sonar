@@ -259,7 +259,7 @@ extern void graph_dt(GRAPH* graph);
 
 #define GRAPH_ALLOC(graph, size)                        \
     ((void*)((graph)->polygon_opaque_thaga.tha.tail_p = \
-                 (char*)((int)(graph)->polygon_opaque_thaga.tha.tail_p - (int)(size))))
+                 (char*)((saddr)(graph)->polygon_opaque_thaga.tha.tail_p - (int)(size))))
 #define GRAPH_ALLOC_TYPE(graph, type, num) (GRAPH_ALLOC(graph, sizeof(type) * (num)))
 
 #if VERSION != VER_GAFU01_00

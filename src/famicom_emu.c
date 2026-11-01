@@ -19,12 +19,12 @@ static u32 freeXfbSize = 0;
 
 static void my_alloc_init(GAME* game, void* start, size_t size) {
     u32 freebytes;
-    u32 alloc;
-    u32 aligned;
+    uaddr alloc;
+    uaddr aligned;
     u32 tsize;
 
     freebytes = game_getFreeBytes(game);
-    alloc = (u32)THA_alloc16(&game->tha, freebytes);
+    alloc = (uaddr)THA_alloc16(&game->tha, freebytes);
     aligned = ALIGN_NEXT(alloc, 16);
     tsize = aligned - alloc;
 

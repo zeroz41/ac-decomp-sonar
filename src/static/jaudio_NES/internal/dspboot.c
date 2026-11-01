@@ -255,7 +255,7 @@ extern s32 __DSPCheckMXICBoot2(DSPTaskInfo2* task) {
         DSPSendMailToDSP(0x80F3A001);
         while (DSPCheckMailToDSP() != 0);
 
-        DSPSendMailToDSP((u32)task->iram_mmem_addr);
+        DSPSendMailToDSP((uaddr)task->iram_mmem_addr);
         while (DSPCheckMailToDSP() != 0);
 
         DSPSendMailToDSP(0x80F3A002);
@@ -292,13 +292,13 @@ extern s32 __DSPCheckMXICBoot2(DSPTaskInfo2* task) {
         DSPSendMailToDSP(0xC000FFCE);
         while (DSPCheckMailToDSP() != 0);
 
-        DSPSendMailToDSP((u32)task->iram_mmem_addr >> 16 | 0xC0010000);
+        DSPSendMailToDSP((uaddr)task->iram_mmem_addr >> 16 | 0xC0010000);
         while (DSPCheckMailToDSP() != 0);
 
         DSPSendMailToDSP(0xC000FFCF);
         while (DSPCheckMailToDSP() != 0);
 
-        DSPSendMailToDSP((u16)task->iram_mmem_addr | 0xC0010000);
+        DSPSendMailToDSP((u16)(uaddr)task->iram_mmem_addr | 0xC0010000);
         while (DSPCheckMailToDSP() != 0);
 
         DSPSendMailToDSP(0xC000FFCD);

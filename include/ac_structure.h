@@ -207,9 +207,9 @@ struct actor_structure_s {
 
     /* general purpose members with unique usage between structure actors */
     /* 0x2B8 */ int arg0;
-    /* 0x2BC */ int arg1;
+    /* 0x2BC */ saddr arg1;
     /* 0x2C0 */ int arg2;
-    /* 0x2C4 */ int arg3;
+    /* 0x2C4 */ saddr arg3;
 
     /* general purpose float members with unique usage between structure actors*/
     /* 0x2C8 */ f32 arg0_f;

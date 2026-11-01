@@ -38,3 +38,7 @@ compile_commands.json
 
 # For saving work files into (like IDB)
 temp/
+
+# The native port's build tree and the user's disc image
+port/build/
+rom/
