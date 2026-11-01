@@ -3,6 +3,11 @@
    an OSThread by its address only, and the glue keeps the fields game code reads. */
 #include "dolphin/os.h"
 #include "dolphin/os/OSAlarm.h"
+#include "dolphin/os/OSAlloc.h"
+#include "dolphin/os/OSArena.h"
+#include "dolphin/os/OSContext.h"
+#include "dolphin/os/OSError.h"
+#include "dolphin/os/OSMemory.h"
 #include "dolphin/os/OSMessage.h"
 #include "dolphin/os/OSMutex.h"
 #include "dolphin/os/OSReset.h"
@@ -182,6 +187,13 @@ BOOL OSSetThreadPriority(OSThread* thread, OSPriority priority) {
 OSPriority OSGetThreadPriority(OSThread* thread) { return thread->base; }
 
 void OSYieldThread(void) { sl_dolphin_os_thread_yield(); }
+
+/* The SDK's scheduler lock, which only JUTException's error handler releases on its way out (below). Core os
+   schedules the threads, so the glue keeps only the count the SDK returned. */
+static s32 scheduler_lock;
+
+s32 OSDisableScheduler(void) { return scheduler_lock++; }
+s32 OSEnableScheduler(void) { return scheduler_lock--; }
 s32 OSCheckActiveThreads(void) { return sl_dolphin_os_thread_count(); }
 
 void OSSleepThread(OSThreadQueue* queue) { sl_dolphin_os_thread_sleep((sl_dolphin_os_thread_queue*)queue); }
@@ -255,3 +267,87 @@ void OSResetSystem(int reset, u32 resetCode, BOOL forceMenu) {
     SL_ERROR("dolphin_os", "OSResetSystem(%d, 0x%08x) failed: %d", reset, (unsigned)resetCode, (int)result);
     abort();
 }
+
+/* ---- Main memory: the kit's, whose first byte stands for physical address 0 */
+
+/* The console's 24 MB, scaled for 64-bit structures (sonarlib docs/platform.md, Memory). */
+#define AC_MAIN_MEMORY_SIZE (4u * 24u * 1024u * 1024u)
+
+/* The host has no uncached mirror, so both views are the same memory. */
+void* OSPhysicalToCached(u32 paddr) { return (u8*)sl_dolphin_os_memory_base() + paddr; }
+void* OSPhysicalToUncached(u32 paddr) { return OSPhysicalToCached(paddr); }
+u32 OSCachedToPhysical(void* caddr) { return (u32)((u8*)caddr - (u8*)sl_dolphin_os_memory_base()); }
+u32 OSUncachedToPhysical(void* ucaddr) { return OSCachedToPhysical(ucaddr); }
+void* OSCachedToUncached(void* caddr) { return caddr; }
+void* OSUncachedToCached(void* ucaddr) { return ucaddr; }
+
+void* OSGetArenaLo(void) { return sl_dolphin_os_arena_lo(); }
+void* OSGetArenaHi(void) { return sl_dolphin_os_arena_hi(); }
+void OSSetArenaLo(void* lo) { sl_dolphin_os_set_arena_lo(lo); }
+void OSSetArenaHi(void* hi) { sl_dolphin_os_set_arena_hi(hi); }
+
+/* The SDK's allocator kept its heap descriptors at the start of the arena it was given. The game creates no OS heap:
+   JKRHeap only reserves the descriptors, and jaudio's OSAlloc2 allocates from its own heap once it has one. So the
+   glue reserves the console's 12 bytes per descriptor, and the arena after it starts where the console's did, but
+   keeps no heaps. */
+volatile OSHeapHandle __OSCurrHeap = -1;
+
+void* OSInitAlloc(void* arenaStart, void* arenaEnd, int maxHeaps) {
+    uaddr start = (uaddr)arenaStart + (uaddr)maxHeaps * 12u;
+    (void)arenaEnd;
+    __OSCurrHeap = -1;
+    return (void*)((start + 31u) & ~(uaddr)31u);
+}
+
+void* OSAllocFromHeap(int heap, u32 size) {
+    SL_ERROR("dolphin_os", "OSAllocFromHeap(%d, %u): the port keeps no OS heaps", heap, (unsigned)size);
+    return NULL;
+}
+
+/* The console's OSInit set up the arena and the OS. The port's OS is sonarlib's, so this creates main memory, with
+   the arena past low memory, and restores the memory the console kept across a restart. Calling it again does
+   nothing, as the SDK's guarded. */
+void OSInit(void) {
+    static BOOL initialized;
+    sl_result result;
+    if (initialized)
+        return;
+    initialized = TRUE;
+    result = sl_dolphin_os_memory_create(AC_MAIN_MEMORY_SIZE, NULL);
+    if (result != SL_OK && result != SL_ERROR_ALREADY_INITIALIZED) {
+        SL_ERROR("dolphin_os", "OSInit: no main memory: %d", (int)result);
+        abort();
+    }
+    sl_os_boot_reset(NULL, ac_nmi_save_area, sizeof ac_nmi_save_area, NULL);
+}
+
+/* ---- CPU errors: the console's exceptions called these handlers, and JUTException installs one to show its crash
+   screen. A fault on the host goes to sonarlib's crash report instead, so the glue keeps the table and never calls
+   it, and the calls the handler makes are left with nothing to do. */
+
+static OSErrorHandler error_handlers[OS_ERROR_MAX];
+
+OSErrorHandler OSSetErrorHandler(OSError error, OSErrorHandler handler) {
+    OSErrorHandler previous;
+    if (error >= OS_ERROR_MAX)
+        return NULL;
+    previous = error_handlers[error];
+    error_handlers[error] = handler;
+    return previous;
+}
+
+void OSFillFPUContext(OSContext* context) { (void)context; }
+
+/* The console's memory protection unit, which the host does not have. */
+void OSProtectRange(u32 chan, void* addr, u32 nBytes, u32 control) {
+    (void)chan;
+    (void)addr;
+    (void)nBytes;
+    (void)control;
+}
+
+/* ---- The boot mode, which the console's SRAM kept and its boot read: osreport's OSChangeBootMode sets it for the
+   next boot, and the port boots one way. */
+
+void __OSSetBootMode(u8 mode) { (void)mode; }
+BOOL __OSSyncSram(void) { return TRUE; }
