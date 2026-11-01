@@ -314,9 +314,13 @@ void JKRDefaultMemoryErrorRoutine(void*, u32, int);
 void* operator new(size_t);
 void* operator new(size_t, s32);
 void* operator new(size_t, JKRHeap*, int);
+#ifdef SONAR_PORT
+#include <new> /* sonarlib port: the host's library defines the placement form */
+#else
 inline void* operator new(size_t, void* buf) {
     return buf;
 } // i believe this is actually part of MSL_C?
+#endif
 
 void* operator new[](size_t);
 void* operator new[](size_t, s32);

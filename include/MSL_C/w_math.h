@@ -3,7 +3,26 @@
 
 #include "MSL_C/MSL_Common/float.h"
 
-#if !defined(BUGFIXES) && !defined(FIX_SQRT_LINKAGE)
+#ifdef SONAR_PORT
+/* sonarlib port: inlined where they are called, and defined once, in port/adapter/msl_inlines.c, where the original
+   compiler left a copy in each unit */
+#ifdef AC_PORT_MSL_INLINES
+#define MSL_EXTERN_INLINE
+#define MSL_INLINE
+#else
+#define MSL_EXTERN_INLINE extern inline __attribute__((gnu_inline))
+#define MSL_INLINE extern inline __attribute__((gnu_inline))
+#endif
+#else
+#define MSL_EXTERN_INLINE extern inline
+#define MSL_INLINE inline
+#endif
+
+#if defined(SONAR_PORT) && defined(__cplusplus)
+extern "C" { /* sonarlib port: the one definition is C's */
+#endif
+
+#if !defined(BUGFIXES) && !defined(FIX_SQRT_LINKAGE) && !defined(SONAR_PORT)
 #define SQRTF_LINKAGE extern
 #else
 // making the function static instead of extern resolves the bug
@@ -44,12 +63,12 @@ SQRTF_LINKAGE inline float sqrtf(float x) {
 // Dirty hack to avoid the current header mess
 #ifndef FABS_DECLARED
 #define FABS_DECLARED
-extern inline double fabs(double x) {
+MSL_EXTERN_INLINE double fabs(double x) {
     return __fabs(x);
 }
 #endif
 
-inline float fabsf(float x) {
+MSL_INLINE float fabsf(float x) {
     return (float)fabs((double)x);
 }
 
@@ -57,7 +76,7 @@ inline float fabsf(float x) {
 #define NAN (*(float*)__float_nan)
 #define HUGE_VALF (*(float*)__float_huge)
 
-extern inline double sqrt(double x) {
+MSL_EXTERN_INLINE double sqrt(double x) {
     if (x > 0.0) {
         double guess = __frsqrte(x);
         guess = .5 * guess * (3.0 - guess * guess * x);
@@ -72,6 +91,10 @@ extern inline double sqrt(double x) {
     }
     return INFINITY;
 }
+
+#if defined(SONAR_PORT) && defined(__cplusplus)
+}
+#endif
 
 #ifdef __cplusplus
 extern "C" {

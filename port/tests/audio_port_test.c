@@ -7,10 +7,6 @@
 #include <stdio.h>
 #include <string.h>
 
-/* The decompilation's math headers define functions that read MSL's constants, which the port does not link. */
-unsigned long __float_nan[1] = {0x7fc00000};
-unsigned long __float_huge[1] = {0x7f800000};
-
 static int failures;
 
 #define CHECK(cond)                                                                                                   \

@@ -5,6 +5,9 @@
 #ifndef AC_PORT_NAMES_H
 #define AC_PORT_NAMES_H
 
+#ifndef __cplusplus
+#include <math.h>
+#endif
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +18,27 @@
 #define bcmp ac_bcmp
 #define bcopy ac_bcopy
 #define bzero ac_bzero
+
+/* MSL's math, which the game keeps for the console's results; the host's library keeps its own. */
+#define acos ac_acos
+#define atan ac_atan
+#define atan2 ac_atan2
+#define copysign ac_copysign
+#define cos ac_cos
+#define cosf ac_cosf
+#define fabs ac_fabs
+#define fabsf ac_fabsf
+#define floor ac_floor
+#define frexp ac_frexp
+#define fsqrt ac_fsqrt /* libc64's; glibc declares a narrowing one */
+#define ldexp ac_ldexp
+#define modf ac_modf
+#define sin ac_sin
+#define sinf ac_sinf
+#define sqrt ac_sqrt
+#define sqrtf ac_sqrtf
+/* MSL_Common/float.h's, inline; glibc declares a function of its own by the name. */
+#define __fpclassifyf ac___fpclassifyf
 
 #define membersize(type, member) (sizeof(((type*)0)->member))
 

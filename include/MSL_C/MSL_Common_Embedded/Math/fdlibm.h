@@ -230,6 +230,9 @@ extern int __kernel_rem_pio2 __P((double*, double*, int, int, int, const int*));
 // Dirty hack to avoid the current header mess
 #ifndef FABS_DECLARED
 #define FABS_DECLARED
+#if defined(SONAR_PORT) && !defined(AC_PORT_MSL_INLINES)
+extern __attribute__((gnu_inline)) /* sonarlib port: as w_math.h's */
+#endif
 inline double fabs(double x) {
     return __fabs(x);
 }

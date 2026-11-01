@@ -58,6 +58,9 @@ message(STATUS "Animal Crossing: ${unit_count} units")
 
 add_library(ac_game OBJECT)
 sonar_decomp_add_units(ac_game PREFIX AC ROOT "${AC_ROOT}" UNITS ${units} DROP_DEFINES MUST_MATCH)
+# The one definition of each of MSL's math inlines (include/MSL_C/w_math.h).
+target_sources(ac_game PRIVATE adapter/msl_inlines.c)
+set_source_files_properties(adapter/msl_inlines.c PROPERTIES COMPILE_DEFINITIONS AC_PORT_MSL_INLINES)
 target_include_directories(ac_game PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include"
     "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin"
     "${AC_BUILD}/include" "${AC_BUILD}/bin/assets"
