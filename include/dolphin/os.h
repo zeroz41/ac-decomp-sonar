@@ -125,6 +125,10 @@ u32 __OSCoreClock : (OS_BASE_CACHED | 0x00FC);
 s32 __gUnknown800030C0[2] : (OS_BASE_CACHED | 0x30C0);
 u8 __gUnknown800030E3 : (OS_BASE_CACHED | 0x30E3);
 vu16 __OSDeviceCode AT_ADDRESS(OS_BASE_CACHED | 0x30E6);
+#elif defined(SONAR_PORT)
+/* sonarlib port: the GameCube's clocks, which the console kept in low memory */
+#define __OSBusClock  162000000u
+#define __OSCoreClock 486000000u
 #else
 #define __OSBusClock  (*(u32 *)(OS_BASE_CACHED | 0x00F8))
 #define __OSCoreClock (*(u32 *)(OS_BASE_CACHED | 0x00FC))

@@ -61,6 +61,8 @@ sonar_decomp_add_units(ac_game PREFIX AC ROOT "${AC_ROOT}" UNITS ${units} DROP_D
 # The one definition of each of MSL's math inlines (include/MSL_C/w_math.h).
 target_sources(ac_game PRIVATE adapter/msl_inlines.c)
 set_source_files_properties(adapter/msl_inlines.c PROPERTIES COMPILE_DEFINITIONS AC_PORT_MSL_INLINES)
+# The SDK's OS functions on sonarlib's kit.
+target_sources(ac_game PRIVATE adapter/dolphin_os.c)
 target_include_directories(ac_game PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include"
     "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin"
     "${AC_BUILD}/include" "${AC_BUILD}/bin/assets"
@@ -86,7 +88,7 @@ target_compile_options(ac_game PRIVATE -fwrapv -fno-strict-aliasing -fno-delete-
                        $<$<COMPILE_LANGUAGE:CXX>:-Werror=return-type>)
 # The original compiler took C++98, which allowed narrowing in braced initializers.
 target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>)
-target_link_libraries(ac_game PRIVATE sonar::base)
+target_link_libraries(ac_game PRIVATE sonar::base sonar::kit_dolphin_os)
 
 # The port's views of a display-list command (tools/gbi_views.py): each field where the console's compiler put it,
 # and the views current with the console's structs.
