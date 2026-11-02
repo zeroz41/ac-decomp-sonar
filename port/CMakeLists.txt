@@ -69,6 +69,15 @@ target_sources(ac_game PRIVATE adapter/msl_inlines.c)
 set_source_files_properties(adapter/msl_inlines.c PROPERTIES COMPILE_DEFINITIONS AC_PORT_MSL_INLINES)
 # The SDK's OS functions on sonarlib's kit.
 target_sources(ac_game PRIVATE adapter/dolphin_os.c)
+# JSystem's system font, which the game keeps in its executable (JUTFontData_Ascfont_fix12.s): the decompilation's
+# build extracts it, and this writes its bytes for the adapter to include.
+set(system_font "${AC_BUILD}/bin/assets/JSystem/JUtility/FontData/Ascfont_fix12.bfn")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${system_font}")
+file(READ "${system_font}" system_font_hex HEX)
+string(REGEX REPLACE "(..)" "0x\\1," system_font_bytes "${system_font_hex}")
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/assets/Ascfont_fix12.inc" CONTENT "${system_font_bytes}\n" @ONLY)
+target_sources(ac_game PRIVATE adapter/jsystem_font.c)
+set_source_files_properties(adapter/jsystem_font.c PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_BINARY_DIR}/assets")
 target_include_directories(ac_game PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include"
     "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin"
     "${AC_BUILD}/include" "${AC_BUILD}/bin/assets"
@@ -92,6 +101,11 @@ target_compile_options(ac_game PRIVATE -fwrapv -fno-strict-aliasing -fno-delete-
                        $<$<COMPILE_LANGUAGE:C>:-Werror=pointer-to-int-cast> -Werror=return-type
                        # C++ treats falling off the end of a function as unreachable, not as an unused result.
                        $<$<COMPILE_LANGUAGE:CXX>:-Werror=return-type>)
+# GCC calls a virtual function's likely override directly, emitting the inline overrides of classes the game never
+# links, such as JUTRomFont's.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-devirtualize-speculatively>)
+endif()
 # The original compiler took C++98, which allowed narrowing in braced initializers.
 target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>)
 target_link_libraries(ac_game PRIVATE sonar::base sonar::kit_dolphin_os)

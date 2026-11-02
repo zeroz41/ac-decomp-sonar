@@ -86,10 +86,12 @@ JKRHeap* JKRHeap::becomeCurrentHeap() {
     return old;
 }
 
+#ifndef SONAR_PORT /* sonarlib port: unused, and it calls a function the game does not have */
 void JKRHeap::destroy(JKRHeap* heap) {
     JUT_ASSERT(heap != 0);
     heap->destroy();
 }
+#endif
 
 void* JKRHeap::alloc(u32 byteCount, int padding, JKRHeap* heap) {
     void* memory = nullptr;

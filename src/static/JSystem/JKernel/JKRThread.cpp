@@ -83,6 +83,7 @@ void* JKRTask::run() {
     }
 }
 
+#ifndef SONAR_PORT /* sonarlib port: unused, and it calls a function the game does not have */
 bool JKRTask::request(RequestCallback callback, void* arg, void* msg) {
     Request* req = searchBlank();
     if (req == nullptr) {
@@ -97,3 +98,4 @@ bool JKRTask::request(RequestCallback callback, void* arg, void* msg) {
     }
     return sendResult;
 }
+#endif

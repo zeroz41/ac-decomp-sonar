@@ -49,5 +49,7 @@ int JSUFileInputStream::seekPos(s32 offset, JSUStreamSeekFrom from) {
     return this->mPosition - pos;
 }
 
+#ifndef SONAR_PORT /* sonarlib port: unused, and its virtual table names functions the game does not have */
 JSUFileOutputStream::JSUFileOutputStream(JKRFile* file) {
 }
+#endif
