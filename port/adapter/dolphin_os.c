@@ -3,10 +3,13 @@
    an OSThread by its address only, and the glue keeps the fields game code reads. */
 #include "dolphin/os.h"
 #include "dolphin/os/OSAlarm.h"
+#include "dolphin/base/PPCArch.h"
 #include "dolphin/os/OSAlloc.h"
 #include "dolphin/os/OSArena.h"
+#include "dolphin/os/OSCache.h"
 #include "dolphin/os/OSContext.h"
 #include "dolphin/os/OSError.h"
+#include "dolphin/os/OSInterrupt.h"
 #include "dolphin/os/OSMemory.h"
 #include "dolphin/os/OSMessage.h"
 #include "dolphin/os/OSMutex.h"
@@ -20,6 +23,7 @@
 #include <sonar/dolphin_os/os.h>
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -345,6 +349,97 @@ void OSProtectRange(u32 chan, void* addr, u32 nBytes, u32 control) {
     (void)nBytes;
     (void)control;
 }
+
+/* ---- Interrupts: the console's devices raised them and the SDK dispatched them to these handlers. The glue keeps
+   the table and the mask for the devices' kits; jaudio's DSP handler is the one the game installs. */
+
+static __OSInterruptHandler interrupt_handlers[__OS_INTERRUPT_MAX];
+static u32 interrupt_mask;
+
+__OSInterruptHandler __OSSetInterruptHandler(__OSInterrupt interrupt, __OSInterruptHandler handler) {
+    __OSInterruptHandler previous;
+    if (interrupt < 0 || interrupt >= __OS_INTERRUPT_MAX)
+        return NULL;
+    previous = interrupt_handlers[interrupt];
+    interrupt_handlers[interrupt] = handler;
+    return previous;
+}
+
+__OSInterruptHandler __OSGetInterruptHandler(__OSInterrupt interrupt) {
+    if (interrupt < 0 || interrupt >= __OS_INTERRUPT_MAX)
+        return NULL;
+    return interrupt_handlers[interrupt];
+}
+
+/* The SDK's masks set a bit to block an interrupt and return the mask before. */
+u32 __OSMaskInterrupts(u32 mask) {
+    const u32 previous = interrupt_mask;
+    interrupt_mask |= mask;
+    return previous;
+}
+
+u32 __OSUnmaskInterrupts(u32 mask) {
+    const u32 previous = interrupt_mask;
+    interrupt_mask &= ~mask;
+    return previous;
+}
+
+/* An interrupt handler ran on a context of its own, which the host's threads have no counterpart for. */
+void OSClearContext(OSContext* context) { (void)context; }
+void OSSetCurrentContext(OSContext* context) { (void)context; }
+
+/* ---- Caches: the host's memory is coherent, so storing, flushing, invalidating and touching a range have nothing
+   to do, and the locked cache is never enabled. DCZeroRange is dcbz on each 32-byte block the range touches, which
+   the game relies on to clear memory. */
+
+void DCInvalidateRange(void* addr, u32 nBytes) {
+    (void)addr;
+    (void)nBytes;
+}
+void DCFlushRange(void* addr, u32 nBytes) {
+    (void)addr;
+    (void)nBytes;
+}
+void DCStoreRange(void* addr, u32 nBytes) {
+    (void)addr;
+    (void)nBytes;
+}
+void DCFlushRangeNoSync(void* addr, u32 nBytes) {
+    (void)addr;
+    (void)nBytes;
+}
+void DCStoreRangeNoSync(void* addr, u32 nBytes) {
+    (void)addr;
+    (void)nBytes;
+}
+void DCTouchRange(void* addr, u32 nBytes) {
+    (void)addr;
+    (void)nBytes;
+}
+void ICInvalidateRange(void* addr, u32 nBytes) {
+    (void)addr;
+    (void)nBytes;
+}
+void LCDisable(void) {}
+
+void DCZeroRange(void* addr, u32 nBytes) {
+    uintptr_t first;
+    uintptr_t end;
+    if (nBytes == 0)
+        return;
+    first = (uintptr_t)addr & ~(uintptr_t)31;
+    end = ((uintptr_t)addr + nBytes + 31) & ~(uintptr_t)31;
+    memset((void*)first, 0, end - first);
+}
+
+/* ---- The processor's state: JUTException reads and writes the machine state register to mask the floating-point
+   exceptions, which the host's floating point does not raise, so the glue keeps the value it was given. */
+
+static u32 machine_state;
+
+u32 PPCMfmsr(void) { return machine_state; }
+void PPCMtmsr(u32 value) { machine_state = value; }
+void PPCSync(void) {}
 
 /* ---- The boot mode, which the console's SRAM kept and its boot read: osreport's OSChangeBootMode sets it for the
    next boot, and the port boots one way. */

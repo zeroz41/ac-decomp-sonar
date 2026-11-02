@@ -19,7 +19,8 @@ sonar_decomp_read_units(PREFIX AC OBJDIFF "${AC_ROOT}/objdiff.json")
 
 # The game's C and C++ units, without the libraries sonarlib and the host replace:
 #   the Dolphin SDK, the debugger stub and the compiler runtime;
-#   MSL's C library, except its math, which the game keeps (porting-model.md, Floating-point determinism);
+#   MSL's C library, except its math and the NaN and infinity it returns, which the game keeps (porting-model.md,
+#   Floating-point determinism);
 #   the NES emulator, out of scope until its assembly is converted (roadmap M6);
 #   the console's hardware set-up, which the host has no counterpart for: the memory map and the DSP tasks that
 #   unlock the memory card and answer the Game Boy Advance;
@@ -33,7 +34,7 @@ set(replaced_sources
     "^src/static/jaudio_NES/internal/dsp_(cardunlock|GBAKey)\\.c$"
     "^src/static/boot\\.c$"
     "^src/executor\\.c$")
-set(msl_math "^src/static/MSL_C\\.PPCEABI\\.bare\\.H/(e|k|s|w)_[a-z0-9_]+\\.c$")
+set(msl_math "^src/static/MSL_C\\.PPCEABI\\.bare\\.H/((e|k|s|w)_[a-z0-9_]+|float)\\.c$")
 set(units "")
 foreach(unit IN LISTS AC_UNITS)
     set(source "${AC_UNIT_${unit}_SOURCE}")
