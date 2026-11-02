@@ -1,6 +1,14 @@
 #include "jaudio_NES/dspproc.h"
 #include "dolphin/dsp.h"
 
+#ifdef SONAR_PORT
+#include "port/dsp_mail.h"
+/* sonarlib port: a host address does not fit a mail, so the port's DSP gives each one a 32-bit handle. */
+#define DSP_MAIL_ADDRESS(address) ac_dsp_mail_address((const void*)(address))
+#else
+#define DSP_MAIL_ADDRESS(address) (address)
+#endif
+
 static u16 DSP_MIXERLEVEL = 0x4000;
 
 extern s32 DSPSendCommands(u32* commands, u32 count) {
@@ -38,25 +46,25 @@ extern void DSPWaitFinish() {
     } while ((DSPReadMailFromDSP() + 0x77780000) == 0x1357);
 }
 
-extern void DsetupTable(u32 arg0, u32 arg1, u32 arg2, u32 arg3, u32 arg4) {
+extern void DsetupTable(u32 arg0, uaddr arg1, uaddr arg2, uaddr arg3, uaddr arg4) {
     u32 commands[5];
 
     commands[0] = (arg0 & 0xFFFF) | 0x81000000;
-    commands[1] = arg1;
-    commands[2] = arg2;
-    commands[3] = arg3;
-    commands[4] = arg4;
+    commands[1] = DSP_MAIL_ADDRESS(arg1);
+    commands[2] = DSP_MAIL_ADDRESS(arg2);
+    commands[3] = DSP_MAIL_ADDRESS(arg3);
+    commands[4] = DSP_MAIL_ADDRESS(arg4);
 
     DSPSendCommands(commands, ARRAY_COUNT(commands));
     DSPWaitFinish();
 }
 
-extern void DsyncFrame(u32 subframes, u32 dspbuf_start, u32 dspbuf_end){
+extern void DsyncFrame(u32 subframes, uaddr dspbuf_start, uaddr dspbuf_end){
     u32 commands[3];
 
     commands[0] = (subframes << 16 & 0xFF0000) | 0x82000000 | DSP_MIXERLEVEL;
-    commands[1] = dspbuf_start;
-    commands[2] = dspbuf_end;
+    commands[1] = DSP_MAIL_ADDRESS(dspbuf_start);
+    commands[2] = DSP_MAIL_ADDRESS(dspbuf_end);
 
     DSPSendCommands(commands, ARRAY_COUNT(commands));
     DSPWaitFinish();    

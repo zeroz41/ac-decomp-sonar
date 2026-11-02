@@ -78,6 +78,8 @@ target_sources(ac_game PRIVATE adapter/dolphin_aram.c)
 target_sources(ac_game PRIVATE adapter/dolphin_gba.c)
 # The SDK's memory cards on sonarlib's virtual card.
 target_sources(ac_game PRIVATE adapter/dolphin_card.c)
+# The SDK's audio interface on sonarlib audio's frame, and the DSP behind its mailbox.
+target_sources(ac_game PRIVATE adapter/dolphin_ai.c adapter/dolphin_dsp.c)
 # The NES emulator's entry points, which halt: its core is excluded below.
 target_sources(ac_game PRIVATE adapter/famicom_core.cpp)
 set_source_files_properties(adapter/famicom_core.cpp PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
@@ -200,3 +202,17 @@ target_compile_options(ac_card_port_test PRIVATE ${adapter_includes})
 set_target_properties(ac_card_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
 target_link_libraries(ac_card_port_test PRIVATE sonar::core sonar::kit_card)
 add_test(NAME ac_card_port COMMAND ac_card_port_test)
+
+# The SDK's audio interface on sonarlib audio's frame, and the DSP answering jaudio's own boot and commands.
+add_executable(ac_ai_dsp_port_test tests/ai_dsp_port_test.c adapter/dolphin_ai.c adapter/dolphin_dsp.c
+    "${AC_ROOT}/src/static/jaudio_NES/internal/dspboot.c" "${AC_ROOT}/src/static/jaudio_NES/internal/dspproc.c")
+# jaudio is C++, as the game builds it, and so the test that calls it.
+set_source_files_properties(tests/ai_dsp_port_test.c "${AC_ROOT}/src/static/jaudio_NES/internal/dspboot.c"
+    "${AC_ROOT}/src/static/jaudio_NES/internal/dspproc.c" PROPERTIES LANGUAGE CXX)
+target_include_directories(ac_ai_dsp_port_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter"
+    "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include" "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin" "${AC_ROOT}")
+target_compile_definitions(ac_ai_dsp_port_test PRIVATE SONAR_PORT=1)
+target_compile_options(ac_ai_dsp_port_test PRIVATE ${adapter_includes})
+set_target_properties(ac_ai_dsp_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON CXX_STANDARD 20 CXX_EXTENSIONS ON)
+target_link_libraries(ac_ai_dsp_port_test PRIVATE sonar::core)
+add_test(NAME ac_ai_dsp_port COMMAND ac_ai_dsp_port_test)

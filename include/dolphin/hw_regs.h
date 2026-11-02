@@ -10,6 +10,17 @@ volatile u32 __DIRegs[]       : 0xCC006000;
 volatile u32 __SIRegs[0x100]  : 0xCC006400;
 volatile u32 __EXIRegs[0x40]  : 0xCC006800;
 volatile u32 __AIRegs[8]      : 0xCC006C00;
+#elif defined(SONAR_PORT)
+/* sonarlib port: the host has no registers at these addresses. The adapter defines the blocks the game itself
+   touches; a use of any other fails to link. */
+extern volatile u16 __VIRegs[];
+extern volatile u32 __PIRegs[];
+extern volatile u16 __MEMRegs[];
+extern volatile u16 __DSPRegs[];
+extern volatile u32 __DIRegs[];
+extern volatile u32 __SIRegs[];
+extern volatile u32 __EXIRegs[];
+extern volatile u32 __AIRegs[];
 #else
 #define __VIRegs         ((volatile u16 *)0xCC002000)
 #define __PIRegs         ((volatile u32 *)0xCC003000)
