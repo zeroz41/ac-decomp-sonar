@@ -14,6 +14,7 @@
 #include "libforest/emu64/emu64_wrapper.h"
 #ifdef SONAR_PORT
 #include <sonar/base/endian.h>
+#include <sonar/legacy_math.h>
 #endif
 #include "sys_ucode.h"
 
@@ -145,6 +146,8 @@ float fastcast_float(register unsigned char* s) {
     asm {
         psq_l f, 0(s), 1, 2
     }
+#elif defined(SONAR_PORT)
+    f = sl_ps_dequantize(*s, 0); /* sonarlib port: qr2, as OSInitFastCast sets it */
 #endif // clang-format on
 
     return f;
@@ -157,6 +160,8 @@ float fastcast_float(register unsigned short* s) {
     asm {
         psq_l f, 0(s), 1, 3
     }
+#elif defined(SONAR_PORT)
+    f = sl_ps_dequantize(*s, 0); /* sonarlib port: qr3, as OSInitFastCast sets it */
 #endif // clang-format on
 
     return f;
@@ -169,6 +174,8 @@ float fastcast_float(register signed char* s) {
     asm {
         psq_l f, 0(s), 1, 4
     }
+#elif defined(SONAR_PORT)
+    f = sl_ps_dequantize(*s, 0); /* sonarlib port: qr4, as OSInitFastCast sets it */
 #endif // clang-format on
 
     return f;
@@ -181,6 +188,8 @@ float fastcast_float(register short* s) {
     asm {
         psq_l f, 0(s), 1, 5
     }
+#elif defined(SONAR_PORT)
+    f = sl_ps_dequantize(*s, 0); /* sonarlib port: qr5, as OSInitFastCast sets it */
 #endif // clang-format on
 
     return f;

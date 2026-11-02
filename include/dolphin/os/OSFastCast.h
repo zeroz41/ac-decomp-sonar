@@ -3,6 +3,11 @@
 
 #include "types.h"
 
+#ifdef SONAR_PORT
+// The port's C fallbacks for the fast casts (sonarlib porting-model.md, Inline assembly and paired singles).
+#include <sonar/legacy_math.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif // ifdef __cplusplus
@@ -53,6 +58,8 @@ static inline s16 __OSf32tos16(register f32 inF) {
 		psq_st inF, 0(tmpPtr), 0x1, OS_FASTCAST_S16
 		lha out, 0(tmpPtr)
 	}
+#elif defined(SONAR_PORT)
+    out = (s16)sl_ps_quantize(inF, 0, -32768, 32767);
 #endif // clang-format on
 
     return out;
@@ -71,6 +78,8 @@ static inline u8 __OSf32tou8(register f32 inF) {
 		psq_st inF, 0(tmpPtr), 0x1, OS_FASTCAST_U8
 		lbz out, 0(tmpPtr)
 	}
+#elif defined(SONAR_PORT)
+    out = (u8)sl_ps_quantize(inF, 0, 0, 255);
 #endif // clang-format on
 
     return out;
@@ -90,6 +99,8 @@ static inline s8 __OSf32tos8(register f32 inF) {
 		lbz out, 0(tmpPtr)
 		extsb out, out
 	}
+#elif defined(SONAR_PORT)
+    out = (s8)sl_ps_quantize(inF, 0, -128, 127);
 #endif // clang-format on
 
     return out;
@@ -106,6 +117,8 @@ static inline float __OSs16tof32(register s16* s) {
     asm {
         psq_l f, 0(s), 1, 5
     }
+#elif defined(SONAR_PORT)
+    f = sl_ps_dequantize(*s, 0);
 #endif // clang-format on
 
     return f;
