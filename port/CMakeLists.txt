@@ -72,6 +72,8 @@ target_sources(ac_game PRIVATE adapter/msl_inlines.c)
 set_source_files_properties(adapter/msl_inlines.c PROPERTIES COMPILE_DEFINITIONS AC_PORT_MSL_INLINES)
 # The SDK's OS functions on sonarlib's kit.
 target_sources(ac_game PRIVATE adapter/dolphin_os.c)
+# The SDK's ARAM and its DMA queue.
+target_sources(ac_game PRIVATE adapter/dolphin_aram.c)
 # The NES emulator's entry points, which halt: its core is excluded below.
 target_sources(ac_game PRIVATE adapter/famicom_core.cpp)
 set_source_files_properties(adapter/famicom_core.cpp PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
@@ -172,3 +174,14 @@ target_compile_options(ac_mtx_port_test PRIVATE -ffp-contract=off)
 set_target_properties(ac_mtx_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
 target_link_libraries(ac_mtx_port_test PRIVATE sonar::base m)
 add_test(NAME ac_mtx_port COMMAND ac_mtx_port_test)
+
+
+# The SDK's ARAM and its DMA queue on core os.
+add_executable(ac_aram_port_test tests/aram_port_test.c adapter/dolphin_aram.c)
+target_include_directories(ac_aram_port_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include" "${AC_ROOT}/include"
+    "${AC_ROOT}/src/static/dolphin" "${AC_ROOT}")
+target_compile_definitions(ac_aram_port_test PRIVATE SONAR_PORT=1)
+target_compile_options(ac_aram_port_test PRIVATE ${adapter_includes})
+set_target_properties(ac_aram_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
+target_link_libraries(ac_aram_port_test PRIVATE sonar::core)
+add_test(NAME ac_aram_port COMMAND ac_aram_port_test)
