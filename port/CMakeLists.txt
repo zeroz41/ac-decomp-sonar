@@ -76,6 +76,8 @@ target_sources(ac_game PRIVATE adapter/dolphin_os.c)
 target_sources(ac_game PRIVATE adapter/dolphin_aram.c)
 # The SDK's Game Boy Advance functions, with none connected.
 target_sources(ac_game PRIVATE adapter/dolphin_gba.c)
+# The SDK's memory cards on sonarlib's virtual card.
+target_sources(ac_game PRIVATE adapter/dolphin_card.c)
 # The NES emulator's entry points, which halt: its core is excluded below.
 target_sources(ac_game PRIVATE adapter/famicom_core.cpp)
 set_source_files_properties(adapter/famicom_core.cpp PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
@@ -118,7 +120,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 # The original compiler took C++98, which allowed narrowing in braced initializers.
 target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>)
-target_link_libraries(ac_game PRIVATE sonar::base sonar::kit_dolphin_os)
+target_link_libraries(ac_game PRIVATE sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card)
 
 # The port's views of a display-list command (tools/gbi_views.py): each field where the console's compiler put it,
 # and the views current with the console's structs.
@@ -187,3 +189,14 @@ target_compile_options(ac_aram_port_test PRIVATE ${adapter_includes})
 set_target_properties(ac_aram_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
 target_link_libraries(ac_aram_port_test PRIVATE sonar::core)
 add_test(NAME ac_aram_port COMMAND ac_aram_port_test)
+
+
+# The SDK's memory cards on sonarlib's virtual card in a memory store.
+add_executable(ac_card_port_test tests/card_port_test.c adapter/dolphin_card.c)
+target_include_directories(ac_card_port_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter"
+    "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include" "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin" "${AC_ROOT}")
+target_compile_definitions(ac_card_port_test PRIVATE SONAR_PORT=1)
+target_compile_options(ac_card_port_test PRIVATE ${adapter_includes})
+set_target_properties(ac_card_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
+target_link_libraries(ac_card_port_test PRIVATE sonar::core sonar::kit_card)
+add_test(NAME ac_card_port COMMAND ac_card_port_test)
