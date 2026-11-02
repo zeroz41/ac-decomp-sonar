@@ -10,6 +10,7 @@
 #include "dolphin/os/OSContext.h"
 #include "dolphin/os/OSError.h"
 #include "dolphin/os/OSInterrupt.h"
+#include "dolphin/os/OSLink.h"
 #include "dolphin/os/OSMemory.h"
 #include "dolphin/os/OSMessage.h"
 #include "dolphin/os/OSMutex.h"
@@ -215,6 +216,9 @@ void OSSignalCond(OSCond* cond) { sl_dolphin_os_cond_signal(KIT_COND(cond)); }
 
 /* ---- Alarms */
 
+/* The kit's alarms need no set-up. */
+void OSInitAlarm(void) {}
+
 void OSCreateAlarm(OSAlarm* alarm) { sl_dolphin_os_alarm_create(KIT_ALARM(alarm)); }
 
 void OSSetAlarm(OSAlarm* alarm, OSTime tick, OSAlarmHandler handler) {
@@ -260,6 +264,12 @@ u8 ac_nmi_save_area[0x40];
 BOOL OSGetResetSwitchState(void) { return FALSE; }
 
 u32 OSGetResetCode(void) { return sl_dolphin_os_reset_code(); }
+
+/* The memory kept across a restart, which the game reports at boot: the port's NMISaveArea. */
+void OSGetSaveRegion(void** start, void** end) {
+    *start = ac_nmi_save_area;
+    *end = ac_nmi_save_area + sizeof ac_nmi_save_area;
+}
 
 /* The console kept NMISaveArea across a restart, and the game copies it back at boot. The console never returned
    from a restart or hot reset, so neither does the port: one that cannot reset stops. The menu is the console's and
@@ -440,6 +450,11 @@ static u32 machine_state;
 u32 PPCMfmsr(void) { return machine_state; }
 void PPCMtmsr(u32 value) { machine_state = value; }
 void PPCSync(void) {}
+
+/* ---- Modules: the console linked foresta.rel at run time, and the port links it in (boot.c's LoadLink). The
+   string table named a module's unresolved symbols for the linker's errors, which the port has none of. */
+
+void OSSetStringTable(const void* string_table) { (void)string_table; }
 
 /* ---- The boot mode, which the console's SRAM kept and its boot read: osreport's OSChangeBootMode sets it for the
    next boot, and the port boots one way. */

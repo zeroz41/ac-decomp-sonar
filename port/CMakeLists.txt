@@ -24,7 +24,7 @@ sonar_decomp_read_units(PREFIX AC OBJDIFF "${AC_ROOT}/objdiff.json")
 #   the NES emulator, out of scope until its assembly is converted (roadmap M6);
 #   the console's hardware set-up, which the host has no counterpart for: the memory map and the DSP tasks that
 #   unlock the memory card and answer the Game Boy Advance;
-#   the start-up that loads foresta.rel and runs its static constructors, which the port's entry point does.
+#   foresta.rel's start-up, which runs its static constructors: the port links foresta in (boot.c's LoadLink).
 set(replaced_sources
     "^src/static/dolphin/"
     "^src/static/TRK_MINNOW_DOLPHIN/"
@@ -32,7 +32,6 @@ set(replaced_sources
     "^src/static/Famicom/"
     "^src/static/libforest/ReconfigBATs\\.c$"
     "^src/static/jaudio_NES/internal/dsp_(cardunlock|GBAKey)\\.c$"
-    "^src/static/boot\\.c$"
     "^src/executor\\.c$")
 set(msl_math "^src/static/MSL_C\\.PPCEABI\\.bare\\.H/((e|k|s|w)_[a-z0-9_]+|float)\\.c$")
 set(units "")
@@ -64,6 +63,9 @@ message(STATUS "Animal Crossing: ${unit_count} units")
 
 add_library(ac_game OBJECT)
 sonar_decomp_add_units(ac_game PREFIX AC ROOT "${AC_ROOT}" UNITS ${units} DROP_DEFINES MUST_MATCH)
+# The boot's main and foresta's, which the port links into one program.
+set_property(SOURCE "${AC_ROOT}/src/static/boot.c" APPEND PROPERTY COMPILE_DEFINITIONS main=ac_boot_main)
+set_property(SOURCE "${AC_ROOT}/src/main.c" APPEND PROPERTY COMPILE_DEFINITIONS main=ac_foresta_main)
 # The one definition of each of MSL's math inlines (include/MSL_C/w_math.h).
 target_sources(ac_game PRIVATE adapter/msl_inlines.c)
 set_source_files_properties(adapter/msl_inlines.c PROPERTIES COMPILE_DEFINITIONS AC_PORT_MSL_INLINES)

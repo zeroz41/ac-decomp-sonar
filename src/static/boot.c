@@ -69,6 +69,7 @@ s32 search_partial_address(u32 addr, u32* module_id, u32* section_idx, u32* sect
     return -1; /* failed */
   }
 
+#ifndef SONAR_PORT /* sonarlib port: no module is loaded, and the console's addresses are not the host's */
   module_p = BaseModule;
   while (module_p != nullptr) {
     section_info = OSGetSectionInfo(module_p);
@@ -98,6 +99,7 @@ s32 search_partial_address(u32 addr, u32* module_id, u32* section_idx, u32* sect
 
     module_p = (OSModuleHeader*)module_p->info.link.next;
   }
+#endif
 
   return -1; /* failed */
 }
@@ -146,6 +148,9 @@ int LoadStringTable(const char* table) {  // https://decomp.me/scratch/7syDa
  * @param module Handle to the module header to unload.
  */
 extern void UnLink(OSModuleHeader* module) {
+#ifdef SONAR_PORT /* sonarlib port: foresta is linked in, and has no destructors to run */
+  (void)module;
+#else
   if (module != nullptr) {
     if (module->epilog != 0) {
       OSReport("エピローグ開始\n"); /* epilog start */
@@ -159,6 +164,7 @@ extern void UnLink(OSModuleHeader* module) {
   }
 
   JW_Free(module);
+#endif
 }
 
 /**
@@ -169,6 +175,13 @@ extern void UnLink(OSModuleHeader* module) {
  * @return OSModuleHeader* loadedModule
  */
 OSModuleHeader* LoadLink(const char* module_name) {
+#ifdef SONAR_PORT /* sonarlib port: foresta is linked in and has no constructors, so linking it is running its main */
+  static OSModuleHeader linked;
+  extern void ac_foresta_main(void);
+  OSReport("module %s is linked in\n", module_name);
+  ac_foresta_main();
+  return &linked;
+#else
   int result;
   size_t length;
   void* bss;
@@ -225,6 +238,7 @@ failed:
   JW_Free(bss);
   JW_Free(module);
   return nullptr;
+#endif
 }
 
 /**
@@ -447,6 +461,7 @@ void adjustOSArena() {
 
   OSReport("ARENA %08x-%08x" VT_RST "\n", arenalo, arenahi);
 
+#ifndef SONAR_PORT /* sonarlib port: main memory is sized for 64-bit structures (sonarlib platform.md, Memory) */
   if (arenahi > (void*)0x81800000) {
     if (!APPNMI_EXTENDEDMEMORY_GET()) {
       OSReport("搭載メモリが 24MB を超えていますが、24MB に限定します。" VT_RST "\n"); /* The installed memory exceeds 24MB, but will be limited to 24MB. */
@@ -460,6 +475,7 @@ void adjustOSArena() {
   } else {
     OSReport("搭載メモリが 24MB 以下なので動かない事がありえます。" VT_RST "\n"); /* Since the installed memory is 24MB or less, there may be issues. */
   }
+#endif
 
   OSSetArenaHi(arenahi);
   OSReport("ARENA %08x-%08x" VT_RST "\n", arenalo, arenahi);
@@ -497,7 +513,9 @@ int main(int argc, const char** argv) {
   u32* base;
   u32* basenext;
 
+#ifndef SONAR_PORT /* sonarlib port: the host has no block address translation */
   ReconfigBATs();
+#endif
   if (fakemain_check) {
     return -1;
   }
@@ -525,6 +543,7 @@ int main(int argc, const char** argv) {
   OSInitAlarm();
 
   /* Initialize stack */
+#ifndef SONAR_PORT /* sonarlib port: the stack is the host's */
   var1 = ((u32)OSGetStackPointer() - 0x100);
   var2 = OSGetCurrentThread();
   base = (u32*)var1;
@@ -535,6 +554,7 @@ int main(int argc, const char** argv) {
       memset(basenext, 0xfd, (uaddr)base - (uaddr)basenext);
     }
   }
+#endif
 
   /* Reset N64 NMI buffer*/
   bzero(osAppNMIBuffer, 16 * sizeof(s32));
