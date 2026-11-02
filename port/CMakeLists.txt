@@ -49,8 +49,9 @@ foreach(unit IN LISTS AC_UNITS)
     if(source MATCHES "^src/static/MSL_C\\.PPCEABI\\.bare\\.H/" AND NOT source MATCHES "${msl_math}")
         set(replaced TRUE)
     endif()
-    # The SDK's calendar arithmetic, which touches no hardware.
-    if(source MATCHES "^src/static/dolphin/os/OSTime\\.c$")
+    # The SDK's calendar arithmetic, which touches no hardware, and its matrix library, whose paired-single
+    # assembly has C fallbacks on sonarlib's paired singles.
+    if(source MATCHES "^src/static/dolphin/(os/OSTime|mtx/(mtx|mtx44|mtxvec|vec))\\.c$")
         set(replaced FALSE)
     endif()
     if(NOT replaced)
@@ -127,3 +128,26 @@ target_compile_options(ac_bitfield_views_test PRIVATE ${adapter_includes})
 set_target_properties(ac_bitfield_views_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
 target_link_libraries(ac_bitfield_views_test PRIVATE sonar::base)
 add_test(NAME ac_bitfield_views COMMAND ac_bitfield_views_test)
+
+# The SDK's matrix library on the port's paired-single fallbacks: the matrices and vectors its assembly computes.
+set(mtx_sources "")
+foreach(name IN ITEMS mtx mtx44 mtxvec vec)
+    list(APPEND mtx_sources "${AC_ROOT}/src/static/dolphin/mtx/${name}.c")
+endforeach()
+add_executable(ac_mtx_port_test tests/mtx_port_test.c ${mtx_sources})
+target_include_directories(ac_mtx_port_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include"
+    "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin" "${AC_ROOT}")
+target_compile_definitions(ac_mtx_port_test PRIVATE SONAR_PORT=1 DEBUG=0 VERSION=0)
+# The game's names and intrinsics in the library's units only: the test's reference math is the host's.
+if(CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    set(mtx_adapter_includes ${adapter_includes})
+else()
+    # A source's COMPILE_OPTIONS takes no SHELL: groups.
+    set(mtx_adapter_includes -include "${CMAKE_CURRENT_SOURCE_DIR}/adapter/intrinsics.h"
+        -include "${CMAKE_CURRENT_SOURCE_DIR}/adapter/names.h")
+endif()
+set_source_files_properties(${mtx_sources} PROPERTIES COMPILE_OPTIONS "${mtx_adapter_includes}")
+target_compile_options(ac_mtx_port_test PRIVATE -ffp-contract=off)
+set_target_properties(ac_mtx_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
+target_link_libraries(ac_mtx_port_test PRIVATE sonar::base m)
+add_test(NAME ac_mtx_port COMMAND ac_mtx_port_test)

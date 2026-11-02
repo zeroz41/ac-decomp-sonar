@@ -34,6 +34,7 @@ void C_MTXFrustum(Mtx44 m, f32 t, f32 b, f32 l, f32 r, f32 n, f32 f)
 	m[3][3] = 0.0f;
 }
 
+#ifndef SONAR_PORT // the game does not link it and has no tanf, which the port would take from the host's libm
 void C_MTXPerspective(GC_Mtx m, f32 fovY, f32 aspect, f32 n, f32 f)
 {
 	f32 angle;
@@ -61,6 +62,7 @@ void C_MTXPerspective(GC_Mtx m, f32 fovY, f32 aspect, f32 n, f32 f)
 	m[3][2] = -1;
 	m[3][3] = 0;
 }
+#endif
 
 void C_MTXOrtho(GC_Mtx m, f32 t, f32 b, f32 l, f32 r, f32 n, f32 f)
 {

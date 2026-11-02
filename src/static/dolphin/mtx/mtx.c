@@ -4,6 +4,15 @@
 
 #define qr0 0
 
+#ifdef SONAR_PORT
+// The port's C fallbacks for the paired-single assembly, line for line with the same register names (sonarlib
+// porting-model.md, Inline assembly and paired singles).
+#include <sonar/legacy_math.h>
+
+// The address d(r) of a load or store.
+#define PS_EA(r, d) ((f32*)((char*)(r) + (d)))
+#endif
+
 // unsorted externs
 extern f32 sinf(f32);
 extern f32 cosf(f32);
@@ -26,6 +35,24 @@ void C_MTXIdentity(GC_Mtx mtx)
 	mtx[2][2] = 1.0f;
 }
 
+#ifdef SONAR_PORT
+void PSMTXIdentity(GC_Mtx m)
+{
+	sl_ps c_zero = sl_ps_fill(0.0f);
+	sl_ps c_one  = sl_ps_fill(1.0f);
+	sl_ps c_01;
+	sl_ps c_10;
+
+	sl_ps_store(PS_EA(m, 8), c_zero);
+	c_01 = sl_ps_merge01(c_zero, c_one);
+	sl_ps_store(PS_EA(m, 24), c_zero);
+	c_10 = sl_ps_merge10(c_one, c_zero);
+	sl_ps_store(PS_EA(m, 32), c_zero);
+	sl_ps_store(PS_EA(m, 16), c_01);
+	sl_ps_store(PS_EA(m, 0), c_10);
+	sl_ps_store(PS_EA(m, 40), c_10);
+}
+#else
 void PSMTXIdentity(register GC_Mtx m)
 {
 	register f32 c_zero = 0.0f;
@@ -46,7 +73,27 @@ void PSMTXIdentity(register GC_Mtx m)
 	}
 #endif // clang-format on
 }
+#endif
 
+#ifdef SONAR_PORT
+void PSMTXCopy(const GC_Mtx src, GC_Mtx dst)
+{
+	sl_ps f0, f1, f2, f3, f4, f5;
+
+	f0 = sl_ps_load(PS_EA(src, 0));
+	sl_ps_store(PS_EA(dst, 0), f0);
+	f1 = sl_ps_load(PS_EA(src, 8));
+	sl_ps_store(PS_EA(dst, 8), f1);
+	f2 = sl_ps_load(PS_EA(src, 16));
+	sl_ps_store(PS_EA(dst, 16), f2);
+	f3 = sl_ps_load(PS_EA(src, 24));
+	sl_ps_store(PS_EA(dst, 24), f3);
+	f4 = sl_ps_load(PS_EA(src, 32));
+	sl_ps_store(PS_EA(dst, 32), f4);
+	f5 = sl_ps_load(PS_EA(src, 40));
+	sl_ps_store(PS_EA(dst, 40), f5);
+}
+#else
 asm void PSMTXCopy(const register GC_Mtx src, register GC_Mtx dst)
 {
 #ifdef __MWERKS__ // clang-format off
@@ -64,7 +111,55 @@ asm void PSMTXCopy(const register GC_Mtx src, register GC_Mtx dst)
 	psq_st f5, 40(dst), 0, qr0
 #endif // clang-format on
 }
+#endif
 
+#ifdef SONAR_PORT
+void PSMTXConcat(const GC_Mtx mA, const GC_Mtx mB, GC_Mtx mAB)
+{
+	sl_ps f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f31;
+
+	f0 = sl_ps_load(PS_EA(mA, 0));
+	f6 = sl_ps_load(PS_EA(mB, 0));
+	f7 = sl_ps_load(PS_EA(mB, 8));
+	f8 = sl_ps_load(PS_EA(mB, 16));
+	f12 = sl_ps_muls0(f6, f0);
+	f2 = sl_ps_load(PS_EA(mA, 16));
+	f13 = sl_ps_muls0(f7, f0);
+	f31 = sl_ps_load(Unit01);
+	f14 = sl_ps_muls0(f6, f2);
+	f9 = sl_ps_load(PS_EA(mB, 24));
+	f15 = sl_ps_muls0(f7, f2);
+	f1 = sl_ps_load(PS_EA(mA, 8));
+	f12 = sl_ps_madds1(f8, f0, f12);
+	f3 = sl_ps_load(PS_EA(mA, 24));
+	f14 = sl_ps_madds1(f8, f2, f14);
+	f10 = sl_ps_load(PS_EA(mB, 32));
+	f13 = sl_ps_madds1(f9, f0, f13);
+	f11 = sl_ps_load(PS_EA(mB, 40));
+	f15 = sl_ps_madds1(f9, f2, f15);
+	f4 = sl_ps_load(PS_EA(mA, 32));
+	f5 = sl_ps_load(PS_EA(mA, 40));
+	f12 = sl_ps_madds0(f10, f1, f12);
+	f13 = sl_ps_madds0(f11, f1, f13);
+	f14 = sl_ps_madds0(f10, f3, f14);
+	f15 = sl_ps_madds0(f11, f3, f15);
+	sl_ps_store(PS_EA(mAB, 0), f12);
+	f2 = sl_ps_muls0(f6, f4);
+	f13 = sl_ps_madds1(f31, f1, f13);
+	f0 = sl_ps_muls0(f7, f4);
+	sl_ps_store(PS_EA(mAB, 16), f14);
+	f15 = sl_ps_madds1(f31, f3, f15);
+	sl_ps_store(PS_EA(mAB, 8), f13);
+	f2 = sl_ps_madds1(f8, f4, f2);
+	f0 = sl_ps_madds1(f9, f4, f0);
+	f2 = sl_ps_madds0(f10, f5, f2);
+	sl_ps_store(PS_EA(mAB, 24), f15);
+	f0 = sl_ps_madds0(f11, f5, f0);
+	sl_ps_store(PS_EA(mAB, 32), f2);
+	f0 = sl_ps_madds1(f31, f5, f0);
+	sl_ps_store(PS_EA(mAB, 40), f0);
+}
+#else
 asm void PSMTXConcat(const register GC_Mtx mA, const register GC_Mtx mB, register GC_Mtx mAB)
 {
 #ifdef __MWERKS__ // clang-format off
@@ -122,7 +217,75 @@ asm void PSMTXConcat(const register GC_Mtx mA, const register GC_Mtx mB, registe
 	blr
 #endif // clang-format on
 }
+#endif
 
+#ifdef SONAR_PORT
+u32 PSMTXInverse(const GC_Mtx src, GC_Mtx inv)
+{
+	sl_ps f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13;
+
+	f0 = sl_ps_load1(PS_EA(src, 0));
+	f1 = sl_ps_load(PS_EA(src, 4));
+	f2 = sl_ps_load1(PS_EA(src, 16));
+	f6 = sl_ps_merge10(f1, f0);
+	f3 = sl_ps_load(PS_EA(src, 20));
+	f4 = sl_ps_load1(PS_EA(src, 32));
+	f7 = sl_ps_merge10(f3, f2);
+	f5 = sl_ps_load(PS_EA(src, 36));
+	f11 = sl_ps_mul(f3, f6);
+	f13 = sl_ps_mul(f5, f7);
+	f8 = sl_ps_merge10(f5, f4);
+	f11 = sl_ps_msub(f1, f7, f11);
+	f12 = sl_ps_mul(f1, f8);
+	f13 = sl_ps_msub(f3, f8, f13);
+	f10 = sl_ps_mul(f3, f4);
+	f12 = sl_ps_msub(f5, f6, f12);
+	f9 = sl_ps_mul(f0, f5);
+	f8 = sl_ps_mul(f1, f2);
+	f6 = sl_ps_sub(f6, f6);
+	f10 = sl_ps_msub(f2, f5, f10);
+	f7 = sl_ps_mul(f0, f13);
+	f9 = sl_ps_msub(f1, f4, f9);
+	f7 = sl_ps_madd(f2, f12, f7);
+	f8 = sl_ps_msub(f0, f3, f8);
+	f7 = sl_ps_madd(f4, f11, f7);
+	if (f7.ps0 == f6.ps0) {
+		return 0;
+	}
+	f0 = sl_ps_fill(sl_fp_fres(f7.ps0));
+	f6 = sl_ps_add(f0, f0);
+	f5 = sl_ps_mul(f0, f0);
+	f0 = sl_ps_nmsub(f7, f5, f6);
+	f1 = sl_ps_fill(sl_fp_lfs(PS_EA(src, 12)));
+	f13 = sl_ps_muls0(f13, f0);
+	f2 = sl_ps_fill(sl_fp_lfs(PS_EA(src, 28)));
+	f12 = sl_ps_muls0(f12, f0);
+	f3 = sl_ps_fill(sl_fp_lfs(PS_EA(src, 44)));
+	f11 = sl_ps_muls0(f11, f0);
+	f5 = sl_ps_merge00(f13, f12);
+	f10 = sl_ps_muls0(f10, f0);
+	f4 = sl_ps_merge11(f13, f12);
+	f9 = sl_ps_muls0(f9, f0);
+	sl_ps_store(PS_EA(inv, 0), f5);
+	f6 = sl_ps_mul(f13, f1);
+	sl_ps_store(PS_EA(inv, 16), f4);
+	f8 = sl_ps_muls0(f8, f0);
+	f6 = sl_ps_madd(f12, f2, f6);
+	sl_ps_store1(PS_EA(inv, 32), f10);
+	f6 = sl_ps_nmadd(f11, f3, f6);
+	sl_ps_store1(PS_EA(inv, 36), f9);
+	f7 = sl_ps_mul(f10, f1);
+	f5 = sl_ps_merge00(f11, f6);
+	sl_ps_store1(PS_EA(inv, 40), f8);
+	f4 = sl_ps_merge11(f11, f6);
+	sl_ps_store(PS_EA(inv, 8), f5);
+	f7 = sl_ps_madd(f9, f2, f7);
+	sl_ps_store(PS_EA(inv, 24), f4);
+	f7 = sl_ps_nmadd(f8, f3, f7);
+	sl_ps_store1(PS_EA(inv, 44), f7);
+	return 1;
+}
+#else
 asm u32 PSMTXInverse(const register GC_Mtx src, register GC_Mtx inv)
 {
 #ifdef __MWERKS__ // clang-format off
@@ -190,6 +353,7 @@ skip_return:
 	psq_st f7, 44(inv), 1, qr0
 #endif // clang-format on
 }
+#endif
 
 void PSMTXRotRad(GC_Mtx m, char axis, f32 rad)
 {
@@ -199,6 +363,60 @@ void PSMTXRotRad(GC_Mtx m, char axis, f32 rad)
 	PSMTXRotTrig(m, axis, s, c);
 }
 
+#ifdef SONAR_PORT
+void PSMTXRotTrig(GC_Mtx m, char axis, f32 sinA_, f32 cosA_)
+{
+	sl_ps sinA = sl_ps_fill(sinA_);
+	sl_ps cosA = sl_ps_fill(cosA_);
+	sl_ps fc0;
+	sl_ps fc1;
+	sl_ps nsinA;
+	sl_ps fw0, fw1, fw2, fw3;
+
+	fc0 = sl_ps_fill(0.0f);
+	fc1 = sl_ps_fill(1.0f);
+
+	nsinA = sl_ps_neg(sinA);
+	switch (axis | 0x20) {
+	case 'x':
+		sl_ps_store1(PS_EA(m, 0), fc1);
+		sl_ps_store(PS_EA(m, 4), fc0);
+		fw0 = sl_ps_merge00(sinA, cosA);
+		sl_ps_store(PS_EA(m, 12), fc0);
+		fw1 = sl_ps_merge00(cosA, nsinA);
+		sl_ps_store(PS_EA(m, 28), fc0);
+		sl_ps_store1(PS_EA(m, 44), fc0);
+		sl_ps_store(PS_EA(m, 36), fw0);
+		sl_ps_store(PS_EA(m, 20), fw1);
+		break;
+
+	case 'y':
+		fw0 = sl_ps_merge00(cosA, fc0);
+		fw1 = sl_ps_merge00(fc0, fc1);
+		sl_ps_store(PS_EA(m, 24), fc0);
+		sl_ps_store(PS_EA(m, 0), fw0);
+		fw2 = sl_ps_merge00(nsinA, fc0);
+		fw3 = sl_ps_merge00(sinA, fc0);
+		sl_ps_store(PS_EA(m, 40), fw0);
+		sl_ps_store(PS_EA(m, 16), fw1);
+		sl_ps_store(PS_EA(m, 8), fw3);
+		sl_ps_store(PS_EA(m, 32), fw2);
+		break;
+
+	case 'z':
+		sl_ps_store(PS_EA(m, 8), fc0);
+		fw0 = sl_ps_merge00(sinA, cosA);
+		fw2 = sl_ps_merge00(cosA, nsinA);
+		sl_ps_store(PS_EA(m, 24), fc0);
+		sl_ps_store(PS_EA(m, 32), fc0);
+		fw1 = sl_ps_merge00(fc1, fc0);
+		sl_ps_store(PS_EA(m, 16), fw0);
+		sl_ps_store(PS_EA(m, 0), fw2);
+		sl_ps_store(PS_EA(m, 40), fw1);
+		break;
+	}
+}
+#else
 void PSMTXRotTrig(register GC_Mtx m, register char axis, register f32 sinA,
                   register f32 cosA)
 {
@@ -262,6 +480,7 @@ _end:
   }
 #endif // clang-format on
 }
+#endif
 
 static inline void __PSMTXRotAxisRadInternal(register GC_Mtx m,
                                              const register Vec* axis,
@@ -269,6 +488,56 @@ static inline void __PSMTXRotAxisRadInternal(register GC_Mtx m,
 {
 }
 
+#ifdef SONAR_PORT
+void PSMTXRotAxisRad(GC_Mtx m, const Vec* axis, f32 rad)
+{
+	sl_ps tmp0, tmp1, tmp2, tmp3, tmp4;
+	sl_ps tmp5, tmp6, tmp7, tmp8, tmp9;
+
+	sl_ps sT;
+	sl_ps cT;
+	sl_ps oneMinusCosT;
+	sl_ps zero;
+	Vec axisNormalized;
+	Vec* axisNormalizedPtr;
+	sl_ps rad_; // rad's register, which the assembly reuses
+
+	zero              = sl_ps_fill(0.0f);
+	axisNormalizedPtr = &axisNormalized;
+	sT                = sl_ps_fill(sinf(rad));
+	cT                = sl_ps_fill(cosf(rad));
+	oneMinusCosT      = sl_ps_fill(sl_fp_subs(1.0f, cT.ps0));
+
+	PSVECNormalize(axis, axisNormalizedPtr);
+
+	rad_ = sl_ps_load(PS_EA(axisNormalizedPtr, 0x0));
+	tmp1 = sl_ps_fill(sl_fp_lfs(PS_EA(axisNormalizedPtr, 0x8)));
+	tmp0 = sl_ps_merge00(cT, cT);
+	tmp4 = sl_ps_muls0(rad_, oneMinusCosT);
+	tmp5 = sl_ps_muls0(tmp1, oneMinusCosT);
+	tmp3 = sl_ps_muls1(tmp4, rad_);
+	tmp2 = sl_ps_muls0(tmp4, rad_);
+	rad_ = sl_ps_muls0(rad_, sT);
+	tmp4 = sl_ps_muls0(tmp4, tmp1);
+	tmp6 = sl_ps_fill(sl_fp_nmsubs(tmp1.ps0, sT.ps0, tmp3.ps0));
+	tmp7 = sl_ps_fill(sl_fp_madds(tmp1.ps0, sT.ps0, tmp3.ps0));
+	tmp9 = sl_ps_neg(rad_);
+	tmp8 = sl_ps_sum0(tmp4, zero, rad_);
+	tmp2 = sl_ps_sum0(tmp2, tmp6, tmp0);
+	tmp3 = sl_ps_sum1(tmp0, tmp7, tmp3);
+	tmp6 = sl_ps_sum0(tmp9, zero, tmp4);
+	tmp9 = sl_ps_sum0(tmp4, tmp4, tmp9);
+	sl_ps_store(PS_EA(m, 0x8), tmp8);
+	tmp5 = sl_ps_muls0(tmp5, tmp1);
+	sl_ps_store(PS_EA(m, 0x0), tmp2);
+	tmp4 = sl_ps_sum1(rad_, tmp9, tmp4);
+	sl_ps_store(PS_EA(m, 0x10), tmp3);
+	tmp5 = sl_ps_sum0(tmp5, zero, tmp0);
+	sl_ps_store(PS_EA(m, 0x18), tmp6);
+	sl_ps_store(PS_EA(m, 0x20), tmp4);
+	sl_ps_store(PS_EA(m, 0x28), tmp5);
+}
+#else
 void PSMTXRotAxisRad(register GC_Mtx m, const Vec* axis, register f32 rad)
 {
 	register f32 tmp0, tmp1, tmp2, tmp3, tmp4;
@@ -322,7 +591,26 @@ void PSMTXRotAxisRad(register GC_Mtx m, const Vec* axis, register f32 rad)
   }
 #endif // clang-format on
 }
+#endif
 
+#ifdef SONAR_PORT
+void PSMTXTrans(GC_Mtx m, f32 xT, f32 yT, f32 zT)
+{
+	sl_ps c0 = sl_ps_fill(0.0F);
+	sl_ps c1 = sl_ps_fill(1.0F);
+
+	sl_fp_stfs(PS_EA(m, 12), xT);
+	sl_fp_stfs(PS_EA(m, 28), yT);
+	sl_ps_store(PS_EA(m, 4), c0);
+	sl_ps_store(PS_EA(m, 32), c0);
+	sl_fp_stfs(PS_EA(m, 16), c0.ps0);
+	sl_fp_stfs(PS_EA(m, 20), c1.ps0);
+	sl_fp_stfs(PS_EA(m, 24), c0.ps0);
+	sl_fp_stfs(PS_EA(m, 40), c1.ps0);
+	sl_fp_stfs(PS_EA(m, 44), zT);
+	sl_fp_stfs(PS_EA(m, 0), c1.ps0);
+}
+#else
 void PSMTXTrans(register GC_Mtx m, register f32 xT, register f32 yT,
                 register f32 zT)
 {
@@ -343,7 +631,34 @@ void PSMTXTrans(register GC_Mtx m, register f32 xT, register f32 yT,
 	}
 #endif // clang-format on
 }
+#endif
 
+#ifdef SONAR_PORT
+void PSMTXTransApply(const GC_Mtx src, GC_Mtx dst, f32 xT_, f32 yT_, f32 zT_)
+{
+	sl_ps xT = sl_ps_fill(xT_);
+	sl_ps yT = sl_ps_fill(yT_);
+	sl_ps zT = sl_ps_fill(zT_);
+	sl_ps fp4, fp5, fp6, fp7, fp8, fp9;
+
+	fp4 = sl_ps_load(PS_EA(src, 0));
+	fp5 = sl_ps_load(PS_EA(src, 8));
+	fp7 = sl_ps_load(PS_EA(src, 24));
+	fp8 = sl_ps_load(PS_EA(src, 40));
+	fp5 = sl_ps_sum1(xT, fp5, fp5);
+	fp6 = sl_ps_load(PS_EA(src, 16));
+	fp7 = sl_ps_sum1(yT, fp7, fp7);
+	fp9 = sl_ps_load(PS_EA(src, 32));
+	fp8 = sl_ps_sum1(zT, fp8, fp8);
+
+	sl_ps_store(PS_EA(dst, 0), fp4);
+	sl_ps_store(PS_EA(dst, 8), fp5);
+	sl_ps_store(PS_EA(dst, 16), fp6);
+	sl_ps_store(PS_EA(dst, 24), fp7);
+	sl_ps_store(PS_EA(dst, 32), fp9);
+	sl_ps_store(PS_EA(dst, 40), fp8);
+}
+#else
 asm void PSMTXTransApply(const register GC_Mtx src, register GC_Mtx dst, register f32 xT,
                          register f32 yT, register f32 zT)
 {
@@ -368,7 +683,23 @@ asm void PSMTXTransApply(const register GC_Mtx src, register GC_Mtx dst, registe
 	blr
 #endif // clang-format on
 }
+#endif
 
+#ifdef SONAR_PORT
+void PSMTXScale(GC_Mtx m, f32 xS, f32 yS, f32 zS)
+{
+	sl_ps c0 = sl_ps_fill(0.0F);
+
+	sl_fp_stfs(PS_EA(m, 0), xS);
+	sl_ps_store(PS_EA(m, 4), c0);
+	sl_ps_store(PS_EA(m, 12), c0);
+	sl_fp_stfs(PS_EA(m, 20), yS);
+	sl_ps_store(PS_EA(m, 24), c0);
+	sl_ps_store(PS_EA(m, 32), c0);
+	sl_fp_stfs(PS_EA(m, 40), zS);
+	sl_fp_stfs(PS_EA(m, 44), c0.ps0);
+}
+#else
 void PSMTXScale(register GC_Mtx m, register f32 xS, register f32 yS,
                 register f32 zS)
 {
@@ -386,7 +717,36 @@ void PSMTXScale(register GC_Mtx m, register f32 xS, register f32 yS,
 	}
 #endif // clang-format on
 }
+#endif
 
+#ifdef SONAR_PORT
+void PSMTXScaleApply(const GC_Mtx src, GC_Mtx dst, f32 xS_, f32 yS_, f32 zS_)
+{
+	sl_ps xS = sl_ps_fill(xS_);
+	sl_ps yS = sl_ps_fill(yS_);
+	sl_ps zS = sl_ps_fill(zS_);
+	sl_ps fp2, fp4, fp5, fp6, fp7, fp8;
+
+	fp4 = sl_ps_load(PS_EA(src, 0));
+	fp5 = sl_ps_load(PS_EA(src, 8));
+	fp4 = sl_ps_muls0(fp4, xS);
+	fp6 = sl_ps_load(PS_EA(src, 16));
+	fp5 = sl_ps_muls0(fp5, xS);
+	fp7 = sl_ps_load(PS_EA(src, 24));
+	fp6 = sl_ps_muls0(fp6, yS);
+	fp8 = sl_ps_load(PS_EA(src, 32));
+	sl_ps_store(PS_EA(dst, 0), fp4);
+	fp7 = sl_ps_muls0(fp7, yS);
+	fp2 = sl_ps_load(PS_EA(src, 40));
+	sl_ps_store(PS_EA(dst, 8), fp5);
+	fp8 = sl_ps_muls0(fp8, zS);
+	sl_ps_store(PS_EA(dst, 16), fp6);
+	fp2 = sl_ps_muls0(fp2, zS);
+	sl_ps_store(PS_EA(dst, 24), fp7);
+	sl_ps_store(PS_EA(dst, 32), fp8);
+	sl_ps_store(PS_EA(dst, 40), fp2);
+}
+#else
 asm void PSMTXScaleApply(const register GC_Mtx src, register GC_Mtx dst, register f32 xS,
                          register f32 yS, register f32 zS)
 {
@@ -413,7 +773,57 @@ asm void PSMTXScaleApply(const register GC_Mtx src, register GC_Mtx dst, registe
   blr
 #endif // clang-format on
 }
+#endif
 
+#ifdef SONAR_PORT
+void PSMTXQuat(GC_Mtx m, const PSQuaternion* q)
+{
+	sl_ps c_zero, c_one, c_two, scale;
+	sl_ps tmp0, tmp1, tmp2, tmp3, tmp4;
+	sl_ps tmp5, tmp6, tmp7, tmp8, tmp9;
+
+	c_one = sl_ps_fill(1.0F);
+	tmp0   = sl_ps_load(PS_EA(q, 0));
+	tmp1   = sl_ps_load(PS_EA(q, 8));
+	c_zero = sl_ps_fill(sl_fp_subs(c_one.ps0, c_one.ps0));
+	c_two  = sl_ps_fill(sl_fp_adds(c_one.ps0, c_one.ps0));
+	tmp2   = sl_ps_mul(tmp0, tmp0);
+	tmp5   = sl_ps_merge10(tmp0, tmp0);
+	tmp4   = sl_ps_madd(tmp1, tmp1, tmp2);
+	tmp3   = sl_ps_mul(tmp1, tmp1);
+	scale  = sl_ps_sum0(tmp4, tmp4, tmp4);
+	tmp7   = sl_ps_muls1(tmp5, tmp1);
+	tmp9   = sl_ps_fill(sl_fp_fres(scale.ps0));
+	tmp4   = sl_ps_sum1(tmp3, tmp4, tmp2);
+	scale  = sl_ps_nmsub(scale, tmp9, c_two);
+	tmp6   = sl_ps_muls1(tmp1, tmp1);
+	scale  = sl_ps_mul(tmp9, scale);
+	tmp2   = sl_ps_sum0(tmp2, tmp2, tmp2);
+	scale  = sl_ps_fill(sl_fp_muls(scale.ps0, c_two.ps0));
+	tmp8   = sl_ps_madd(tmp0, tmp5, tmp6);
+	tmp6   = sl_ps_msub(tmp0, tmp5, tmp6);
+	sl_ps_store1(PS_EA(m, 12), c_zero);
+	tmp2 = sl_ps_nmsub(tmp2, scale, c_one);
+	tmp4 = sl_ps_nmsub(tmp4, scale, c_one);
+	sl_ps_store1(PS_EA(m, 44), c_zero);
+	tmp8 = sl_ps_mul(tmp8, scale);
+	tmp6 = sl_ps_mul(tmp6, scale);
+	sl_ps_store1(PS_EA(m, 40), tmp2);
+	tmp5 = sl_ps_madds0(tmp0, tmp1, tmp7);
+	tmp1 = sl_ps_merge00(tmp8, tmp4);
+	tmp7 = sl_ps_nmsub(tmp7, c_two, tmp5);
+	tmp0 = sl_ps_merge10(tmp4, tmp6);
+	sl_ps_store(PS_EA(m, 16), tmp1);
+	tmp5 = sl_ps_mul(tmp5, scale);
+	tmp7 = sl_ps_mul(tmp7, scale);
+	sl_ps_store(PS_EA(m, 0), tmp0);
+	sl_ps_store1(PS_EA(m, 8), tmp5);
+	tmp3 = sl_ps_merge10(tmp7, c_zero);
+	tmp9 = sl_ps_merge01(tmp7, tmp5);
+	sl_ps_store(PS_EA(m, 24), tmp3);
+	sl_ps_store(PS_EA(m, 32), tmp9);
+}
+#else
 void PSMTXQuat(register GC_Mtx m, const register PSQuaternion* q)
 {
 	register f32 c_zero, c_one, c_two, scale;
@@ -465,6 +875,7 @@ void PSMTXQuat(register GC_Mtx m, const register PSQuaternion* q)
 	}
 #endif // clang-format on
 }
+#endif
 
 void C_MTXLookAt(GC_Mtx m, const Vec* camPos, const Vec* camUp, const Vec* target) {
     Vec vLook;
@@ -518,6 +929,7 @@ void C_MTXLightFrustum(GC_Mtx m, f32 t, f32 b, f32 l, f32 r, f32 n, f32 scaleS,
 	m[2][3] = 0;
 }
 
+#ifndef SONAR_PORT // the game does not link it and has no tanf, which the port would take from the host's libm
 void C_MTXLightPerspective(GC_Mtx m, f32 fovY, f32 aspect, f32 scaleS, f32 scaleT,
                            f32 transS, f32 transT)
 {
@@ -540,6 +952,7 @@ void C_MTXLightPerspective(GC_Mtx m, f32 fovY, f32 aspect, f32 scaleS, f32 scale
 	m[2][2] = -1;
 	m[2][3] = 0;
 }
+#endif
 
 void C_MTXLightOrtho(GC_Mtx m, f32 t, f32 b, f32 l, f32 r, f32 scaleS, f32 scaleT,
                      f32 transS, f32 transT)

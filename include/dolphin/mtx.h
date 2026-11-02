@@ -38,7 +38,6 @@ void PSMTXConcat(const GC_Mtx A, const GC_Mtx B, GC_Mtx concat);
 void PSMTXTranspose(const GC_Mtx src, GC_Mtx xPose);
 u32 PSMTXInverse(const GC_Mtx src, GC_Mtx inv);
 
-void __PSMTXRotAxisRadInternal(GC_Mtx mtx, const Vec* axis, f32 sinA, f32 cosA);
 void PSMTXRotRad(GC_Mtx mtx, char axis, f32 angle);
 void PSMTXRotTrig(GC_Mtx mtx, char axis, f32 sinA, f32 cosA);
 void PSMTXRotAxisRad(GC_Mtx mtx, const Vec* axis, f32 angle);
@@ -53,11 +52,21 @@ void PSMTXQuat(GC_Mtx mtx, const PSQuaternion* quat);
 void PSVECNormalize(const Vec* src, Vec* dst);
 void PSMTXMultVec(const GC_Mtx m, const Vec* src, Vec* dst);
 
+void PSVECAdd(const Vec* a, const Vec* b, Vec* ab);
+void PSVECSubtract(const Vec* a, const Vec* b, Vec* a_b);
+void PSVECScale(const Vec* src, Vec* dst, f32 scale);
+f32 PSVECMag(const Vec* v);
+f32 PSVECDotProduct(const Vec* a, const Vec* b);
+void PSVECCrossProduct(const Vec* a, const Vec* b, Vec* axb);
+f32 PSVECSquareDistance(const Vec* a, const Vec* b);
+f32 PSVECDistance(const Vec* a, const Vec* b);
+
 ////////////////////////////////////////////
 
 //// PAIRED SINGLE MATRIX VEC FUNCTIONS ////
 void PSMTXMultVec(const GC_Mtx, const Vec*, Vec*);
 void PSMTXMultVecSR(const GC_Mtx, const Vec*, Vec*);
+void PSMTXMultVecArray(const GC_Mtx m, const Vec* srcBase, Vec* dstBase, u32 count);
 void PSMTXMultVecArraySR(const GC_Mtx, f32*, f32*, f32*);
 
 ////////////////////////////////////////////
