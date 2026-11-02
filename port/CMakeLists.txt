@@ -74,6 +74,8 @@ set_source_files_properties(adapter/msl_inlines.c PROPERTIES COMPILE_DEFINITIONS
 target_sources(ac_game PRIVATE adapter/dolphin_os.c)
 # The SDK's ARAM and its DMA queue.
 target_sources(ac_game PRIVATE adapter/dolphin_aram.c)
+# The SDK's Game Boy Advance functions, with none connected.
+target_sources(ac_game PRIVATE adapter/dolphin_gba.c)
 # The NES emulator's entry points, which halt: its core is excluded below.
 target_sources(ac_game PRIVATE adapter/famicom_core.cpp)
 set_source_files_properties(adapter/famicom_core.cpp PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
