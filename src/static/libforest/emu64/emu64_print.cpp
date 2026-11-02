@@ -440,7 +440,12 @@ void emu64::show_vtx(Vtx* vtx, int count, int begin) {
 }
 
 void emu64::print_combine(u64 cmd) {
+#ifdef SONAR_PORT
+    Gfx g = emu64_gfx_of(cmd); /* sonarlib port: the view reads the host's padded command */
+    Gsetcombine_new* combine = (Gsetcombine_new*)&g;
+#else
     Gsetcombine_new* combine = (Gsetcombine_new*)&cmd;
+#endif
     this->Printf0(
         "gsDPSetCombineLERP(%s,%s,%s,%s, %s,%s,%s,%s, %s,%s,%s,%s, %s,%s,%s,%s),",
         this->combine_name(combine->a0, COMBINER_PARAM_A), this->combine_name(combine->b0, COMBINER_PARAM_B),
@@ -454,7 +459,12 @@ void emu64::print_combine(u64 cmd) {
 }
 
 void emu64::print_combine_tev(u64 combine_tev) {
+#ifdef SONAR_PORT
+    Gfx g = emu64_gfx_of(combine_tev); /* sonarlib port: the view reads the host's padded command */
+    Gsetcombine_tev* c_tev = (Gsetcombine_tev*)&g;
+#else
     Gsetcombine_tev* c_tev = (Gsetcombine_tev*)&combine_tev;
+#endif
 
     this->Printf0("gsDPSetCombineTev(%s,%s,%s,%s, %s,%s,%s,%s, %s,%s,%s,%s, %s,%s,%s,%s),",
                   this->combine_tev_color_name(c_tev->a0), this->combine_tev_color_name(c_tev->b0),

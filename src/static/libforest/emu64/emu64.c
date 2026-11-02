@@ -1444,7 +1444,11 @@ void emu64::combine_tev() {
 void emu64::combine_manual() {
     static u64 highlow_errs[NUM_COMBINER_HIGHLOW_ERRS];
     static u32 last_highlow;
+#ifdef SONAR_PORT
+    u64 combine_mode = emu64_gfx_bits(&this->combine_gfx); /* sonarlib port: both of the host's padded words */
+#else
     u64 combine_mode = *(u64*)&this->combine_gfx;
+#endif
 
     switch (combine_mode) {
         case gsDPSetCombineLERPInline(TEXEL0, 0, SHADE, TEXEL0, 0, 0, 0, TEXEL0, SHADE, ENVIRONMENT, PRIMITIVE,
@@ -3732,6 +3736,22 @@ void emu64::dl_G_LOADTLUT() {
 }
 
 void emu64::dl_G_SETCOMBINE_NOTEV() {
+#ifdef SONAR_PORT
+    /* sonarlib port: the command is both of the host's padded words, not one 64-bit load */
+    Gfx* combine = &this->gfx;
+    s8 print_commands = this->print_commands;
+
+    if (print_commands) {
+        this->print_combine(emu64_gfx_bits(combine));
+    }
+
+    /* Update combiner settings only if it changed */
+    ((Gsetcombine_new*)combine)->cmd = G_SETCOMBINE;
+    if (emu64_gfx_bits(&this->combine_gfx) != emu64_gfx_bits(combine)) {
+        this->combine_gfx = *combine;
+        this->dirty_flags[EMU64_DIRTY_FLAG_COMBINE] = true;
+    }
+#else
     u64* combine = (u64*)&this->gfx;
     s8 print_commands = this->print_commands;
 
@@ -3745,9 +3765,24 @@ void emu64::dl_G_SETCOMBINE_NOTEV() {
         *(u64*)&this->combine_gfx = *combine;
         this->dirty_flags[EMU64_DIRTY_FLAG_COMBINE] = true;
     }
+#endif
 }
 
 void emu64::dl_G_SETCOMBINE() {
+#ifdef SONAR_PORT
+    /* sonarlib port: the command is both of the host's padded words, not one 64-bit load */
+    s8 print_commands = this->print_commands;
+
+    if (print_commands) {
+        this->print_combine(emu64_gfx_bits(&this->gfx));
+    }
+
+    /* Update combiner settings only if it changed */
+    if (emu64_gfx_bits(&this->combine_gfx) != emu64_gfx_bits(&this->gfx)) {
+        this->combine_gfx = this->gfx;
+        this->dirty_flags[EMU64_DIRTY_FLAG_COMBINE] = true;
+    }
+#else
     u64* combine = (u64*)&this->gfx;
     s8 print_commands = this->print_commands;
 
@@ -3760,6 +3795,7 @@ void emu64::dl_G_SETCOMBINE() {
         *(u64*)&this->combine_gfx = *combine;
         this->dirty_flags[EMU64_DIRTY_FLAG_COMBINE] = true;
     }
+#endif
 
     /* N64 Combiner -> GC TEV */
     if (this->gfx_cmd != G_SETCOMBINE_NOTEV && aflags[AFLAGS_SKIP_COMBINE_TEV] == 0) {
@@ -3768,6 +3804,20 @@ void emu64::dl_G_SETCOMBINE() {
 }
 
 void emu64::dl_G_SETCOMBINE_TEV() {
+#ifdef SONAR_PORT
+    /* sonarlib port: the command is both of the host's padded words, not one 64-bit load */
+    s8 print_commands = this->print_commands;
+
+    if (print_commands) {
+        this->print_combine_tev(emu64_gfx_bits(&this->gfx));
+    }
+
+    /* Update combiner settings only if it changed */
+    if (emu64_gfx_bits(&this->combine_gfx) != emu64_gfx_bits(&this->gfx)) {
+        this->combine_gfx = this->gfx;
+        this->dirty_flags[EMU64_DIRTY_FLAG_COMBINE] = true;
+    }
+#else
     u64* combine_tev = (u64*)&this->gfx;
     s8 print_commands = this->print_commands;
 
@@ -3780,6 +3830,7 @@ void emu64::dl_G_SETCOMBINE_TEV() {
         *(u64*)&this->combine_gfx = *combine_tev;
         this->dirty_flags[EMU64_DIRTY_FLAG_COMBINE] = true;
     }
+#endif
 }
 
 void emu64::dl_G_SETOTHERMODE_H() {
@@ -4775,8 +4826,12 @@ void emu64::dl_G_TRI2() {
         }
 
         this->dirty_check(this->texture_gfx.tile, this->texture_gfx.level, TRUE);
+#ifdef SONAR_PORT
+        Gfx t_g = *this->gfx_p; /* sonarlib port: the view reads the host's padded command whole */
+#else
         u64 t_g;
         t_g = *(u64*)&this->gfx_p->words;
+#endif
         Gtri2* tri2 = (Gtri2*)&t_g;
         this->setup_1tri_2tri_1quad(tri2->t0v0 / 2);
 
@@ -4975,8 +5030,14 @@ void emu64::dl_G_TEXTURE() {
 #endif
 
     Gfx* t = (Gfx*)&this->texture_gfx;
+#ifdef SONAR_PORT
+    /* sonarlib port: the scales are in w1, past the first 64 bits of the host's padded command */
+    if (emu64_gfx_bits(t) != emu64_gfx_bits(&this->gfx)) {
+        *t = this->gfx;
+#else
     if ((*(u64*)t) != (*(u64*)&this->gfx)) {
         *(u64*)&this->texture_gfx = *(u64*)texture;
+#endif
         this->dirty_flags[EMU64_DIRTY_FLAG_TEX] = true;
 
         if (this->texture_gfx.s == 0) {

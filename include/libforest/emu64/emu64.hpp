@@ -42,6 +42,22 @@
 
 #define EMU64_WARN_TIME 600
 
+#ifdef SONAR_PORT
+/* sonarlib port: the host's Gfx pads both words, so a command's 64 bits are its two words, w0 above w1, as the
+   console's 64-bit load of one reads them */
+static inline u64 emu64_gfx_bits(const Gfx* g) {
+    return (u64)g->words.w0 << 32 | (u32)g->words.w1;
+}
+
+/* sonarlib port: the command those 64 bits are, for a view of it */
+static inline Gfx emu64_gfx_of(u64 bits) {
+    Gfx g;
+    g.words.w0 = (u32)(bits >> 32);
+    g.words.w1 = (u32)bits;
+    return g;
+}
+#endif
+
 #define EMU64_DIRTY_FLAG_PRIM_COLOR 0
 #define EMU64_DIRTY_FLAG_ENV_COLOR 1
 #define EMU64_DIRTY_FLAG_BLEND_COLOR 2
