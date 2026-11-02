@@ -21,7 +21,8 @@ sonar_decomp_read_units(PREFIX AC OBJDIFF "${AC_ROOT}/objdiff.json")
 #   the Dolphin SDK, the debugger stub and the compiler runtime;
 #   MSL's C library, except its math and the NaN and infinity it returns, which the game keeps (porting-model.md,
 #   Floating-point determinism);
-#   the NES emulator, out of scope until its assembly is converted (roadmap M6);
+#   the NES emulator's core and drawing, out of scope until the core's assembly is converted (roadmap M6): the port
+#   keeps the game's Famicom front end, whose famicom_init declines to start, and stubs the core's entry points;
 #   the console's hardware set-up, which the host has no counterpart for: the memory map and the DSP tasks that
 #   unlock the memory card and answer the Game Boy Advance;
 #   foresta.rel's start-up, which runs its static constructors: the port links foresta in (boot.c's LoadLink).
@@ -29,7 +30,7 @@ set(replaced_sources
     "^src/static/dolphin/"
     "^src/static/TRK_MINNOW_DOLPHIN/"
     "^src/static/Runtime\\.PPCEABI\\.H/"
-    "^src/static/Famicom/"
+    "^src/static/Famicom/ks_nes_(core|draw)\\.cpp$"
     "^src/static/libforest/ReconfigBATs\\.c$"
     "^src/static/jaudio_NES/internal/dsp_(cardunlock|GBAKey)\\.c$"
     "^src/executor\\.c$")
@@ -71,6 +72,9 @@ target_sources(ac_game PRIVATE adapter/msl_inlines.c)
 set_source_files_properties(adapter/msl_inlines.c PROPERTIES COMPILE_DEFINITIONS AC_PORT_MSL_INLINES)
 # The SDK's OS functions on sonarlib's kit.
 target_sources(ac_game PRIVATE adapter/dolphin_os.c)
+# The NES emulator's entry points, which halt: its core is excluded below.
+target_sources(ac_game PRIVATE adapter/famicom_core.cpp)
+set_source_files_properties(adapter/famicom_core.cpp PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
 # JSystem's system font, which the game keeps in its executable (JUTFontData_Ascfont_fix12.s): the decompilation's
 # build extracts it, and this writes its bytes for the adapter to include.
 set(system_font "${AC_BUILD}/bin/assets/JSystem/JUtility/FontData/Ascfont_fix12.bfn")

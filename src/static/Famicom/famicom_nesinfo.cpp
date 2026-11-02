@@ -540,7 +540,7 @@ static u8* nesinfo_next_tag(u8* data) {
 }
 
 static u16 calc_check_sum2(void* data, size_t size) {
-    if (((u32)data & 1) == 0) {
+    if (((uaddr)data & 1) == 0) {
         u16 sum;
         size_t i;
         u16* data2;
@@ -952,9 +952,12 @@ extern void nesinfo_tag_process2() {
                     case 3:
                     default: {
                         /* This gives us an effective patch application range of [0x80000000, 0x807FFFFF] */
+#ifndef SONAR_PORT /* sonarlib port: the game's memory is not at the console's addresses, so a patch has no target */
                         if (patch_type >= 0x80 && patch_type <= 0xFF) {
                             dst_p = (u8*)((0x8000 + (patch_type - 0x80)) << 16) + patch_ofs;
-                        } else {
+                        } else
+#endif
+                        {
                             dst_p = nullptr;
                         }
 

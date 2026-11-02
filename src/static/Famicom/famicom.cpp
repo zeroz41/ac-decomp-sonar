@@ -546,10 +546,12 @@ static s32 memcard_getFreeBlocks(s32 chan, s32* unused_bytes, s32* unused_files)
 }
 
 /* @unused @fabricated - strings necessary for matching */
+#ifndef SONAR_PORT /* sonarlib port: unused, and it returns no value */
 static s32 memcard_list(int chan) {
     OSReport("No. Name Co B FileName                         (YYYY/MM/DD hh:mm:ss) IconAddr IFmt ISpd Pm Cp StB Lng Com\n");
     OSReport("%3d %.4s %.2s %d %-32.32s (%04d/%02d/%02d %02d:%02d:%02d) %03x %04x %04x %02x %2d %3d %3d %04x\n");
 }
+#endif
 
 static size_t getBannerSizeFromFormat(u8 format) {
     switch (format) {
@@ -594,7 +596,7 @@ static int SetupResBanner(const ResTIMG*, u8*, size_t, size_t*, u8*);
 static int SetupResIcon(const ResTIMG*, u8*, size_t, size_t*, u16*, u16*);
 
 static void SetupExternCommentImage(u8* embedded_save_comment_img, u8* dst, u8* rom_file_comment_img) {
-    u32 size;
+    size_t size;
 
     switch (famicomCommon.memcard_game_header.flags0.comment_type) {
         case MEMCARD_COMMENT_TYPE_NONE:
@@ -725,7 +727,7 @@ static void SetupInternalCommentImage(u8* data) {
         famicomCommon.memcard_game_header.icon_flags = 0;
     }
 
-    famicomCommon.memcard_game_header.comment_img_size = (u32)data - (u32)data_p;
+    famicomCommon.memcard_game_header.comment_img_size = (uaddr)data - (uaddr)data_p;
 }
 
 static s32 memcard_data_save(
@@ -1108,7 +1110,7 @@ static s32 memcard_data_load(
 
         // Reading successful!
         OSReport("読み込み成功！！\n");
-        FamicomSaveDataHeader* read_save_header = (FamicomSaveDataHeader*)((u32)buf + status.offsetData);
+        FamicomSaveDataHeader* read_save_header = (FamicomSaveDataHeader*)((uaddr)buf + status.offsetData);
         
         if (famicom_save_data_check(read_save_header, -1, comment_img) == 0) {
             // The data is normal!
@@ -1643,6 +1645,10 @@ extern int famicom_init(int rom_idx, Famicom_MallocInfo* malloc_info, int player
     filer_demo_mode = FILER_DEMO_MODE_NORMAL;
     filer_demo_count = 0;
     nesrom_idx_loaded = -1;
+#ifdef SONAR_PORT /* sonarlib port: the emulator's 6502 core is assembly not yet converted, so the game fails to start */
+    OSReport("famicom_init: the port does not run the NES emulator yet\n");
+    return -1;
+#endif
 
     if (rom_idx == 0) {
         famicomCommon.nesrom_memcard = FALSE;
@@ -1839,7 +1845,7 @@ static int SetupResBanner(const ResTIMG* img, u8* dst, size_t max_size, size_t* 
     }
 
     if (size != nullptr) {
-        *size = (u32)data_p - (u32)dst;
+        *size = (uaddr)data_p - (uaddr)dst;
     }
 
     if (type != nullptr) {
@@ -1899,7 +1905,7 @@ static int SetupResIcon(const ResTIMG* img, u8* dst, size_t max_size, size_t* si
     }
 
     if (size_p != nullptr) {
-        *size_p = (u32)data_p - (u32)dst;
+        *size_p = (uaddr)data_p - (uaddr)dst;
     }
 
     if (icon_fmt_p != nullptr) {
