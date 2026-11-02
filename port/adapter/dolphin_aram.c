@@ -2,6 +2,8 @@
    DMA queue (ARQ) on an interrupt source of sonarlib's core os. A request's data arrives, and its callback runs, in
    interrupt context after ARQPostRequest returns, as the console's DMA interrupt delivered them. Addresses in ARAM
    stay the console's offsets; main memory is the host's pointers. */
+#include "ac_port.h"
+
 #include "dolphin/ar.h"
 #include "dolphin/os.h"
 
@@ -47,6 +49,11 @@ u32 ARAlloc(u32 length) {
 u32 ARGetBaseAddress(void) { return __AR_ARAM_USR_BASE_ADDR; }
 
 u32 ARGetSize(void) { return ARAM_SIZE; }
+
+const u8* ac_aram_memory(u32* size) {
+    *size = ARAM_SIZE;
+    return aram;
+}
 
 /* ---- The DMA queue ---- */
 

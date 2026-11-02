@@ -122,7 +122,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 # The original compiler took C++98, which allowed narrowing in braced initializers.
 target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>)
-target_link_libraries(ac_game PRIVATE sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card)
+target_link_libraries(ac_game PRIVATE sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card sonar::kit_jaudio)
 
 # The port's views of a display-list command (tools/gbi_views.py): each field where the console's compiler put it,
 # and the views current with the console's structs.
@@ -203,16 +203,20 @@ set_target_properties(ac_card_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON
 target_link_libraries(ac_card_port_test PRIVATE sonar::core sonar::kit_card)
 add_test(NAME ac_card_port COMMAND ac_card_port_test)
 
-# The SDK's audio interface on sonarlib audio's frame, and the DSP answering jaudio's own boot and commands.
+# The SDK's audio interface on sonarlib audio's frame, and the DSP answering jaudio's own boot and commands and
+# rendering its channels from ARAM.
+set(jaudio_dsp_sources "")
+foreach(name IN ITEMS dspboot dspproc dspinterface)
+    list(APPEND jaudio_dsp_sources "${AC_ROOT}/src/static/jaudio_NES/internal/${name}.c")
+endforeach()
 add_executable(ac_ai_dsp_port_test tests/ai_dsp_port_test.c adapter/dolphin_ai.c adapter/dolphin_dsp.c
-    "${AC_ROOT}/src/static/jaudio_NES/internal/dspboot.c" "${AC_ROOT}/src/static/jaudio_NES/internal/dspproc.c")
+    adapter/dolphin_aram.c ${jaudio_dsp_sources})
 # jaudio is C++, as the game builds it, and so the test that calls it.
-set_source_files_properties(tests/ai_dsp_port_test.c "${AC_ROOT}/src/static/jaudio_NES/internal/dspboot.c"
-    "${AC_ROOT}/src/static/jaudio_NES/internal/dspproc.c" PROPERTIES LANGUAGE CXX)
+set_source_files_properties(tests/ai_dsp_port_test.c ${jaudio_dsp_sources} PROPERTIES LANGUAGE CXX)
 target_include_directories(ac_ai_dsp_port_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter"
     "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include" "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin" "${AC_ROOT}")
-target_compile_definitions(ac_ai_dsp_port_test PRIVATE SONAR_PORT=1)
+target_compile_definitions(ac_ai_dsp_port_test PRIVATE SONAR_PORT=1 F3DEX_GBI_2 _LANGUAGE_C)
 target_compile_options(ac_ai_dsp_port_test PRIVATE ${adapter_includes})
 set_target_properties(ac_ai_dsp_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON CXX_STANDARD 20 CXX_EXTENSIONS ON)
-target_link_libraries(ac_ai_dsp_port_test PRIVATE sonar::core)
+target_link_libraries(ac_ai_dsp_port_test PRIVATE sonar::core sonar::kit_jaudio)
 add_test(NAME ac_ai_dsp_port COMMAND ac_ai_dsp_port_test)

@@ -10,16 +10,21 @@
    interrupt is delivered where the mail was sent, as normal mode delivers it at that handoff, rather than at the
    runtime's next fixed point, which would hold the game's audio back a frame for every subframe.
 
-   The subframes are silent for now: the microcode's channels are rendered by sonarlib's jaudio kit once it has
-   them. They play only the console's start-up jingle; the game's sound comes through the CPU's mix. */
+   The microcode itself is sonarlib's jaudio kit, which renders the channel blocks command 1 gives from ARAM into
+   each subframe. The resampling filter's words hold the 256 resampling coefficients, then the 256 samples of the
+   constant patterns, and the ADPCM filter's the 32 AFC coefficients, two 16-bit values to a word, the first in
+   its high half, as the console's big-endian DMA gave them to the DSP. The effect buffers are not rendered, as
+   the kit does not render them. */
+#include "ac_port.h"
+
 #include "dolphin/dsp.h"
 #include "dolphin/os.h"
 #include "port/dsp_mail.h"
 
+#include <sonar/jaudio/dsp.h>
 #include <sonar/os.h>
 
 #include <stdint.h>
-#include <string.h>
 
 /* The control register the game sets and clears interrupt bits in, and the rest of the block it never reads. */
 volatile u16 __DSPRegs[32];
@@ -96,12 +101,14 @@ static u32 args[1 + DSP_MAX_ARGS]; /* the command word first */
 static u32 arg_count;
 static u32 args_expected;
 
-/* What command 1 gave, for the channels' renderer. */
-static u32 channel_count;
-static void* channels;
-static void* resample_filter;
-static void* adpcm_filter;
-static void* effect_buffers;
+/* The tables command 1 gives, as 16-bit values. */
+#define DSP_RESAMPLE_COEFFS 256
+#define DSP_PATTERN_SAMPLES 256
+#define DSP_AFC_COEFFS 32
+
+static s16 resample_coeffs[DSP_RESAMPLE_COEFFS];
+static s16 patterns[DSP_PATTERN_SAMPLES];
+static s16 afc_coeffs[DSP_AFC_COEFFS];
 
 /* What command 2 gave. */
 static u32 subframes;
@@ -133,12 +140,52 @@ static void raise_interrupt(void) {
         (void)sl_os_irq_dispatch();
 }
 
+static void boot_microcode(void) {
+    sl_jaudio_dsp_desc desc;
+    sl_result result;
+    desc.aram = ac_aram_memory(&desc.aram_size);
+    sl_jaudio_dsp_shutdown();
+    result = sl_jaudio_dsp_init(&desc);
+    if (result != SL_OK)
+        OSReport("DSP: the microcode does not start (%d)\n", (int)result);
+}
+
+/* Each word's two values, the high half first. */
+static void unpack(s16* values, const u32* words, u32 count) {
+    u32 i;
+    for (i = 0; i < count / 2; ++i) {
+        values[2 * i] = (s16)(u16)(words[i] >> 16);
+        values[2 * i + 1] = (s16)(u16)(words[i] & 0xFFFF);
+    }
+}
+
+static void set_up(u32 channel_count, void* channels, const u32* resample_filter, const u32* adpcm_filter) {
+    sl_jaudio_dsp_setup setup;
+    sl_result result;
+    if (channels == NULL || resample_filter == NULL || adpcm_filter == NULL) {
+        OSReport("DSP: the setup command is missing a table\n");
+        return;
+    }
+    unpack(resample_coeffs, resample_filter, DSP_RESAMPLE_COEFFS);
+    unpack(patterns, resample_filter + DSP_RESAMPLE_COEFFS / 2, DSP_PATTERN_SAMPLES);
+    unpack(afc_coeffs, adpcm_filter, DSP_AFC_COEFFS);
+    /* The game's DSPchannel_, which has the kit's layout (jaudio_NES/dspinterface.h). */
+    setup.voices = (sl_jaudio_dsp_voice*)channels;
+    setup.voice_count = channel_count;
+    setup.resample_coeffs = resample_coeffs;
+    setup.patterns = patterns;
+    setup.afc_coeffs = afc_coeffs;
+    result = sl_jaudio_dsp_set_up(&setup);
+    if (result != SL_OK)
+        OSReport("DSP: the microcode refuses its setup (%d)\n", (int)result);
+}
+
 static void render_subframe(void) {
     const size_t offset = (size_t)subframe * DSP_SUBFRAME_SAMPLES;
-    if (left != NULL)
-        memset(left + offset, 0, DSP_SUBFRAME_SAMPLES * sizeof *left);
-    if (right != NULL)
-        memset(right + offset, 0, DSP_SUBFRAME_SAMPLES * sizeof *right);
+    if (left != NULL && right != NULL)
+        sl_jaudio_dsp_render(left + offset, right + offset, output_volume);
+    else
+        OSReport("DSP: a frame without its buffers\n");
     if (++subframe == subframes)
         state = DSP_STATE_WAITING;
     raise_interrupt();
@@ -151,11 +198,8 @@ static void run_command(void) {
     state = DSP_STATE_WAITING;
     switch (command) {
         case 0x01:
-            channel_count = args[0] & 0xFFFF;
-            channels = mail_address(args[1]);
-            resample_filter = mail_address(args[2]);
-            adpcm_filter = mail_address(args[3]);
-            effect_buffers = mail_address(args[4]);
+            set_up(args[0] & 0xFFFF, mail_address(args[1]), (const u32*)mail_address(args[2]),
+                   (const u32*)mail_address(args[3]));
             break;
         case 0x02:
             subframes = (args[0] >> 16) & 0xFF;
@@ -216,6 +260,7 @@ void DSPSendMailToDSP(u32 mail) {
             /* The microcode's address, length and entry, which the HLE has no use for. */
             if (--boot_words == 0) {
                 state = DSP_STATE_WAITING;
+                boot_microcode();
                 post(0x88881111);
             }
             break;

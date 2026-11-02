@@ -21,6 +21,10 @@ BOOL ac_card_insert(s32 chan, const char* name);
 /* Ejects slot chan's card, as pulling it out of the console does. Main thread. */
 void ac_card_eject(s32 chan);
 
+/* The console's audio RAM as host memory, and its size in *size, for the DSP to read its samples from. Any
+   thread. */
+const u8* ac_aram_memory(u32* size);
+
 /* Starts sonarlib audio for the console's audio interface: the caller's sink, tier, output rate, latency, driver,
    coefficient ROM and capture callback, with the interface's rate and block for the console rate and frame, on an
    os alarm (sl_audio_init's errors). Main thread, after os starts and before the game's AIInit. */
