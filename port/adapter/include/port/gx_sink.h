@@ -63,7 +63,7 @@ void ac_frame_end(void);
    open, counted in outside. */
 BOOL ac_frame_task(struct sl_frame** frame);
 
-/* The differential test's (port/README.md, --diff; sonarlib docs/roadmap.md, M6 step 6j), around each emu64 task,
+/* The differential test's (port/NOTES.md, --diff; sonarlib docs/roadmap.md, M6 step 6j), around each emu64 task,
    after ac_frame_task. With begin FALSE, submits the open frame early and leaves the glue's frame open with no frame,
    so records go nowhere; with TRUE, begins a new one (sl_frame_begin), whose next record is its first. A refusal
    counts in refused_frames. Does nothing when no frame is open. Neither calls ac_emu64_frame_submitted. */

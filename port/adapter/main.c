@@ -1,5 +1,5 @@
 /* ac_port --package <file> [--ticks <n>] [--validate] [--diff]: Animal Crossing on sonarlib, headless and
-   deterministic, from boot to play's first frame (port/README.md). The program starts the library and the render
+   deterministic, from boot to play's first frame (port/NOTES.md). The program starts the library and the render
    module on the null sink, makes the emu64 the glue records each task with, mounts the package as game:, starts the
    CPU model and the runtime in deterministic mode, and calls boot's main, which never returns: the run ends at the
    submit of the frame that holds play's first task (emu64_glue.c, from the GX glue's ac_frame_end) or at the tick

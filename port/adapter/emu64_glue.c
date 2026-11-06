@@ -2,7 +2,7 @@
    sonarlib's kits/emu64 (sonarlib docs/roadmap.md, M6 steps 6g and 6h): each task is recorded on the kit into the frame the GX
    glue holds open from JW_BeginFrame to JW_EndFrame (port/gx_sink.h), the game's edits on the kit's path come here
    (port/emu64_glue.h), and the program's proof stops the run at play's first frame, after the submit of the frame
-   that holds play's first task (port/README.md). Under --diff each task is drawn also by the console's emu64, the
+   that holds play's first task (port/NOTES.md). Under --diff each task is drawn also by the console's emu64, the
    reference, built into the program under emu64_ref_ names, and the kit's and the reference's frames are compared
    (M6 step 6j). */
 #include "game.h"

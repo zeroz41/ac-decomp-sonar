@@ -185,13 +185,13 @@ target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>
 target_link_libraries(ac_game PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
                       sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend sonar::fmt_card)
 
-# The program (README.md, ac_port): the game and its glue, from boot to play's first frame.
+# The program (NOTES.md, The program): the game and its glue, from boot to play's first frame.
 add_executable(ac_port adapter/main.c $<TARGET_OBJECTS:ac_game>)
 set_target_properties(ac_port PROPERTIES C_STANDARD 11 C_EXTENSIONS ON LINKER_LANGUAGE CXX)
 target_link_libraries(ac_port PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
                       sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend sonar::fmt_card)
 
-# The importer (README.md, The package): ac-import writes the package the game reads from boot to Town's first frame
+# The importer (NOTES.md, The package): ac-import writes the package the game reads from boot to Town's first frame
 # from the player's disc, converting the structures the game reads in place (sonarlib docs/roadmap.md, M6 step 6c).
 add_library(ac_import_lib STATIC importer/archive.cpp importer/import.cpp)
 sonar_add_schema(ac_import_lib importer/ac.schema PREFIX ac LANGUAGE CXX

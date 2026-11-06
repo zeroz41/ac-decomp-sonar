@@ -1,4 +1,4 @@
-/* The Dolphin SDK's DVD functions the game calls, on the package the program mounts as game: (port/README.md, The
+/* The Dolphin SDK's DVD functions the game calls, on the package the program mounts as game: (port/NOTES.md, The
    package). The disc's file system table becomes a table of every file and directory in the package, sorted by
    path in byte order, and an entry number is an index in it. Reads are synchronous: an asynchronous read calls its
    callback before it returns, as a read that finished at once would. The disc has no directories to list, no

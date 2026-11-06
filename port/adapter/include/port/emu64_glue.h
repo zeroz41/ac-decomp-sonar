@@ -43,7 +43,7 @@ void ac_emu64_forget_actor(const struct actor_s* actor);
    ends the run, exit 0. */
 void ac_emu64_frame_submitted(void);
 
-/* The differential test (port/README.md, --diff; sonarlib docs/roadmap.md, M6 step 6j): each task is drawn by the
+/* The differential test (port/NOTES.md, --diff; sonarlib docs/roadmap.md, M6 step 6j): each task is drawn by the
    kit and by the console's emu64, the reference, into frames of their own, and the two captures are compared.
    ac_diff_enable is main.c's, before boot; ac_diff_enabled is for any game thread. */
 void ac_diff_enable(void);
