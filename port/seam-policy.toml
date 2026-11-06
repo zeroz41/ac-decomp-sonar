@@ -1,0 +1,117 @@
+# The port's seam policy (sonarlib docs/porting-model.md, Seam audit; docs/roadmap.md, M6 step 6h). The test
+# ac_seam_audit runs sl-seam-audit over the build's compile_commands.json with this policy: every file the build
+# compiles that uses GX is listed here. The SDK's GX units are sdk, the port's glue is glue, and each other file is
+# transitional, with what it does with GX. A file that starts using GX fails the audit until it is listed, and a
+# converted file fails until its entry goes. The seam is complete at transitional 0.
+
+[category.GX]
+names = "GX"
+headers = "dolphin/gx.h dolphin/gx/"
+
+[file.dolphin_sdk]
+path = "src/static/dolphin/"
+category = "GX"
+kind = "sdk"
+note = "the SDK's units, GX's among them, compiled on the host since step 6f; their bytes go to the port's sink"
+
+[file.port_adapter]
+path = "port/adapter/"
+category = "GX"
+kind = "glue"
+note = "the sink, the GX front end's hand-over, the frame and GX's address space"
+
+[file.jfw_display]
+path = "src/static/JSystem/JFramework/JFWDisplay.cpp"
+category = "GX"
+kind = "transitional"
+note = "the frame's clear and copy out, clearEfb's quad, preGX and endGX, the fader"
+
+[file.j2d_graf_context]
+path = "src/static/JSystem/J2DGraph/J2DGrafContext.cpp"
+category = "GX"
+kind = "transitional"
+note = "J2D's port: viewport, scissor, its TEV and blend state, lines and quads"
+
+[file.j2d_ortho_graph]
+path = "src/static/JSystem/J2DGraph/J2DOrthoGraph.cpp"
+category = "GX"
+kind = "transitional"
+note = "J2D's orthographic projection and position matrix"
+
+[file.jut_res_font]
+path = "src/static/JSystem/JUtility/JUTResFont.cpp"
+category = "GX"
+kind = "transitional"
+note = "the resource font's glyph texture, TEV setup and glyph quads"
+
+[file.jut_video]
+path = "src/static/JSystem/JUtility/JUTVideo.cpp"
+category = "GX"
+kind = "transitional"
+note = "the retrace's copy to the XFB, draw done and its callback"
+
+[file.jut_graph_fifo]
+path = "src/static/JSystem/JUtility/JUTGraphFifo.cpp"
+category = "GX"
+kind = "transitional"
+note = "GXInit and the graphics FIFO's base and pointers"
+
+[file.m_play]
+path = "src/game/m_play.c"
+category = "GX"
+kind = "transitional"
+note = "copy_efb_to_texture's EFB copy, built into a GX display list that emu64's list calls (step 10)"
+
+[file.shutdown]
+path = "src/static/libultra/shutdown.c"
+category = "GX"
+kind = "transitional"
+note = "shutdown's abort of the frame, draw done and flush, and the GX thread"
+
+[file.famicom]
+path = "src/static/Famicom/famicom.cpp"
+category = "GX"
+kind = "transitional"
+note = "the NES emulator's screen and its GX state; unreachable, famicom_init returns -1 under SONAR_PORT"
+
+[file.jfw_system]
+path = "src/static/JSystem/JFramework/JFWSystem.cpp"
+category = "GX"
+kind = "transitional"
+note = "names the default render mode, GXNtsc480IntDf; includes dolphin/gx.h"
+
+[file.jut_exception]
+path = "src/static/JSystem/JUtility/JUTException.cpp"
+category = "GX"
+kind = "transitional"
+note = "names the render mode and gamma of the exception screen; includes dolphin/gx.h"
+
+[file.jut_xfb]
+path = "src/static/JSystem/JUtility/JUTXfb.cpp"
+category = "GX"
+kind = "transitional"
+note = "sizes the XFBs from a GXRenderModeObj; includes dolphin/gx.h"
+
+[file.jsyswrap]
+path = "src/static/jsyswrap.cpp"
+category = "GX"
+kind = "transitional"
+note = "names the render mode and GXColor of the JSystem wrapper's display setup"
+
+[file.jsyswrapper_main]
+path = "src/static/libjsys/jsyswrapper_main.cpp"
+category = "GX"
+kind = "transitional"
+note = "names the render mode and GXColor of the wrapper's start-up"
+
+[file.famicom_emu]
+path = "src/famicom_emu.c"
+category = "GX"
+kind = "transitional"
+note = "names GXColor and GXRenderModeObj; includes dolphin/gx.h"
+
+[file.dvderr]
+path = "src/static/dvderr.c"
+category = "GX"
+kind = "transitional"
+note = "includes dolphin/gx.h; its error screen draws through emu64's task"

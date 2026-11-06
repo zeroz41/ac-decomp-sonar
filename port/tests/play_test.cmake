@@ -1,11 +1,12 @@
-# Runs ac_port from boot to play's first frame, twice and once with --validate (sonarlib docs/roadmap.md, M6 steps 6f
-# and 6g):
+# Runs ac_port from boot to play's first frame, twice and once with --validate (sonarlib docs/roadmap.md, M6 steps 6f,
+# 6g and 6h):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
 #         -P play_test.cmake
 # ac-import writes the package from the player's disc into OUT_DIR, then each run must reach play's first frame, exit
 # 0 and print the same ac_port line, so the frame recorded on emu64's kit matches run to run and no static list on the
 # path was drawn stale. The frame must hold instances and a hash, with no invalid frame, view overflow or render
-# overflow; the kit's refusals and the render module's problems are reported as they are. When AC_DISC names no disc
+# overflow; the kit's refusals and the render module's problems are reported as they are. The GX glue's counts must
+# all be 0: no GX error, no unmapped address, no task outside a frame, no nested frame and no refused frame. When AC_DISC names no disc
 # it prints the line the test's SKIP_REGULAR_EXPRESSION matches and returns.
 cmake_minimum_required(VERSION 3.25)
 
@@ -33,7 +34,8 @@ set(count "[0-9]+")
 set(line_pattern "ac_port: [a-z]+ tick ${count} retrace ${count} gx ${count} dvd ${count} ${count} hash [0-9a-f]+")
 string(APPEND line_pattern " instances ${count} compiles ${count} holes ${count}/${count} cpu ${count}")
 string(APPEND line_pattern " refused ${count} views ${count} invalid ${count} problems ${count} overflows ${count}")
-string(APPEND line_pattern " unowned ${count}")
+string(APPEND line_pattern " unowned ${count} gx-errors ${count} unmapped ${count} outside ${count} nested ${count}")
+string(APPEND line_pattern " refused-frames ${count}")
 foreach(run IN ITEMS 1 2 validate)
     set(options "")
     if(run STREQUAL "validate")
@@ -75,3 +77,12 @@ endif()
 if(NOT views EQUAL 0 OR NOT invalid EQUAL 0 OR NOT overflows EQUAL 0)
     message(FATAL_ERROR "ac_port_play: play's first frame overflowed or was invalid:\n${first}")
 endif()
+string(REGEX MATCH " gx-errors ([0-9]+) unmapped ([0-9]+) outside ([0-9]+) nested ([0-9]+) refused-frames ([0-9]+)$"
+       ignored "${first}")
+set(gx_counts "${CMAKE_MATCH_1};${CMAKE_MATCH_2};${CMAKE_MATCH_3};${CMAKE_MATCH_4};${CMAKE_MATCH_5}")
+set(gx_names "gx-errors;unmapped;outside;nested;refused-frames")
+foreach(value name IN ZIP_LISTS gx_counts gx_names)
+    if(NOT value EQUAL 0)
+        message(FATAL_ERROR "ac_port_play: the GX glue's ${name} is not 0:\n${first}")
+    endif()
+endforeach()

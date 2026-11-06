@@ -269,7 +269,11 @@ void __GXInitGX(void) {
     GXClearVtxDesc();
     GXInvalidateVtxCache();
     for (i = GX_VA_POS; i <= GX_LIGHT_ARRAY; i++) {
+#ifdef SONAR_PORT /* sonarlib port: placeholder bases nothing reads; NULL is no address to the port's sink, not a zero-initialized static it cannot map */
+        GXSetArray(i, NULL, 0);
+#else
         GXSetArray(i, gx, 0);
+#endif
     }
     GXSetLineWidth(6, 0);
     GXSetPointSize(6, 0);

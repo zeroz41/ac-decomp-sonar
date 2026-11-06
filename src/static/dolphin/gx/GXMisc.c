@@ -57,7 +57,7 @@ void GXFlush(void)
 	GX_WRITE_U32(0);
 	GX_WRITE_U32(0);
 	GX_WRITE_U32(0);
-#ifdef SONAR_PORT /* sonarlib port: the port's sink discards what was written outside a display list */
+#ifdef SONAR_PORT /* sonarlib port: the port's sink hands what was written outside a display list to the GX front end */
     ac_gx_flush();
 #else
     PPCSync();

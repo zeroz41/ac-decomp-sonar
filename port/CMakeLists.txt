@@ -3,6 +3,8 @@
 # objdiff.json and the asset includes under build/<version>.
 cmake_minimum_required(VERSION 3.25)
 project(ac_port LANGUAGES C CXX)
+# The seam audit (ac_seam_audit) reads the translation units the build compiles from compile_commands.json.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(AC_VERSION "GAFE01_00" CACHE STRING "The disc revision to build: GAFE01_00 or GAFU01_00")
 set(SONARLIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../sonarlib" CACHE PATH "sonarlib's source tree")
@@ -124,7 +126,8 @@ target_sources(ac_game PRIVATE adapter/dolphin_dvd.c)
 set_source_files_properties(adapter/dolphin_dvd.c PROPERTIES COMPILE_DEFINITIONS "AC_PORT_DISC_VERSION=\"${AC_VERSION}\"")
 # The SDK's video and controller functions on sonarlib's VI and PAD kits.
 target_sources(ac_game PRIVATE adapter/dolphin_vi.c adapter/dolphin_pad.c)
-# The sink the SDK's GX units write into, and the FIFO functions of GXFifo.c, which it replaces.
+# The sink the SDK's GX units write into, handing its bytes to sonarlib's GX front end, GX's address space, the frame
+# from JW_BeginFrame to JW_EndFrame, and the FIFO functions of GXFifo.c, which it replaces.
 target_sources(ac_game PRIVATE adapter/dolphin_gx.c)
 # What the game calls of emu64, on sonarlib's kit, and the proof's stop at play's first frame.
 target_sources(ac_game PRIVATE adapter/emu64_glue.c)
@@ -166,13 +169,13 @@ endif()
 # The original compiler took C++98, which allowed narrowing in braced initializers.
 target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>)
 target_link_libraries(ac_game PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
-                      sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::fmt_card)
+                      sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend sonar::fmt_card)
 
 # The program (README.md, ac_port): the game and its glue, from boot to play's first frame.
 add_executable(ac_port adapter/main.c $<TARGET_OBJECTS:ac_game>)
 set_target_properties(ac_port PROPERTIES C_STANDARD 11 C_EXTENSIONS ON LINKER_LANGUAGE CXX)
 target_link_libraries(ac_port PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
-                      sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::fmt_card)
+                      sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend sonar::fmt_card)
 
 # The importer (README.md, The package): ac-import writes the package the game reads from boot to Town's first frame
 # from the player's disc, converting the structures the game reads in place (sonarlib docs/roadmap.md, M6 step 6c).
@@ -312,3 +315,10 @@ add_test(NAME ac_port_play
                  "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/play"
                  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/play_test.cmake")
 set_tests_properties(ac_port_play PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_play: skipped, AC_DISC is not set")
+
+# The seam audit (sonarlib's sl-seam-audit) over the translation units this build compiles, against the port's policy
+# of seam files (seam-policy.toml): every file that uses GX is listed, and no transitional entry is stale. No disc.
+add_custom_target(ac_seam_audit_tool ALL DEPENDS sl-seam-audit)
+add_test(NAME ac_seam_audit
+         COMMAND sl-seam-audit --policy "${CMAKE_CURRENT_SOURCE_DIR}/seam-policy.toml"
+                 --commands "${CMAKE_BINARY_DIR}/compile_commands.json" --root "${AC_ROOT}")

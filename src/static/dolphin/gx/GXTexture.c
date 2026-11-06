@@ -212,12 +212,13 @@ void GXInitTexObj(GXTexObj *obj, void *image_ptr, u16 width, u16 height, GXTexFm
     SET_REG_FIELD(0x266, t->image0, 10, 10, height - 1);
     SET_REG_FIELD(0x267, t->image0, 4, 20, format & 0xF);
     ASSERTMSGLINEV(0x26D, ((u32)image_ptr & 0x1F) == 0, "%s: %s pointer not aligned to 32B", "GXInitTexObj", "image");
-#ifdef SONAR_PORT /* sonarlib port: the address as the port's sink maps it (port/adapter/dolphin_gx.c) */
-    imageBase = (ac_gx_address(image_ptr) >> 5) & 0x01FFFFFF;
+#ifdef SONAR_PORT /* sonarlib port: the address as the port's sink maps it, in all 24 bits of the register's field */
+    imageBase = ac_gx_address(image_ptr) >> 5;
+    SET_REG_FIELD(0x26F, t->image3, 24, 0, imageBase);
 #else
     imageBase = (u32)((u32)image_ptr >> 5) & 0x01FFFFFF;
-#endif
     SET_REG_FIELD(0x26F, t->image3, 21, 0, imageBase);
+#endif
     switch (format & 0xF) {
     case 0:
     case 8:
@@ -323,12 +324,13 @@ void GXInitTexObjData(GXTexObj *obj, void *image_ptr)
     ASSERTMSGLINE(0x31E, obj, "Texture Object Pointer is null");
     CHECK_GXBEGIN(0x320, "GXInitTexObjData");
     ASSERTMSGLINEV(0x323, ((u32)image_ptr & 0x1F) == 0, "%s: %s pointer not aligned to 32B", "GXInitTexObjData", "image");
-#ifdef SONAR_PORT /* sonarlib port: the address as the port's sink maps it (port/adapter/dolphin_gx.c) */
-    imageBase = (ac_gx_address(image_ptr) >> 5) & 0x01FFFFFF;
+#ifdef SONAR_PORT /* sonarlib port: the address as the port's sink maps it, in all 24 bits of the register's field */
+    imageBase = ac_gx_address(image_ptr) >> 5;
+    SET_REG_FIELD(0x326, t->image3, 24, 0, imageBase);
 #else
     imageBase = ((u32)image_ptr >> 5) & 0x01FFFFFF;
-#endif
     SET_REG_FIELD(0x326, t->image3, 21, 0, imageBase);
+#endif
 }
 
 void GXInitTexObjWrapMode(GXTexObj *obj, GXTexWrapMode sm, GXTexWrapMode tm)
@@ -372,8 +374,8 @@ void GXGetTexObjAll(const GXTexObj *obj, void **image_ptr, u16 *width, u16 *heig
     const __GXTexObjInt *t = (const __GXTexObjInt *)obj;
 
     ASSERTMSGLINE(0x37E, obj, "Texture Object Pointer is null");
-#ifdef SONAR_PORT /* sonarlib port: the address back to its pointer, as the port's sink maps it */
-    *image_ptr = ac_gx_pointer(GET_REG_FIELD(t->image3, 21, 0) << 5);
+#ifdef SONAR_PORT /* sonarlib port: the address back to its pointer, as the port's sink maps it, from all 24 bits */
+    *image_ptr = ac_gx_pointer((u32)GET_REG_FIELD(t->image3, 24, 0) << 5);
 #else
     *image_ptr = (void *)(GET_REG_FIELD(t->image3, 21, 0) << 5);
 #endif
@@ -390,8 +392,8 @@ void *GXGetTexObjData(const GXTexObj *to)
     const __GXTexObjInt *t = (const __GXTexObjInt *)to;
 
     ASSERTMSGLINE(0x38B, to, "Texture Object Pointer is null");
-#ifdef SONAR_PORT /* sonarlib port: the address back to its pointer, as the port's sink maps it */
-    return ac_gx_pointer(GET_REG_FIELD(t->image3, 21, 0) << 5);
+#ifdef SONAR_PORT /* sonarlib port: the address back to its pointer, as the port's sink maps it, from all 24 bits */
+    return ac_gx_pointer((u32)GET_REG_FIELD(t->image3, 24, 0) << 5);
 #else
     return (void *)(GET_REG_FIELD(t->image3, 21, 0) << 5);
 #endif
@@ -603,8 +605,8 @@ void GXInitTlutObj(GXTlutObj *tlut_obj, void *lut, GXTlutFmt fmt, u16 n_entries)
     ASSERTMSGLINEV(0x47D, ((u32)lut & 0x1F) == 0, "%s: %s pointer not aligned to 32B", "GXInitTlutObj", "Tlut");
     t->tlut = 0;
     SET_REG_FIELD(0x480, t->tlut, 2, 10, fmt);
-#ifdef SONAR_PORT /* sonarlib port: the address as the port's sink maps it (port/adapter/dolphin_gx.c) */
-    SET_REG_FIELD(0x481, t->loadTlut0, 21, 0, ac_gx_address(lut) >> 5);
+#ifdef SONAR_PORT /* sonarlib port: the address as the port's sink maps it, below the TLUT load's 32 MiB */
+    SET_REG_FIELD(0x481, t->loadTlut0, 21, 0, ac_gx_tlut_address(lut) >> 5);
 #else
     SET_REG_FIELD(0x481, t->loadTlut0, 21, 0, ((u32)lut & 0x3FFFFFFF) >> 5);
 #endif
@@ -947,8 +949,13 @@ void GXPreLoadEntireTexture(GXTexObj *tex_obj, GXTexRegion *region)
 
     loadImage0 = 0;
     SET_REG_FIELD(0, loadImage0, 8, 24, 0x60);
+#ifdef SONAR_PORT /* sonarlib port: the texture's address in all 24 bits of both registers' fields */
+    base = t->image3 & 0xFFFFFF;
+    SET_REG_FIELD(0x658, loadImage0, 24, 0, base);
+#else
     base = t->image3 & 0x1FFFFF;
     SET_REG_FIELD(0x658, loadImage0, 21, 0, base);
+#endif
 
     loadImage1 = 0;
     SET_REG_FIELD(0, loadImage1, 8, 24, 0x61);
@@ -1044,7 +1051,11 @@ void GXPreLoadEntireTexture(GXTexObj *tex_obj, GXTexRegion *region)
             tmem2 = (i & 1) ? tmemGB : tmemAR;
             __GetImageTileCount(t->fmt, (u16) (wd >> (i + 1)), (u16) (ht >> (i + 1)), &rowTiles, &colTiles, &cmpTiles);
             nTiles = rowTiles * colTiles;
+#ifdef SONAR_PORT /* sonarlib port: the level's address in all 24 bits of the register's field */
+            SET_REG_FIELD(0x6D6, loadImage0, 24, 0, base);
+#else
             SET_REG_FIELD(0x6D6, loadImage0, 21, 0, base);
+#endif
             SET_REG_FIELD(0x6D7, loadImage1, 15, 0, tmem1);
             SET_REG_FIELD(0x6D8, loadImage2, 15, 0, tmem2);
             SET_REG_FIELD(0x6D9, loadImage3, 15, 0, nTiles);

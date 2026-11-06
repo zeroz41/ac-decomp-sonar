@@ -482,13 +482,15 @@ void GXCopyDisp(void *dest, GXBool clear)
     GX_WRITE_RAS_REG(gx->cpDispSize);
     GX_WRITE_RAS_REG(gx->cpDispStride);
 
-#ifdef SONAR_PORT /* sonarlib port: the address as the port's sink maps it (port/adapter/dolphin_gx.c) */
+#ifdef SONAR_PORT /* sonarlib port: the address as the port's sink maps it, in all 24 bits of the register's field */
     phyAddr = ac_gx_address(dest);
+    reg = 0;
+    SET_REG_FIELD(1818, reg, 24, 0, phyAddr >> 5);
 #else
     phyAddr = (u32)dest & 0x3FFFFFFF;
-#endif
     reg = 0;
     SET_REG_FIELD(1818, reg, 21, 0, phyAddr >> 5);
+#endif
     SET_REG_FIELD(1819, reg, 8, 24, 0x4B);
     GX_WRITE_RAS_REG(reg);
 
@@ -547,13 +549,15 @@ void GXCopyTex(void *dest, GXBool clear)
     GX_WRITE_RAS_REG(gx->cpTexSize);
     GX_WRITE_RAS_REG(gx->cpTexStride);
 
-#ifdef SONAR_PORT /* sonarlib port: the address as the port's sink maps it (port/adapter/dolphin_gx.c) */
+#ifdef SONAR_PORT /* sonarlib port: the address as the port's sink maps it, in all 24 bits of the register's field */
     phyAddr = ac_gx_address(dest);
+    reg = 0;
+    SET_REG_FIELD(1911, reg, 24, 0, phyAddr >> 5);
 #else
     phyAddr = (u32)dest & 0x3FFFFFFF;
-#endif
     reg = 0;
     SET_REG_FIELD(1911, reg, 21, 0, phyAddr >> 5);
+#endif
     SET_REG_FIELD(1912, reg, 8, 24, 0x4B);
     GX_WRITE_RAS_REG(reg);
 

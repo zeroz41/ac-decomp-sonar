@@ -1,7 +1,8 @@
 /* What the game calls of emu64 (src/static/libforest/emu64/emu64.c, which the port does not compile), on sonarlib's
-   kits/emu64 (sonarlib docs/roadmap.md, M6 step 6g): each task is recorded into a frame on the kit, the game's edits
-   on the kit's path come here (port/emu64_glue.h), and emu64_taskstart is where the program's proof stops the run:
-   at play's first frame, after its task's submit (port/README.md). */
+   kits/emu64 (sonarlib docs/roadmap.md, M6 steps 6g and 6h): each task is recorded on the kit into the frame the GX
+   glue holds open from JW_BeginFrame to JW_EndFrame (port/gx_sink.h), the game's edits on the kit's path come here
+   (port/emu64_glue.h), and the program's proof stops the run at play's first frame, after the submit of the frame
+   that holds play's first task (port/README.md). */
 #include "game.h"
 #include "graph.h"
 #include "m_actor.h"
@@ -42,8 +43,8 @@ static u8 aflags[AC_AFLAGS_MAX > 0 ? AC_AFLAGS_MAX : 1];
 u8 FrameCansel = FALSE;
 
 static sl_emu64* emu;
-static u64 null_frames; /* tasks skipped because sl_frame_begin gave no frame */
-static u64 unowned;     /* actors drawn outside main memory, without owners */
+static u64 unowned;    /* actors drawn outside main memory, without owners */
+static BOOL play_task; /* play's first task was recorded */
 
 /* GRAPH's eleven display lists, in its field order (graph.h). */
 static const size_t list_fields[AC_EMU64_LISTS] = {
@@ -93,11 +94,6 @@ int emu64_get_aflags(int idx) {
 
 void ac_emu64_written(const void* begin, const void* end) {
     sl_emu64_written(emu, begin, end);
-}
-
-/* GXColor's bytes, R in bits 24 to 31. */
-void ac_emu64_set_clear(GXColor color, u32 z) {
-    sl_emu64_set_clear(emu, (u32)color.r << 24 | (u32)color.g << 16 | (u32)color.b << 8 | color.a, z);
 }
 
 /* The actor's offset from main memory's base, FALSE for an actor outside it. */
@@ -169,33 +165,36 @@ void ac_emu64_forget_actor(const ACTOR* actor) {
 void ac_port_report(const char* what) {
     sl_emu64_stats kit;
     sl_render_stats render;
+    ac_gx_counts gx;
     sl_emu64_get_stats(emu, &kit);
     sl_render_get_stats(&render);
+    ac_gx_get_counts(&gx);
     printf("ac_port: %s tick %" PRIu64 " retrace %" PRIu64 " gx %" PRIu64 " dvd %" PRIu64 " %" PRIu64
            " hash %016" PRIx64 " instances %" PRIu32 " compiles %" PRIu64 " holes %" PRIu64 "/%" PRIu64 " cpu %" PRIu64
            " refused %" PRIu64 " views %" PRIu64 " invalid %" PRIu64 " problems %" PRIu64 " overflows %" PRIu64
-           " unowned %" PRIu64 "\n",
+           " unowned %" PRIu64 " gx-errors %" PRIu64 " unmapped %" PRIu64 " outside %" PRIu64 " nested %" PRIu64
+           " refused-frames %" PRIu64 "\n",
            what, sl_tick_count(), sl_retrace_count(), (uint64_t)ac_gx_bytes(), (uint64_t)ac_dvd_reads(),
            (uint64_t)ac_dvd_read_bytes(), sl_render_frame_hash(), kit.instances, kit.compiles, kit.vertex_holes,
            kit.list_holes, kit.cpu_draws, kit.refused, kit.view_overflows, render.frames_invalid, render.problems,
-           render.overflows, (uint64_t)unowned);
-    if (null_frames != 0)
-        fprintf(stderr, "ac_port: %" PRIu64 " tasks without a frame\n", (uint64_t)null_frames);
+           render.overflows, (uint64_t)unowned, (uint64_t)gx.errors, (uint64_t)gx.unmapped, (uint64_t)gx.outside,
+           (uint64_t)gx.nested, (uint64_t)gx.refused_frames);
     fflush(stdout);
     fflush(stderr);
 }
 
-/* One frame a task: its lists recorded on the kit, then submitted. The proof's check: the first frame play's exec
-   draws ends the run, after its submit. */
+/* The task's lists, recorded on the kit into the open frame after the front end's draws so far. The proof's check
+   marks play's first task: the frame that holds it ends the run at its submit (ac_emu64_frame_submitted). */
 void emu64_taskstart(Gfx* gfx) {
-    sl_frame* const frame = sl_frame_begin();
-    if (frame == NULL) {
-        null_frames++;
-    } else {
+    sl_frame* frame;
+    if (ac_frame_task(&frame))
         sl_emu64_task(emu, frame, (const sl_emu64_gfx*)gfx);
-        sl_frame_submit(frame);
-    }
-    if (game_class_p != NULL && game_class_p->exec == play_main) {
+    if (game_class_p != NULL && game_class_p->exec == play_main)
+        play_task = TRUE;
+}
+
+void ac_emu64_frame_submitted(void) {
+    if (play_task) {
         ac_port_report("play");
         _Exit(0);
     }

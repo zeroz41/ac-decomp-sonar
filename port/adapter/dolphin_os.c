@@ -20,6 +20,8 @@
 #include "dolphin/os/OSTime.h"
 #include "boot.h"
 
+#include <port/gx_sink.h>
+
 #include <sonar/base/log.h>
 #include <sonar/dolphin_os/os.h>
 
@@ -332,6 +334,8 @@ void OSInit(void) {
         SL_ERROR("dolphin_os", "OSInit: no main memory: %d", (int)result);
         abort();
     }
+    /* GX's address space, main memory's and the image's data ranges, before any other thread runs. */
+    ac_gx_map_memory();
     /* Boot's main thread, which the program attached to core os, becomes the SDK's default thread at its main
        priority. Its stack is the host's, so stackBase and stackEnd stay 0. */
     {
