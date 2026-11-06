@@ -23,6 +23,7 @@
 #include <sonar/runtime.h>
 
 #include <inttypes.h>
+#include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -48,6 +49,8 @@ u8 FrameCansel = FALSE;
 static sl_emu64* emu;
 static u64 unowned;    /* actors drawn outside main memory, without owners */
 static BOOL play_task; /* play's first task was recorded */
+static BOOL window;    /* --window: the run goes on after play's first frame */
+static atomic_int play_reached; /* play's first frame was submitted; the presenter reads it */
 
 /* GRAPH's eleven display lists, in its field order (graph.h). */
 static const size_t list_fields[AC_EMU64_LISTS] = {
@@ -373,14 +376,24 @@ void emu64_taskstart(Gfx* gfx) {
         play_task = TRUE;
 }
 
+void ac_window_enable(void) {
+    window = TRUE;
+}
+
+BOOL ac_play_reached(void) {
+    return atomic_load(&play_reached) != 0;
+}
+
 void ac_emu64_frame_submitted(void) {
-    if (play_task) {
+    if (play_task && !atomic_load(&play_reached)) {
         if (diff)
             printf("ac_port: diff tasks %" PRIu64 " equal %" PRIu64 " different %" PRIu64 " refused %" PRIu64
                    " triangles %" PRIu64 " skipped %" PRIu64 " %" PRIu64 "\n",
                    (uint64_t)diff_tasks, (uint64_t)diff_equal, (uint64_t)diff_different, (uint64_t)diff_refused,
                    (uint64_t)diff_triangles, (uint64_t)diff_skipped[0], (uint64_t)diff_skipped[1]);
         ac_port_report("play");
-        _Exit(0);
+        if (!window)
+            _Exit(0);
+        atomic_store(&play_reached, 1);
     }
 }

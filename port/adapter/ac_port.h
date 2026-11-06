@@ -38,6 +38,11 @@ void ac_audio_shutdown(void);
 u64 ac_dvd_reads(void);
 u64 ac_dvd_read_bytes(void);
 
+/* --window: play's first frame prints the play line and ends no run (emu64_glue.c). main.c's, before boot. */
+void ac_window_enable(void);
+/* Whether play's first frame was submitted. Any thread. */
+BOOL ac_play_reached(void);
+
 /* Prints the proof's line, "ac_port: <what> tick <t> retrace <r> gx <bytes> dvd <reads> <bytes> hash <h> instances
    <n> compiles <n> holes <vertex>/<list> cpu <n> refused <n> views <overflows> invalid <frames> problems <n>
    overflows <n> unowned <n> gx-errors <n> unmapped <n> outside <n> nested <n> refused-frames <n>", to stdout and

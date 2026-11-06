@@ -348,8 +348,8 @@ void OSInit(void) {
     }
     /* GX's address space, main memory's and the image's data ranges, before any other thread runs. */
     ac_gx_map_memory();
-    /* Boot's main thread, which the program attached to core os, becomes the SDK's default thread at its main
-       priority. Its stack is the host's, so stackBase and stackEnd stay 0. */
+    /* Boot's main thread, the game thread "main" the program started on core os, becomes the SDK's default thread
+       at its main priority. Its stack is the host's, so stackBase and stackEnd stay 0. */
     {
         static OSThread boot_thread;
         if (!sl_dolphin_os_thread_bind_current(&boot_thread, 16)) {

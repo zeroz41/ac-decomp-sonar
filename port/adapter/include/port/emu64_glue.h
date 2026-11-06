@@ -40,7 +40,7 @@ void ac_emu64_owner_close(struct graph_s* graph, const ac_emu64_marks* marks);
 void ac_emu64_forget_actor(const struct actor_s* actor);
 
 /* The GX glue's ac_frame_end, after its submit: once the frame holds play's first task, prints the proof's line and
-   ends the run, exit 0. */
+   ends the run, exit 0, but under --window (ac_window_enable), where the run goes on. */
 void ac_emu64_frame_submitted(void);
 
 /* The differential test (port/NOTES.md, --diff; sonarlib docs/roadmap.md, M6 step 6j): each task is drawn by the

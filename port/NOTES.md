@@ -34,7 +34,11 @@ The other files on the first frame's path stay as the console's bytes, as the ga
 
 ## The program
 
-`ac_port` (`adapter/main.c`) runs the game on sonarlib headless, in deterministic mode, from boot to play's first frame (sonarlib's `docs/roadmap.md`, M6 steps 6f, 6g and 6h). Each frame runs from `JW_BeginFrame` to `JW_EndFrame`: the GX the game writes is recorded into it by sonarlib's GX front end and emu64's tasks by sonarlib's `kits/emu64`, and it is submitted to the render module, on its null sink. It opens no window and makes no sound.
+`ac_port` (`adapter/main.c`) runs the game on sonarlib. By default it runs headless, in deterministic mode, from boot to play's first frame (sonarlib's `docs/roadmap.md`, M6 steps 6f, 6g and 6h); with `--window` it shows the game in a window in real time (step 6k). Each frame runs from `JW_BeginFrame` to `JW_EndFrame`: the GX the game writes is recorded into it by sonarlib's GX front end and emu64's tasks by sonarlib's `kits/emu64`, and it is submitted to the render module. Headless that is the null sink, and the run opens no window, reads no device and makes no sound.
+
+### The threads
+
+The process's main thread starts sonarlib, the render module, emu64's kit, fs and os. It then creates and starts a game thread named `main` at priority 0, which starts the runtime and calls the game's `main`, so the game's main thread is the runtime's tick thread. `OSInit` binds it as the SDK's default thread. Headless, the process's main thread joins it and the run ends with `_Exit`. Under `--window` the process's main thread stays outside the game's threads and presents (below). In normal mode, while the tick thread waits in os, sonarlib's idle driver fires each retrace on time.
 
 ### The run
 
@@ -53,6 +57,20 @@ On `GAFE01_00` the three runs print, as the reference line:
 ```
 ac_port: play tick 712 retrace 712 gx 514337 dvd 227 6686462 hash 4b6269a823855fb9 instances 48 compiles 920 holes 3/832 cpu 3 refused 0 views 0 invalid 0 problems 0 overflows 0 unowned 5 gx-errors 0 unmapped 0 outside 0 nested 0 refused-frames 0
 ```
+
+### The window
+
+`--window` starts os and the runtime in normal mode on the host's own clock and date, the window system before the render module, and the render module on the GPU sink at 640x480. It opens one window, `Animal Crossing`, 1280x960 and paced by VSync, and starts input with the GameCube profile's default bindings: the keyboard on port 0, and each gamepad on the first free port as it arrives. The main thread then pumps the window and input, and shows the latest submitted frame each pass, until the window is closed. The play line prints at play's first frame and the run goes on. `--ticks` applies only when given, and then ends the run once the runtime has begun that many ticks. At the end it prints
+
+```
+ac_port: window ticks <t> frames <n>
+```
+
+with the ticks begun and the frames presented, and exits 0 if play's first frame was reached or the window was closed, else 1. There is no sound yet: the game's own sound engine faults when it runs (step 6l). `--validate` and `--diff` work with it as without.
+
+The test `ac_port_window` runs `ac_port --window --ticks 1800` on SDL's `offscreen` video driver through lavapipe's Vulkan, with SDL's `dummy` audio driver, so nothing opens on the desktop. It must exit 0 with one play line and a window line with at least 1800 ticks and frames above 0. It is skipped without a disc or lavapipe. In real time the play line differs between runs.
+
+The GPU sink compiles pipelines on the game thread, and the GPU driver's shader compiler can be C++ (lavapipe's LLVM is): its allocations then reach the game's `operator new`. sonarlib runs every render call inside a host scope (`sl_mem_host_scope`), and `JKRHeap.cpp`'s rule sends those allocations to the host's allocator, never JKR's heaps.
 
 ### The emu64 differential test
 
@@ -82,7 +100,7 @@ ac_port: play tick 712 retrace 712 gx 1627029 dvd 227 6686462 hash a8b722393cbeb
 ### The glue
 
 - **DVD** (`adapter/dolphin_dvd.c`): the package, listed once into a table sorted by path; an entry number is the index. Paths are relative to the disc's root, without regard to case. Reads complete at once. Directory listing and streaming fail.
-- **OS** (`adapter/dolphin_os.c`): `OSInit` binds boot's main thread as a game thread at priority 16. The main thread is the runtime's tick thread throughout: its retrace waits begin ticks, and while it waits in os the runtime moves time.
+- **OS** (`adapter/dolphin_os.c`): `OSInit` binds boot's main thread, the game thread `main`, as the SDK's at priority 16. It is the runtime's tick thread throughout: its retrace waits begin ticks, and while it waits in os the runtime moves time.
 - **VI and PAD** (`adapter/dolphin_vi.c`, `dolphin_pad.c`) on sonarlib's `kit_vi` and `kit_pad`. Frames pace on `JUTVideo`'s retrace queue through the VI glue's post-retrace callback, as on the console; `setFrameRate` also sets the tick's length in retraces.
 - **GX** (`adapter/dolphin_gx.c`, `include/port/gx_sink.h`): the SDK's own GX units are compiled for the host, writing into a sink in the console's byte order. Outside a display list the bytes go to sonarlib's GX front end at each `GXFlush`, at the frame's end and before each emu64 task; display lists fill their buffers as on the console. `JW_BeginFrame` begins the frame and `JW_EndFrame` records the last bytes and submits it. Pointers written as 32-bit values become GX addresses: main memory at 0, then the executable's read-only and initialized data ranges, each 32-byte aligned after the one before, within the 512 MiB that the registers' 24-bit fields reach; NULL is 0, and a pointer in no region is 0 and counted as unmapped. `OSInit` lays the space out and logs its table. `GXFifo.c` is not compiled: the glue keeps the FIFO objects, and the GPU is always idle, its draw-done and draw-sync complete at once.
 - **emu64** (`adapter/emu64_glue.c`, `include/port/emu64_glue.h`) on sonarlib's `kits/emu64`. `emu64_taskstart` records the task's lists with `sl_emu64_task` into the frame `JW_BeginFrame` opened, after the GX written before it, and the run ends when the frame holding play's first task is submitted. The task passes no clear: the front end's first record clears the frame. `emu64_texture_cache_data_entry_set` and `emu64_refresh` go to the kit; at start the program adds the executable's read-only and initialized data as static ranges (`sl_mem_image_data`). Owners are actors: `Actor_draw` writes an owner marker at the head of each of `GRAPH`'s display lists, `(offset << 4) | (list + 1)` for the actor's offset in main memory, takes back each marker the actor drew nothing after and closes the other lists; `Actor_dt` forgets the actor's owners.
@@ -93,7 +111,7 @@ ac_port: play tick 712 retrace 712 gx 1627029 dvd 227 6686462 hash a8b722393cbeb
 
 Each is a Portability edit, under `SONAR_PORT` with the original kept, unless it compiles the same on the console.
 
-- `JKRHeap.cpp`: the global `operator new` and `delete`, in every form, sized and aligned too. Allocations from a thread the game does not own, or before JKR's heaps exist, go to the host's allocator; `delete` picks by whether the address lies in main memory.
+- `JKRHeap.cpp`: the global `operator new` and `delete`, in every form, sized and aligned too. Allocations inside sonarlib's host scope, from a thread the game does not own, or before JKR's heaps exist go to the host's allocator; `delete` picks by whether the address lies in main memory.
 - `JKRExpHeap.cpp`: the `0x10`s that are a block header's size become `sizeof(CMemBlock)` (no guard: the same on the console).
 - `jsyswrap.cpp`: `SystemHeapSize`'s `0xD0` becomes what the root heap takes at the host's sizes; `JW_BeginFrame` begins the port's frame and `JW_EndFrame` submits it.
 - `JFWDisplay.h`: `setFrameRate` sets the runtime tick's length in retraces.
@@ -113,7 +131,7 @@ Each is a Portability edit, under `SONAR_PORT` with the original kept, unless it
 ### What runs silent or does nothing
 
 - **Sound:** no audio runs. `AIInit` reports that the game will not be heard. jaudio's threads run with no audio frames, `audiorom.img` is not in the package, and the boot sound is skipped.
-- **Drawing:** emu64's frames go to the render module's null sink, which hashes them and draws nothing, so there is no picture.
-- **Input:** no input module runs, so every pad channel reads no controller.
+- **Drawing** (headless): emu64's frames go to the render module's null sink, which hashes them and draws nothing, so there is no picture.
+- **Input** (headless): no input module runs, so every pad channel reads no controller.
 - **Saves:** the memory cards stay in memory.
 - **The Famicom emulator** declines to start.

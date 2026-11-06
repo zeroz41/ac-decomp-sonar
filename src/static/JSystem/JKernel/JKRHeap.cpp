@@ -300,6 +300,7 @@ bool JKRHeap::isSubHeap(JKRHeap* heap) const {
 
 #ifdef SONAR_PORT /* sonarlib port: the operator new rule (sonarlib docs/porting-model.md, Statically linked modules) */
 
+#include <sonar/base/alloc.h>
 #include <sonar/dolphin_os/os.h>
 #include <sonar/os.h>
 
@@ -340,9 +341,10 @@ static void host_free(void* memory) {
 #pragma pop_macro("free")
 #pragma pop_macro("malloc")
 
-/* A thread the game does not own, or a game thread before the game's heaps exist, allocates from the host. */
+/* A thread inside sonarlib's host scope (a platform library's allocation, such as the GPU driver's), a thread the
+   game does not own, or a game thread before the game's heaps exist, allocates from the host. */
 static void* game_new(size_t byteCount, int alignment) {
-    if (sl_os_thread_current().id == 0 || JKRHeap::sCurrentHeap == nullptr) {
+    if (sl_mem_host_scope() || sl_os_thread_current().id == 0 || JKRHeap::sCurrentHeap == nullptr) {
         return host_alloc(byteCount, (size_t)(alignment < 0 ? -alignment : alignment));
     }
     return JKRHeap::alloc(byteCount, alignment, nullptr);

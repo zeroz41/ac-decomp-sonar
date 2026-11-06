@@ -1,22 +1,31 @@
-/* ac_port --package <file> [--ticks <n>] [--validate] [--diff]: Animal Crossing on sonarlib, headless and
-   deterministic, from boot to play's first frame (port/NOTES.md). The program starts the library and the render
-   module on the null sink, makes the emu64 the glue records each task with, mounts the package as game:, starts the
-   CPU model and the runtime in deterministic mode, and calls boot's main, which never returns: the run ends at the
-   submit of the frame that holds play's first task (emu64_glue.c, from the GX glue's ac_frame_end) or at the tick
-   limit. With --diff, each task is drawn also by the console's emu64 and the two are compared (emu64_glue.c). */
+/* ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--window]: Animal Crossing on sonarlib (port/NOTES.md,
+   The program). The process's main thread starts the library and the render module, makes the emu64 the glue records
+   each task with, mounts the package as game:, starts the CPU model, and creates the game thread "main", which starts
+   the runtime and calls boot's main, which never returns.
+
+   Headless, the default: deterministic, silent, on the null sink. The main thread joins "main", and the run ends at
+   the submit of the frame that holds play's first task (emu64_glue.c, from the GX glue's ac_frame_end) or at the tick
+   limit. With --diff, each task is drawn also by the console's emu64 and the two are compared (emu64_glue.c).
+
+   --window: in real time, on the GPU sink, in a window, with the game's pads on the keyboard and gamepads and no
+   sound yet (sonarlib docs/roadmap.md, M6 step 6l). The main thread presents until the window is closed, or until
+   --ticks's limit when it is given. */
 #include "ac_port.h"
 
 #include <port/emu64_glue.h>
 
 #include <sonar/emu64/emu64.h>
 #include <sonar/fs.h>
+#include <sonar/input.h>
 #include <sonar/mem.h>
 #include <sonar/os.h>
 #include <sonar/render.h>
 #include <sonar/runtime.h>
 #include <sonar/sonar.h>
+#include <sonar/window.h>
 
 #include <errno.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,9 +33,11 @@
 
 int ac_boot_main(int argc, const char** argv); /* src/static/boot.c's main */
 
-static const char usage[] = "usage: ac_port --package <file> [--ticks <n>] [--validate] [--diff]\n";
+static const char usage[] = "usage: ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--window]\n";
 
 static uint64_t tick_limit = 3600;
+static int ticks_given; /* --ticks */
+static int window;      /* --window */
 
 static int usage_error(void) {
     fputs(usage, stderr);
@@ -61,8 +72,60 @@ static int parse_ticks(const char* text, uint64_t* ticks) {
     return 1;
 }
 
+/* The game thread "main": it owns the ticks from the runtime's start, and OSInit binds it as the SDK's default
+   thread (dolphin_os.c). */
+static void* game_main(void* arg) {
+    static const char* const boot_argv[] = { "ac_port", NULL };
+    sl_result result;
+    (void)arg;
+    {
+        /* Fixed ticks at the video rate, NTSC: the rates' zeros. Headless runs are deterministic. */
+        sl_runtime_desc desc;
+        memset(&desc, 0, sizeof desc);
+        desc.tick_mode = SL_TICK_FIXED;
+        desc.deterministic = window ? 0 : 1;
+        result = sl_runtime_start(&desc);
+        if (result != SL_OK)
+            _Exit(failed("sl_runtime_start", result));
+    }
+    if (!window) {
+        result = sl_retrace_add_callback(stop_at_limit, NULL);
+        if (result != SL_OK)
+            _Exit(failed("sl_retrace_add_callback", result));
+    }
+    ac_boot_main(1, (const char**)boot_argv);
+    _Exit(1);
+}
+
+/* --window's main loop: presents the latest submitted frame until the window is closed or, with --ticks, the runtime
+   has begun the limit's ticks. Never returns. */
+static void present(sl_window shown) {
+    uint64_t frames = 0;
+    int closed = 0;
+    for (;;) {
+        sl_window_info info;
+        sl_window_pump();
+        sl_input_update();
+        memset(&info, 0, sizeof info);
+        if (sl_window_quit_requested() || (sl_window_get_info(shown, &info) == SL_OK && info.close_requested)) {
+            closed = 1;
+            break;
+        }
+        if (ticks_given && sl_tick_count() >= tick_limit)
+            break;
+        sl_window_frame_begin(shown);
+        sl_render_present(1.0f, NULL); /* SL_ERROR_NOT_FOUND until the game submits its first frame */
+        if (sl_window_present(shown, 1.0f) == SL_OK)
+            frames++;
+    }
+    printf("ac_port: window ticks %" PRIu64 " frames %" PRIu64 "\n", sl_tick_count(), frames);
+    fflush(stdout);
+    _Exit(closed || ac_play_reached() ? 0 : 1);
+}
+
 int main(int argc, char** argv) {
     const char* package = NULL;
+    sl_window shown = { 0 };
     uint32_t emu64_flags = 0;
     sl_result result;
     int i;
@@ -72,10 +135,14 @@ int main(int argc, char** argv) {
         } else if (strcmp(argv[i], "--ticks") == 0 && i + 1 < argc) {
             if (!parse_ticks(argv[++i], &tick_limit))
                 return usage_error();
+            ticks_given = 1;
         } else if (strcmp(argv[i], "--validate") == 0) {
             emu64_flags |= SL_EMU64_VALIDATE; /* every use of a program hashes its ranges again */
         } else if (strcmp(argv[i], "--diff") == 0) {
             ac_diff_enable(); /* the differential test, before boot: OSInit takes the reference's buffers */
+        } else if (strcmp(argv[i], "--window") == 0) {
+            window = 1;
+            ac_window_enable(); /* play's first frame ends no run */
         } else {
             return usage_error();
         }
@@ -93,12 +160,19 @@ int main(int argc, char** argv) {
         if (result != SL_OK)
             return failed("sl_init", result);
     }
+    if (window) {
+        /* The window system before the render module, so the GPU sink's device shares its video driver: the
+           environment's choice, else the platform's. */
+        result = sl_window_init(NULL);
+        if (result != SL_OK)
+            return failed("sl_window_init", result);
+    }
     {
-        /* The null sink: each frame is checked and hashed at submit, and nothing is presented. --diff captures each
-           frame too. */
+        /* Headless, the null sink; --window, the GPU sink at 640 x 480. Each frame is checked and hashed at submit.
+           --diff captures each frame too. */
         sl_render_desc desc;
         memset(&desc, 0, sizeof desc);
-        desc.sink = SL_RENDER_SINK_NULL;
+        desc.sink = window ? SL_RENDER_SINK_GPU : SL_RENDER_SINK_NULL;
         desc.flags = SL_RENDER_HASH_FRAMES | (ac_diff_enabled() ? SL_RENDER_CAPTURE_FRAMES : 0u);
         desc.max_views = 256;
         result = sl_render_init(&desc);
@@ -142,7 +216,7 @@ int main(int argc, char** argv) {
             return failed("sl_fs_mount", result);
     }
     {
-        /* 2001-12-14 12:00:00.000, a Friday, the year's 348th day. */
+        /* Headless: 2001-12-14 12:00:00.000, a Friday, the year's 348th day. --window: the host's clock. */
         sl_os_calendar start;
         sl_os_desc desc;
         memset(&start, 0, sizeof start);
@@ -153,40 +227,45 @@ int main(int argc, char** argv) {
         start.weekday = 5;
         start.year_day = 347;
         memset(&desc, 0, sizeof desc);
-        desc.deterministic = 1;
-        desc.start_calendar = &start;
+        desc.deterministic = window ? 0 : 1;
+        desc.start_calendar = window ? NULL : &start;
         result = sl_os_start(&desc);
         if (result != SL_OK)
             return failed("sl_os_start", result);
     }
+    if (window) {
+        /* Input's GameCube profile with its default bindings: the keyboard on port 0, each gamepad on the first free
+           one, as the window's pump reports them. Both before the game's first PADRead. */
+        sl_window_desc desc;
+        result = sl_input_init(NULL);
+        if (result != SL_OK)
+            return failed("sl_input_init", result);
+        memset(&desc, 0, sizeof desc);
+        desc.title = "Animal Crossing";
+        desc.width = 1280;
+        desc.height = 960;
+        desc.pacing = SL_PACING_VSYNC;
+        shown = sl_window_create(&desc);
+        if (shown.id == 0)
+            return failed("sl_window_create", SL_ERROR_UNSUPPORTED);
+    }
     {
-        /* The main thread joins the CPU model before the runtime starts, so it holds the token as boot's main
-           thread; OSInit binds it as the SDK's. */
+        /* Boot's main on a game thread of its own, at the attach's default priority. */
         sl_os_thread_desc desc;
-        sl_os_thread self;
+        sl_os_thread game;
         memset(&desc, 0, sizeof desc);
+        desc.entry = game_main;
         desc.name = "main";
-        result = sl_os_thread_attach(&desc, &self);
+        game = sl_os_thread_create(&desc);
+        if (game.id == 0)
+            return failed("sl_os_thread_create", SL_ERROR_OUT_OF_MEMORY);
+        result = sl_os_thread_start(game);
         if (result != SL_OK)
-            return failed("sl_os_thread_attach", result);
-    }
-    {
-        /* Fixed ticks at the video rate, NTSC: the rates' zeros. */
-        sl_runtime_desc desc;
-        memset(&desc, 0, sizeof desc);
-        desc.tick_mode = SL_TICK_FIXED;
-        desc.deterministic = 1;
-        result = sl_runtime_start(&desc);
-        if (result != SL_OK)
-            return failed("sl_runtime_start", result);
-    }
-    result = sl_retrace_add_callback(stop_at_limit, NULL);
-    if (result != SL_OK)
-        return failed("sl_retrace_add_callback", result);
-
-    {
-        static const char* const boot_argv[] = { "ac_port", NULL };
-        ac_boot_main(1, (const char**)boot_argv);
+            return failed("sl_os_thread_start", result);
+        if (window)
+            present(shown);
+        /* "main" never returns: the run ends with _Exit. */
+        sl_os_thread_join(game, NULL);
     }
     return 1;
 }

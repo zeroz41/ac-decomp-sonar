@@ -3,6 +3,11 @@
 # objdiff.json and the asset includes under build/<version>.
 cmake_minimum_required(VERSION 3.25)
 project(ac_port LANGUAGES C CXX)
+# GX's C99 inline __GXReadCPCounterU32 (include/dolphin/gx/GXRegs.h) has no external definition without optimization,
+# so a build with no type set fails to link: a single-config generator defaults to RelWithDebInfo.
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "The build type" FORCE)
+endif()
 # The seam audit (ac_seam_audit) reads the translation units the build compiles from compile_commands.json.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -337,6 +342,18 @@ add_test(NAME ac_port_diff
                  "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/diff"
                  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/diff_test.cmake")
 set_tests_properties(ac_port_diff PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_diff: skipped, AC_DISC is not set")
+
+# ac_port --window --ticks 1800 on SDL's offscreen video driver and dummy audio driver, with lavapipe's Vulkan, so
+# nothing opens on the desktop and nothing plays; skipped without the disc or lavapipe, when the script says so.
+find_file(AC_LAVAPIPE_ICD NAMES lvp_icd.x86_64.json lvp_icd.json PATHS /usr/share/vulkan/icd.d NO_DEFAULT_PATH)
+if(NOT AC_LAVAPIPE_ICD)
+    set(AC_LAVAPIPE_ICD "")
+endif()
+add_test(NAME ac_port_window
+         COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
+                 "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/window"
+                 "-DAC_LAVAPIPE_ICD=${AC_LAVAPIPE_ICD}" -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/window_test.cmake")
+set_tests_properties(ac_port_window PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_window: skipped, ")
 
 # The seam audit (sonarlib's sl-seam-audit) over the translation units this build compiles, against the port's policy
 # of seam files (seam-policy.toml): every file that uses GX is listed, and no transitional entry is stale. No disc.
