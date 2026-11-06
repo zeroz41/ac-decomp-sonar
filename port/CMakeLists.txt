@@ -28,8 +28,8 @@ sonar_decomp_read_units(PREFIX AC OBJDIFF "${AC_ROOT}/objdiff.json")
 #   the console's hardware set-up, which the host has no counterpart for: the memory map and the DSP tasks that
 #   unlock the memory card and answer the Game Boy Advance;
 #   foresta.rel's start-up, which runs its static constructors: the port links foresta in (boot.c's LoadLink);
-#   emu64, with the files it includes, until its entry points run on sonarlib's kit (roadmap M6 step 6g): the glue
-#   defines what the game calls of it (adapter/emu64_glue.c).
+#   emu64, with the files it includes: its entry points run on sonarlib's kit (kits/emu64, roadmap M6 step 6g)
+#   through the glue, which defines what the game calls of it (adapter/emu64_glue.c).
 set(replaced_sources
     "^src/static/dolphin/"
     "^src/static/TRK_MINNOW_DOLPHIN/"
@@ -126,7 +126,7 @@ set_source_files_properties(adapter/dolphin_dvd.c PROPERTIES COMPILE_DEFINITIONS
 target_sources(ac_game PRIVATE adapter/dolphin_vi.c adapter/dolphin_pad.c)
 # The sink the SDK's GX units write into, and the FIFO functions of GXFifo.c, which it replaces.
 target_sources(ac_game PRIVATE adapter/dolphin_gx.c)
-# What the game calls of emu64, and the proof's stop at play's first frame.
+# What the game calls of emu64, on sonarlib's kit, and the proof's stop at play's first frame.
 target_sources(ac_game PRIVATE adapter/emu64_glue.c)
 set_source_files_properties(adapter/emu64_glue.c PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
 # The out-of-line copies of the game's C99 inlines.
@@ -166,13 +166,13 @@ endif()
 # The original compiler took C++98, which allowed narrowing in braced initializers.
 target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>)
 target_link_libraries(ac_game PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
-                      sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::fmt_card)
+                      sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::fmt_card)
 
 # The program (README.md, ac_port): the game and its glue, from boot to play's first frame.
 add_executable(ac_port adapter/main.c $<TARGET_OBJECTS:ac_game>)
 set_target_properties(ac_port PROPERTIES C_STANDARD 11 C_EXTENSIONS ON LINKER_LANGUAGE CXX)
 target_link_libraries(ac_port PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
-                      sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::fmt_card)
+                      sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::fmt_card)
 
 # The importer (README.md, The package): ac-import writes the package the game reads from boot to Town's first frame
 # from the player's disc, converting the structures the game reads in place (sonarlib docs/roadmap.md, M6 step 6c).
@@ -305,8 +305,8 @@ set_target_properties(ac_font_test PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS ON)
 target_link_libraries(ac_font_test PRIVATE sonar::base)
 add_test(NAME ac_font COMMAND ac_font_test)
 
-# ac_port from boot to play's first frame, twice, on a package ac-import writes from the player's disc; skipped
-# without one, when the script says so.
+# ac_port from boot to play's first frame, twice and once with --validate, on a package ac-import writes from the
+# player's disc; skipped without one, when the script says so.
 add_test(NAME ac_port_play
          COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
                  "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/play"

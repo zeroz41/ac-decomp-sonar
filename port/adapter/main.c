@@ -1,11 +1,17 @@
-/* ac_port --package <file> [--ticks <n>]: Animal Crossing on sonarlib, headless and deterministic, from boot to play's
-   first frame (port/README.md). The program starts the library, mounts the package as game:, starts the CPU model
-   and the runtime in deterministic mode, and calls boot's main, which never returns: the run ends at play's first
-   frame (emu64_glue.c) or at the tick limit. */
+/* ac_port --package <file> [--ticks <n>] [--validate]: Animal Crossing on sonarlib, headless and deterministic, from
+   boot to play's first frame (port/README.md). The program starts the library and the render module on the null
+   sink, makes the emu64 the glue records each task with, mounts the package as game:, starts the CPU model and the
+   runtime in deterministic mode, and calls boot's main, which never returns: the run ends at play's first frame
+   (emu64_glue.c) or at the tick limit. */
 #include "ac_port.h"
 
+#include <port/emu64_glue.h>
+
+#include <sonar/emu64/emu64.h>
 #include <sonar/fs.h>
+#include <sonar/mem.h>
 #include <sonar/os.h>
+#include <sonar/render.h>
 #include <sonar/runtime.h>
 #include <sonar/sonar.h>
 
@@ -17,7 +23,7 @@
 
 int ac_boot_main(int argc, const char** argv); /* src/static/boot.c's main */
 
-static const char usage[] = "usage: ac_port --package <file> [--ticks <n>]\n";
+static const char usage[] = "usage: ac_port --package <file> [--ticks <n>] [--validate]\n";
 
 static uint64_t tick_limit = 3600;
 
@@ -56,6 +62,7 @@ static int parse_ticks(const char* text, uint64_t* ticks) {
 
 int main(int argc, char** argv) {
     const char* package = NULL;
+    uint32_t emu64_flags = 0;
     sl_result result;
     int i;
     for (i = 1; i < argc; i++) {
@@ -64,6 +71,8 @@ int main(int argc, char** argv) {
         } else if (strcmp(argv[i], "--ticks") == 0 && i + 1 < argc) {
             if (!parse_ticks(argv[++i], &tick_limit))
                 return usage_error();
+        } else if (strcmp(argv[i], "--validate") == 0) {
+            emu64_flags |= SL_EMU64_VALIDATE; /* every use of a program hashes its ranges again */
         } else {
             return usage_error();
         }
@@ -80,6 +89,30 @@ int main(int argc, char** argv) {
         result = sl_init(&desc);
         if (result != SL_OK)
             return failed("sl_init", result);
+    }
+    {
+        /* The null sink: each frame is checked and hashed at submit, and nothing is presented. */
+        sl_render_desc desc;
+        memset(&desc, 0, sizeof desc);
+        desc.sink = SL_RENDER_SINK_NULL;
+        desc.flags = SL_RENDER_HASH_FRAMES;
+        desc.max_views = 256;
+        result = sl_render_init(&desc);
+        if (result != SL_OK)
+            return failed("sl_render_init", result);
+    }
+    {
+        /* emu64's texture cache takes the executable's read-only and initialized data as static (emu64.c's
+           _f_rodata to _e_data), the game's own and foresta's, linked in. */
+        sl_mem_range ranges[16];
+        uint32_t count, n;
+        sl_emu64* emu = sl_emu64_create(emu64_flags);
+        if (emu == NULL)
+            return failed("sl_emu64_create", SL_ERROR_OUT_OF_MEMORY);
+        count = sl_mem_image_data(ranges, 16);
+        for (n = 0; n < count && n < 16; n++)
+            sl_emu64_static_range(emu, ranges[n].begin, ranges[n].end);
+        ac_emu64_start(emu);
     }
     {
         /* No user directories: the run writes nothing, and the cards stay in memory. */

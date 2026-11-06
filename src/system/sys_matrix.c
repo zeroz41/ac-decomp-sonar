@@ -530,10 +530,42 @@ void Matrix_softcv3_load(s_xyz* src, f32 x, f32 y, f32 z) {
     }
 }
 
+#ifdef SONAR_PORT
+/* sonarlib port: an Mtx is 16 words of s15.16, 8 of integer parts and then 8 of fractions, each word two elements, the
+   first in its high half. The game's 16-bit accesses take it as 32 halves in the console's order, the 16 integer parts
+   and then the 16 fractions, and on a little-endian host each word's halves lie the other way round. These move the
+   halves to and from the words: halves 2j and 2j + 1 are word j's high and low halves, whatever the host's byte
+   order. */
+static void sMtx_halves_to_words(Mtx* dest, const u16* halves) {
+    u32* w = (u32*)&dest->m[0][0];
+    int j;
+
+    for (j = 0; j < 16; j++) {
+        w[j] = ((u32)halves[2 * j] << 0x10) | halves[2 * j + 1];
+    }
+}
+
+static void sMtx_words_to_halves(const Mtx* src, u16* halves) {
+    const u32* w = (const u32*)&src->m[0][0];
+    int j;
+
+    for (j = 0; j < 16; j++) {
+        halves[2 * j] = (u16)(w[j] >> 0x10);
+        halves[2 * j + 1] = (u16)w[j];
+    }
+}
+#endif
+
 Mtx* _MtxF_to_Mtx(MtxF* src, Mtx* dest) {
     int fp;
+#ifdef SONAR_PORT /* sonarlib port: the halves are written in the console's order, then moved to the words */
+    u16 halves[32];
+    u16* m1 = halves;
+    u16* m2 = halves + 16;
+#else
     u16* m1 = (u16*)&dest->m[0][0];
     u16* m2 = (u16*)&dest->m[2][0];
+#endif
 
     fp = src->xx * 0x10000;
     m1[0] = (fp >> 0x10);
@@ -598,6 +630,9 @@ Mtx* _MtxF_to_Mtx(MtxF* src, Mtx* dest) {
     fp = src->ww * 0x10000;
     m1[15] = (fp >> 0x10);
     m2[15] = fp & 0xFFFF;
+#ifdef SONAR_PORT /* sonarlib port: the halves are written in the console's order, then moved to the words */
+    sMtx_halves_to_words(dest, halves);
+#endif
     return dest;
 }
 
@@ -672,8 +707,16 @@ void Matrix_copy_MtxF(MtxF* dest, MtxF* src) {
 }
 
 void Matrix_MtxtoMtxF(Mtx* src, MtxF* dest) {
+#ifdef SONAR_PORT /* sonarlib port: the words are moved to halves in the console's order, which are then read */
+    u16 halves[32];
+    u16* m1 = halves;
+    u16* m2 = halves + 16;
+
+    sMtx_words_to_halves(src, halves);
+#else
     u16* m1 = (u16*)&src->m[0][0];
     u16* m2 = (u16*)&src->m[2][0];
+#endif
 
     dest->xx = ((m1[0] << 0x10) | m2[0]) * (1 / (f64)0x10000);
     dest->yx = ((m1[1] << 0x10) | m2[1]) * (1 / (f64)0x10000);
@@ -891,6 +934,43 @@ void Matrix_RotateVector(s16 angle, xyz_t* axis, u8 mode) {
 }
 
 void suMtxMakeTS(Mtx* mtx, f32 scaleX, f32 scaleY, f32 scaleZ, f32 translateX, f32 translateY, f32 translateZ) {
+#ifdef SONAR_PORT
+    /* sonarlib port: the console's word and half writes (under #else) leave the scales on the diagonal, the
+       translation in elements 12 to 14, 1 in element 15 and every other element 0. Those halves are written in the
+       console's order, then moved to the words. */
+    struct {
+        s16 intPart[4][4];
+        u16 fracPart[4][4];
+    } halves = { 0 }, *mu = &halves;
+    int fp;
+
+    fp = scaleX * 0x10000;
+    mu->intPart[0][0] = ((u32)fp >> 16) & 0xFFFF;
+    mu->fracPart[0][0] = fp & 0xFFFF;
+
+    fp = scaleY * 0x10000;
+    mu->intPart[1][1] = ((u32)fp >> 16) & 0xFFFF;
+    mu->fracPart[1][1] = fp & 0xFFFF;
+
+    fp = scaleZ * 0x10000;
+    mu->intPart[2][2] = ((u32)fp >> 16) & 0xFFFF;
+    mu->fracPart[2][2] = fp & 0xFFFF;
+
+    fp = translateX * 0x10000;
+    mu->intPart[3][0] = ((u32)fp >> 16) & 0xFFFF;
+    mu->fracPart[3][0] = fp & 0xFFFF;
+
+    fp = translateY * 0x10000;
+    mu->intPart[3][1] = ((u32)fp >> 16) & 0xFFFF;
+    mu->fracPart[3][1] = fp & 0xFFFF;
+
+    fp = translateZ * 0x10000;
+    mu->intPart[3][2] = ((u32)fp >> 16) & 0xFFFF;
+    mu->fracPart[3][2] = fp & 0xFFFF;
+    mu->intPart[3][3] = 1;
+
+    sMtx_halves_to_words(mtx, (const u16*)mu);
+#else
     struct {
         s16 intPart[4][4];
         u16 fracPart[4][4];
@@ -929,6 +1009,7 @@ void suMtxMakeTS(Mtx* mtx, f32 scaleX, f32 scaleY, f32 scaleZ, f32 translateX, f
     mu->intPart[3][2] = ((u32)fp >> 16) & 0xFFFF;
     mu->intPart[3][3] = 1;
     mtx->m[3][3] = (u32)fp << 16;
+#endif
 }
 
 // S(RxRyRz)T where S is a scale matrix, Rx/Ry/Rz are rotations about the x/y/z axes, and T is a translation
@@ -938,7 +1019,11 @@ void suMtxMakeSRT(Mtx* mtx, f32 scaleX, f32 scaleY, f32 scaleZ, s16 rotX, s16 ro
     struct {
         s16 intPart[4][4];
         u16 fracPart[4][4];
+#ifdef SONAR_PORT /* sonarlib port: the halves are written in the console's order, then moved to the words */
+    } halves, *mu = &halves;
+#else
     }* mu = (void*)mtx;
+#endif
     f32 sinX = sin_s(rotX);
     f32 sinY = sin_s(rotY); // sp+38
     f32 sinZ = sin_s(rotZ); // sp+34
@@ -998,6 +1083,9 @@ void suMtxMakeSRT(Mtx* mtx, f32 scaleX, f32 scaleY, f32 scaleZ, s16 rotX, s16 ro
     mu->fracPart[0][3] = mu->fracPart[1][3] = mu->fracPart[2][3] = 0;
     mu->intPart[3][3] = 1;
     mu->fracPart[3][3] = 0;
+#ifdef SONAR_PORT /* sonarlib port: the halves are written in the console's order, then moved to the words */
+    sMtx_halves_to_words(mtx, (const u16*)mu);
+#endif
 }
 
 // S(RzRxRy)T where S is a scale matrix, Rx/Ry/Rz are rotations, and T is a translation
@@ -1007,7 +1095,11 @@ void suMtxMakeSRT_ZXY(Mtx* mtx, f32 scaleX, f32 scaleY, f32 scaleZ, s16 rotX, s1
     struct {
         s16 intPart[4][4];
         u16 fracPart[4][4];
+#ifdef SONAR_PORT /* sonarlib port: the halves are written in the console's order, then moved to the words */
+    } halves, *mu = &halves;
+#else
     }* mu = (void*)mtx;
+#endif
     f32 sinX = sin_s(rotX); // sp+4C
     f32 sinY = sin_s(rotY); // likely sp+48
     f32 sinZ = sin_s(rotZ); // sp+44
@@ -1067,4 +1159,7 @@ void suMtxMakeSRT_ZXY(Mtx* mtx, f32 scaleX, f32 scaleY, f32 scaleZ, s16 rotX, s1
     mu->fracPart[0][3] = mu->fracPart[1][3] = mu->fracPart[2][3] = 0;
     mu->intPart[3][3] = 1;
     mu->fracPart[3][3] = 0;
+#ifdef SONAR_PORT /* sonarlib port: the halves are written in the console's order, then moved to the words */
+    sMtx_halves_to_words(mtx, (const u16*)mu);
+#endif
 }

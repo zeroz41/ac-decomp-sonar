@@ -34,7 +34,7 @@ The other files on the first frame's path stay as the console's bytes, as the ga
 
 ## The program
 
-`ac_port` (`adapter/main.c`) runs the game on sonarlib headless, in deterministic mode, from boot to play's first frame (sonarlib's `docs/roadmap.md`, M6 step 6f). It opens no window and makes no sound.
+`ac_port` (`adapter/main.c`) runs the game on sonarlib headless, in deterministic mode, from boot to play's first frame (sonarlib's `docs/roadmap.md`, M6 steps 6f and 6g). Each of emu64's tasks is recorded on sonarlib's `kits/emu64` into a frame of the render module, on its null sink. It opens no window and makes no sound.
 
 ### Building and running
 
@@ -50,10 +50,17 @@ ctest --test-dir port/build
 
 ```sh
 port/build/ac-import <disc> <package> <cache>
-port/build/ac_port --package <package> [--ticks <n>]
+port/build/ac_port --package <package> [--ticks <n>] [--validate]
 ```
 
-`ac_port` mounts the package as `game:`, starts sonarlib's os and runtime in deterministic mode at NTSC's video rate, from a fixed calendar (2001-12-14 12:00:00), and calls the game's `main`. When the game reaches play's first frame it prints `ac_port: play tick <t> retrace <r> gx <bytes> dvd <reads> <bytes>` and exits 0. If `n` ticks pass first (3600 by default) it prints the same counts as `ac_port: limit …` and exits 1. Wrong arguments exit 2, and a failure before the game starts exits 1. The test `ac_port_play` imports the disc and runs `ac_port` twice, and both runs must print the same line.
+`ac_port` mounts the package as `game:`, starts sonarlib's os and runtime in deterministic mode at NTSC's video rate, from a fixed calendar (2001-12-14 12:00:00), and calls the game's `main`. When the game has submitted play's first frame it prints the frame line and exits 0:
+
+```
+ac_port: play tick <t> retrace <r> gx <bytes> dvd <reads> <bytes> hash <h> instances <n> compiles <n>
+    holes <vertex>/<list> cpu <n> refused <n> views <n> invalid <n> problems <n> overflows <n> unowned <n>
+```
+
+on one line: the ticks and retraces run, the GX bytes discarded, the DVD reads and their bytes; the hash of the frame submitted last; from emu64's kit, the instances its last task recorded, its compiles, the vertex and list holes it replayed, its draws worked out on the CPU, its refusals and its views past the render module's 256; from the render module, its invalid frames, problems and overflows; and the actors the glue drew without an owner, being outside main memory. If `n` ticks pass first (3600 by default) it prints the same fields as `ac_port: limit …` and exits 1. Wrong arguments exit 2, and a failure before the game starts exits 1. `--validate` creates the kit with `SL_EMU64_VALIDATE`, so every use of a program hashes the ranges it read again, and a static list the game rewrote is compiled again rather than drawn stale; its line must match a plain run's. The test `ac_port_play` imports the disc and runs `ac_port` twice and once with `--validate`, and all three must print the same line, with instances, a hash, and no invalid frame, view past 256 or overflow.
 
 ### The glue
 
@@ -61,7 +68,7 @@ port/build/ac_port --package <package> [--ticks <n>]
 - **OS** (`adapter/dolphin_os.c`): `OSInit` binds boot's main thread as a game thread at priority 16. The main thread is the runtime's tick thread throughout: its retrace waits begin ticks, and while it waits in os the runtime moves time.
 - **VI and PAD** (`adapter/dolphin_vi.c`, `dolphin_pad.c`) on sonarlib's `kit_vi` and `kit_pad`. Frames pace on `JUTVideo`'s retrace queue through the VI glue's post-retrace callback, as on the console; `setFrameRate` also sets the tick's length in retraces.
 - **GX** (`adapter/dolphin_gx.c`, `include/port/gx_sink.h`): the SDK's own GX units are compiled for the host, writing into a sink in the console's byte order. Outside a display list the bytes are counted and discarded at each `GXFlush`; display lists fill their buffers as on the console. Pointers written as 32-bit values become offsets into main memory. `GXFifo.c` is not compiled: the glue keeps the FIFO objects, and the GPU is always idle, its draw-done and draw-sync complete at once.
-- **emu64** (`adapter/emu64_glue.c`): its entry points do nothing, and `emu64_taskstart` watches for play's first frame.
+- **emu64** (`adapter/emu64_glue.c`, `include/port/emu64_glue.h`) on sonarlib's `kits/emu64`. `emu64_taskstart` begins a frame, records the task's lists into it with `sl_emu64_task`, submits it, and ends the run at play's first frame. `emu64_texture_cache_data_entry_set`, `emu64_refresh` and the copy clear go to the kit; at start the program adds the executable's read-only and initialized data as static ranges (`sl_mem_image_data`). Owners are actors: `Actor_draw` writes an owner marker at the head of each of `GRAPH`'s display lists, `(offset << 4) | (list + 1)` for the actor's offset in main memory, takes back each marker the actor drew nothing after and closes the other lists; `Actor_dt` forgets the actor's owners.
 - **Inlines** (`adapter/game_inlines.c`): out-of-line copies of `guScaleF` and `guTranslateF`.
 - **The system font** is converted by `ac-font` (`importer/font.cpp`) at build time into the host's byte order, and `jsystem_font.c` includes the result.
 
@@ -79,13 +86,18 @@ Each is a Portability edit, under `SONAR_PORT` with the original kept, unless it
 - `game64_dummy.c_inc`: `BootSound` returns after `Wavegroup_Init`, since the boot sound is in the console's layout.
 - `game64.c_inc`: `Na_CheckRestartReady` is TRUE while jaudio has run no audio frame.
 - `c_keyframe.c`: its four C99 inline table getters are emitted out of line.
+- `gbi.h`: `Mtx_t` is 16 `s32`s, 0x40 bytes as on the console, not 16 64-bit `long`s; the glue asserts it.
+- `sys_matrix.c`: the five functions that write or read a matrix through 16-bit halves (`_MtxF_to_Mtx`, `Matrix_MtxtoMtxF`, `suMtxMakeTS`, `suMtxMakeSRT`, `suMtxMakeSRT_ZXY`) work on the halves in the console's order in a local array and move them to or from the 32-bit words, so on a little-endian host they agree with the game's word writers and the kit.
+- `m_actor.c`: `Actor_draw` opens and closes the actor's owner markers, and `Actor_dt` forgets its owners.
+- `JFWDisplay.cpp`: `prepareCopyDisp` passes the copy clear to the glue.
+- `m_address_ovl.c`: after rewriting `lat_atena_v`'s initialized vertices, it marks them written, so the programs that load them compile again.
 - The SDK's GX units and headers: the sink's writers, addresses through the sink, declarations the host compile needs, and C for `GXTransform.c`'s paired-single assembly.
 - `adapter/names.h` renames libc64's `malloc`, `free` and `sprintf` to `ac_malloc`, `ac_free` and `ac_sprintf`, so the host's C library keeps its own.
 
 ### What runs silent or does nothing
 
 - **Sound:** no audio runs. `AIInit` reports that the game will not be heard. jaudio's threads run with no audio frames, `audiorom.img` is not in the package, and the boot sound is skipped.
-- **Drawing:** emu64 draws nothing and the GX sink discards what it gets, so there is no picture.
+- **Drawing:** emu64's frames go to the render module's null sink, which hashes them and draws nothing; the GX sink discards what it gets, so there is no picture.
 - **Input:** no input module runs, so every pad channel reads no controller.
 - **Saves:** the memory cards stay in memory.
 - **The Famicom emulator** declines to start.

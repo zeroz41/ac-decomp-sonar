@@ -8,6 +8,9 @@
 #include "JSystem/JUtility/JUTVideo.h"
 #include "JSystem/JUtility/JUTProcBar.h"
 #include "JSystem/JFramework/JFWDisplay.h"
+#ifdef SONAR_PORT /* sonarlib port: the copy clear goes to the port's emu64 glue too */
+#include <port/emu64_glue.h>
+#endif
 
 // Sources: https://github.com/zeldaret/tp/blob/master/libs/JSystem/JFramework/JFWDisplay.cpp
 // https://github.com/kiwi515/ogws/blob/master/src/egg/core/eggAsyncDisplay.cpp
@@ -95,6 +98,9 @@ void JFWDisplay::prepareCopyDisp() {
     u16 xfbHeight = (u16)JUTVideo::getManager()->getXfbHeight();
 
     GXSetCopyClear(mClearColor, mZClear);
+#ifdef SONAR_PORT /* sonarlib port: the clear the copy leaves is the first view's clear in emu64's next task */
+    ac_emu64_set_clear(mClearColor, mZClear);
+#endif
     GXSetDispCopySrc(0, 0, width, height);
     GXSetDispCopyDst(width, xfbHeight);
     GXSetDispCopyYScale(xfbHeight / (f32)height);

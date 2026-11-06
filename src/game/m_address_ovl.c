@@ -5,6 +5,9 @@
 #include "m_editor_ovl.h"
 #include "m_font.h"
 #include "sys_matrix.h"
+#ifdef SONAR_PORT /* sonarlib port: the port's emu64 glue, told of the game's writes over its static vertices */
+#include <port/emu64_glue.h>
+#endif
 
 static mAD_Ovl_c adrs_ovl_data;
 
@@ -447,6 +450,9 @@ static void mAD_address_draw_init(Submenu* submenu) {
             vtx_p[3].v.ob[1] = vtx_p[2].v.ob[1] - 17;
         }
     }
+#ifdef SONAR_PORT /* sonarlib port: initialized data rewritten at run time; the programs that load it compile again */
+    ac_emu64_written(lat_atena_v, lat_atena_v + ARRAY_COUNT(lat_atena_v));
+#endif
 }
 
 extern Gfx lat_mes_winT_model[];

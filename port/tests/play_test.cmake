@@ -1,9 +1,12 @@
-# Runs ac_port from boot to play's first frame, twice (sonarlib docs/roadmap.md, M6 step 6f):
+# Runs ac_port from boot to play's first frame, twice and once with --validate (sonarlib docs/roadmap.md, M6 steps 6f
+# and 6g):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
 #         -P play_test.cmake
 # ac-import writes the package from the player's disc into OUT_DIR, then each run must reach play's first frame, exit
-# 0 and print the same ac_port line. When AC_DISC names no disc it prints the line the test's SKIP_REGULAR_EXPRESSION
-# matches and returns.
+# 0 and print the same ac_port line, so the frame recorded on emu64's kit matches run to run and no static list on the
+# path was drawn stale. The frame must hold instances and a hash, with no invalid frame, view overflow or render
+# overflow; the kit's refusals and the render module's problems are reported as they are. When AC_DISC names no disc
+# it prints the line the test's SKIP_REGULAR_EXPRESSION matches and returns.
 cmake_minimum_required(VERSION 3.25)
 
 if("${AC_DISC}" STREQUAL "")
@@ -26,13 +29,22 @@ endif()
 message("ac-import: ${output}")
 
 set(lines "")
-foreach(run IN ITEMS 1 2)
+set(count "[0-9]+")
+set(line_pattern "ac_port: [a-z]+ tick ${count} retrace ${count} gx ${count} dvd ${count} ${count} hash [0-9a-f]+")
+string(APPEND line_pattern " instances ${count} compiles ${count} holes ${count}/${count} cpu ${count}")
+string(APPEND line_pattern " refused ${count} views ${count} invalid ${count} problems ${count} overflows ${count}")
+string(APPEND line_pattern " unowned ${count}")
+foreach(run IN ITEMS 1 2 validate)
+    set(options "")
+    if(run STREQUAL "validate")
+        set(options --validate)
+    endif()
     string(TIMESTAMP started "%s")
-    execute_process(COMMAND "${AC_PORT}" --package "${package}"
+    execute_process(COMMAND "${AC_PORT}" --package "${package}" ${options}
                     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 1200)
     string(TIMESTAMP ended "%s")
     math(EXPR seconds "${ended} - ${started}")
-    string(REGEX MATCH "ac_port: [a-z]+ tick [0-9]+ retrace [0-9]+ gx [0-9]+ dvd [0-9]+ [0-9]+" line "${output}")
+    string(REGEX MATCH "${line_pattern}" line "${output}")
     message("run ${run}: exit ${result}, ${seconds} s: ${line}")
     if(NOT result EQUAL 0 OR NOT line MATCHES "^ac_port: play ")
         string(LENGTH "${errors}" length)
@@ -45,7 +57,21 @@ foreach(run IN ITEMS 1 2)
     list(APPEND lines "${line}")
 endforeach()
 list(GET lines 0 first)
-list(GET lines 1 second)
-if(NOT first STREQUAL second)
-    message(FATAL_ERROR "ac_port_play: the runs differ:\n${first}\n${second}")
+foreach(other IN LISTS lines)
+    if(NOT other STREQUAL first)
+        message(FATAL_ERROR "ac_port_play: the runs differ:\n${lines}")
+    endif()
+endforeach()
+string(REGEX MATCH " hash ([0-9a-f]+) instances ([0-9]+) " ignored "${first}")
+set(hash "${CMAKE_MATCH_1}")
+set(instances "${CMAKE_MATCH_2}")
+string(REGEX MATCH " views ([0-9]+) invalid ([0-9]+) problems [0-9]+ overflows ([0-9]+) " ignored "${first}")
+set(views "${CMAKE_MATCH_1}")
+set(invalid "${CMAKE_MATCH_2}")
+set(overflows "${CMAKE_MATCH_3}")
+if(instances EQUAL 0 OR hash MATCHES "^0+$")
+    message(FATAL_ERROR "ac_port_play: play's first frame has no instances or no hash:\n${first}")
+endif()
+if(NOT views EQUAL 0 OR NOT invalid EQUAL 0 OR NOT overflows EQUAL 0)
+    message(FATAL_ERROR "ac_port_play: play's first frame overflowed or was invalid:\n${first}")
 endif()

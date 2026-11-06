@@ -18,6 +18,9 @@
 #include "m_npc.h"
 #include "m_malloc.h"
 #include "m_common_data.h"
+#ifdef SONAR_PORT /* sonarlib port: the owner markers and forgetting of the port's emu64 glue */
+#include <port/emu64_glue.h>
+#endif
 
 #ifdef MUST_MATCH
 /* @unused | necessary for proper float ordering*/
@@ -167,6 +170,10 @@ static void Actor_dt(ACTOR* actor, GAME* game) {
     Object_Exchange_c* exchange;
     ACTOR* t;
 
+#ifdef SONAR_PORT /* sonarlib port: the actor's owners are gone, so a later actor at its address starts unmatched */
+    ac_emu64_forget_actor(actor);
+#endif
+
     if (actor->sv_proc != NULL) {
         (*actor->sv_proc)(actor, game);
         actor->sv_proc = NULL;
@@ -241,7 +248,15 @@ static void Actor_draw_ta_clr(ACTOR* actor, GAME_PLAY* play) {
 }
 
 static void Actor_draw(GAME_PLAY* play, ACTOR* actor) {
+#ifdef SONAR_PORT /* sonarlib port: the actor's draws in each display list are its owner's (adapter/emu64_glue.c) */
+    ac_emu64_marks marks;
+    LightsN* lights;
+
+    ac_emu64_owner_open(play->game.graph, actor, &marks);
+    lights = Global_light_read(&play->global_light, play->game.graph);
+#else
     LightsN* lights = Global_light_read(&play->global_light, play->game.graph);
+#endif
 
     /* Light actor */
     LightsN_list_check(lights, play->global_light.list,
@@ -263,6 +278,9 @@ static void Actor_draw(GAME_PLAY* play, ACTOR* actor) {
     if (actor->shape_info.shadow_proc != NULL) {
         (*actor->shape_info.shadow_proc)(actor, lights, play);
     }
+#ifdef SONAR_PORT /* sonarlib port: the actor's owners close in each list it drew into */
+    ac_emu64_owner_close(play->game.graph, &marks);
+#endif
 }
 
 extern int Actor_draw_actor_no_culling_check(ACTOR* actor) {

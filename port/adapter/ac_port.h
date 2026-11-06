@@ -38,8 +38,10 @@ void ac_audio_shutdown(void);
 u64 ac_dvd_reads(void);
 u64 ac_dvd_read_bytes(void);
 
-/* Prints the proof's line, "ac_port: <what> tick <t> retrace <r> gx <bytes> dvd <reads> <bytes>", to stdout and
-   flushes it (emu64_glue.c). */
+/* Prints the proof's line, "ac_port: <what> tick <t> retrace <r> gx <bytes> dvd <reads> <bytes> hash <h> instances
+   <n> compiles <n> holes <vertex>/<list> cpu <n> refused <n> views <overflows> invalid <frames> problems <n>
+   overflows <n> unowned <n>", to stdout and flushes it (emu64_glue.c): the run's counts, the hash of the frame
+   submitted last, the kit's counts with its last task's instances, and the render module's. */
 void ac_port_report(const char* what);
 
 #ifdef __cplusplus
