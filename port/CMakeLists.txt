@@ -13,6 +13,8 @@ if(NOT EXISTS "${AC_BUILD}/include/assets")
     message(FATAL_ERROR "No assets in ${AC_BUILD}/include; build the decompilation for ${AC_VERSION} first")
 endif()
 
+# The importer is built with sonarlib's tools: sl-schema and sonar::import.
+set(SONAR_BUILD_TOOLS ON)
 add_subdirectory("${SONARLIB_DIR}" sonarlib EXCLUDE_FROM_ALL)
 
 sonar_decomp_read_units(PREFIX AC OBJDIFF "${AC_ROOT}/objdiff.json")
@@ -62,6 +64,24 @@ endforeach()
 list(LENGTH units unit_count)
 message(STATUS "Animal Crossing: ${unit_count} units")
 
+# What reads the game's headers as the game does: its include directories, the port's switch and the adapter's forced
+# includes. The game and the importer both build on it.
+add_library(ac_headers INTERFACE)
+target_include_directories(ac_headers INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include"
+    "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin"
+    "${AC_BUILD}/include" "${AC_BUILD}/bin/assets"
+    # The original compiler found quoted includes from the repository root too.
+    "${AC_ROOT}")
+target_compile_definitions(ac_headers INTERFACE SONAR_PORT=1)
+if(CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    set(adapter_includes "/FI${CMAKE_CURRENT_SOURCE_DIR}/adapter/intrinsics.h"
+        "/FI${CMAKE_CURRENT_SOURCE_DIR}/adapter/names.h")
+else()
+    set(adapter_includes "SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/adapter/intrinsics.h"
+        "SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/adapter/names.h")
+endif()
+target_compile_options(ac_headers INTERFACE ${adapter_includes})
+
 add_library(ac_game OBJECT)
 sonar_decomp_add_units(ac_game PREFIX AC ROOT "${AC_ROOT}" UNITS ${units} DROP_DEFINES MUST_MATCH)
 # The boot's main and foresta's, which the port links into one program.
@@ -92,23 +112,9 @@ string(REGEX REPLACE "(..)" "0x\\1," system_font_bytes "${system_font_hex}")
 file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/assets/Ascfont_fix12.inc" CONTENT "${system_font_bytes}\n" @ONLY)
 target_sources(ac_game PRIVATE adapter/jsystem_font.c)
 set_source_files_properties(adapter/jsystem_font.c PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_BINARY_DIR}/assets")
-target_include_directories(ac_game PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include"
-    "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin"
-    "${AC_BUILD}/include" "${AC_BUILD}/bin/assets"
-    # The original compiler found quoted includes from the repository root too.
-    "${AC_ROOT}")
 # The decompilation's libc headers stand in for MSL's; the port takes the host's (porting-model.md, Floating-point
 # determinism, for the math library).
 set_target_properties(ac_game PROPERTIES C_STANDARD 11 C_EXTENSIONS ON CXX_STANDARD 20 CXX_EXTENSIONS ON)
-target_compile_definitions(ac_game PRIVATE SONAR_PORT=1)
-if(CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
-    set(adapter_includes "/FI${CMAKE_CURRENT_SOURCE_DIR}/adapter/intrinsics.h"
-        "/FI${CMAKE_CURRENT_SOURCE_DIR}/adapter/names.h")
-else()
-    set(adapter_includes "SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/adapter/intrinsics.h"
-        "SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/adapter/names.h")
-endif()
-target_compile_options(ac_game PRIVATE ${adapter_includes})
 # The exact-sim profile (porting-model.md, 64-bit and endianness; Floating-point determinism).
 target_compile_options(ac_game PRIVATE -fwrapv -fno-strict-aliasing -fno-delete-null-pointer-checks
                        -ffp-contract=off -Werror=int-to-pointer-cast
@@ -122,7 +128,21 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 # The original compiler took C++98, which allowed narrowing in braced initializers.
 target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>)
-target_link_libraries(ac_game PRIVATE sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card sonar::kit_jaudio)
+target_link_libraries(ac_game PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
+                      sonar::kit_jaudio)
+
+# The importer (README.md, The package): ac-import writes the package the game reads from boot to Town's first frame
+# from the player's disc, converting the structures the game reads in place (sonarlib docs/roadmap.md, M6 step 6c).
+add_library(ac_import_lib STATIC importer/archive.cpp importer/import.cpp)
+sonar_add_schema(ac_import_lib importer/ac.schema PREFIX ac LANGUAGE CXX
+                 INCLUDES JSystem/JKernel/JKRArchive.h m_field_make.h)
+# m_field_make.h needs the display-list switches the game's units take from configure.py's flags (cflags_common).
+target_compile_definitions(ac_import_lib PUBLIC F3DEX_GBI_2 _LANGUAGE_C)
+set_target_properties(ac_import_lib PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS ON)
+target_link_libraries(ac_import_lib PUBLIC ac_headers sonar::import sonar::base)
+add_executable(ac-import importer/main.cpp)
+set_target_properties(ac-import PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS ON)
+target_link_libraries(ac-import PRIVATE ac_import_lib sonar::core)
 
 # The port's views of a display-list command (tools/gbi_views.py): each field where the console's compiler put it,
 # and the views current with the console's structs.
@@ -220,3 +240,18 @@ target_compile_options(ac_ai_dsp_port_test PRIVATE ${adapter_includes})
 set_target_properties(ac_ai_dsp_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON CXX_STANDARD 20 CXX_EXTENSIONS ON)
 target_link_libraries(ac_ai_dsp_port_test PRIVATE sonar::core sonar::kit_jaudio)
 add_test(NAME ac_ai_dsp_port COMMAND ac_ai_dsp_port_test)
+
+# The importer's archive conversion on a console archive built by hand.
+add_executable(ac_import_archive_test tests/import_archive_test.cpp)
+set_target_properties(ac_import_archive_test PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS ON)
+target_link_libraries(ac_import_archive_test PRIVATE ac_import_lib)
+add_test(NAME ac_import_archive COMMAND ac_import_archive_test)
+
+# ac-import on the player's disc, an image or an extracted directory; skipped (77) without one.
+set(AC_DISC "" CACHE PATH "The player's disc for ac_import_disc: an image, or a directory in sl-disc's extracted layout")
+add_executable(ac_import_disc_test tests/import_disc_test.cpp)
+set_target_properties(ac_import_disc_test PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS ON)
+target_link_libraries(ac_import_disc_test PRIVATE ac_import_lib sonar::core sonar::fmt_disc)
+add_dependencies(ac_import_disc_test ac-import)
+add_test(NAME ac_import_disc COMMAND ac_import_disc_test "$<TARGET_FILE:ac-import>" "${AC_DISC}" "${AC_VERSION}")
+set_tests_properties(ac_import_disc PROPERTIES SKIP_RETURN_CODE 77)

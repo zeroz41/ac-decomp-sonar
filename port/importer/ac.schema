@@ -1,0 +1,44 @@
+# The console layouts ac-import converts (sonarlib docs/roadmap.md, M6 step 6c), written by hand from the game's
+# headers: a JKR archive's four structures (JKRArchive.h:64-155) and Town's item layer (m_field_make.h:281-285). The
+# archive's types are nested in JKRArchive, so sonar_add_schema compiles the converters as C++.
+struct ArcHeader size 0x20 type "JKRArchive::SArcHeader"
+    u32  signature           0x00
+    u32  file_length         0x04
+    u32  header_length       0x08
+    u32  file_data_offset    0x0C
+    u32  file_data_length    0x10
+    u32  _14                 0x14    # JKRCompArchive: the part kept in main RAM
+    u32  _18                 0x18    # JKRCompArchive: the part kept in ARAM
+    u32  _1C                 0x1C
+end
+struct ArcDataInfo size 0x20 type "JKRArchive::SArcDataInfo"
+    u32  num_nodes           0x00
+    u32  node_offset         0x04
+    u32  num_file_entries    0x08
+    u32  file_entry_offset   0x0C
+    u32  string_table_length 0x10
+    u32  string_table_offset 0x14
+    u16  nextFreeFileID      0x18
+    u8   isSyncIDs           0x1A    # a bool on the host
+    u8   _1B[5]              0x1B bytes
+end
+struct DirEntry size 0x10 type "JKRArchive::SDIDirEntry"
+    u32  mType               0x00
+    u32  mOffset             0x04
+    u16  _08                 0x08
+    u16  mNum                0x0A
+    u32  mFirstIdx           0x0C
+end
+struct FileEntry size 0x14 type "JKRArchive::SDIFileEntry"
+    u16  mFileID             0x00
+    u16  mHash               0x02
+    u32  mFlag               0x04    # attributes in the top 8 bits, the name's offset below
+    u32  mDataOffset         0x08
+    u32  mSize               0x0C
+    ptr  mData               0x10 null
+end
+struct FgData size 0x206 type "mFM_fg_data_c"
+    u16  fg_id               0x000
+    u16  items[16][16]       0x002
+    u8   haniwa_step[4]      0x202 bytes
+end
