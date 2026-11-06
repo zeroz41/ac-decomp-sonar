@@ -29,9 +29,9 @@ sonar_decomp_read_units(PREFIX AC OBJDIFF "${AC_ROOT}/objdiff.json")
 #   keeps the game's Famicom front end, whose famicom_init declines to start, and stubs the core's entry points;
 #   the console's hardware set-up, which the host has no counterpart for: the memory map and the DSP tasks that
 #   unlock the memory card and answer the Game Boy Advance;
-#   foresta.rel's start-up, which runs its static constructors: the port links foresta in (boot.c's LoadLink);
-#   emu64, with the files it includes: its entry points run on sonarlib's kit (kits/emu64, roadmap M6 step 6g)
-#   through the glue, which defines what the game calls of it (adapter/emu64_glue.c).
+#   foresta.rel's start-up, which runs its static constructors: the port links foresta in (boot.c's LoadLink).
+# emu64 stays, under other names (below): the game's calls of it run on sonarlib's kit (kits/emu64, roadmap M6 step
+# 6g) through the glue (adapter/emu64_glue.c), and --diff runs it beside the kit as the reference (step 6j).
 set(replaced_sources
     "^src/static/dolphin/"
     "^src/static/TRK_MINNOW_DOLPHIN/"
@@ -39,8 +39,7 @@ set(replaced_sources
     "^src/static/Famicom/ks_nes_(core|draw)\\.cpp$"
     "^src/static/libforest/ReconfigBATs\\.c$"
     "^src/static/jaudio_NES/internal/dsp_(cardunlock|GBAKey)\\.c$"
-    "^src/executor\\.c$"
-    "^src/static/libforest/emu64/emu64\\.c$")
+    "^src/executor\\.c$")
 set(msl_math "^src/static/MSL_C\\.PPCEABI\\.bare\\.H/((e|k|s|w)_[a-z0-9_]+|float)\\.c$")
 set(units "")
 foreach(unit IN LISTS AC_UNITS)
@@ -105,6 +104,21 @@ target_sources(ac_game PRIVATE ${gx_unlisted_sources})
 # The boot's main and foresta's, which the port links into one program.
 set_property(SOURCE "${AC_ROOT}/src/static/boot.c" APPEND PROPERTY COMPILE_DEFINITIONS main=ac_boot_main)
 set_property(SOURCE "${AC_ROOT}/src/main.c" APPEND PROPERTY COMPILE_DEFINITIONS main=ac_foresta_main)
+# emu64, the --diff run's reference (roadmap M6 step 6j): its C entry points and FrameCansel take the emu64_ref_ names,
+# as the glue keeps the game's; the macros rename the class's members of the same names too, which nothing else sees.
+# It keeps what the console's compiler accepted: fastcast_float's register, which C++17 refuses; string literals as
+# char* in its name tables, panic's parameters and warningString; and combine_auto's comparison of an alpha argument
+# with GX_CC_ZERO (the decompilation's @BUG).
+set(emu64_ref_names "")
+foreach(name IN ITEMS init cleanup taskstart set_ucode_info set_first_ucode refresh texture_cache_data_entry_set
+                      set_aflags get_aflags)
+    list(APPEND emu64_ref_names "emu64_${name}=emu64_ref_${name}")
+endforeach()
+list(APPEND emu64_ref_names FrameCansel=emu64_ref_FrameCansel)
+set_property(SOURCE "${AC_ROOT}/src/static/libforest/emu64/emu64.c" APPEND PROPERTY COMPILE_DEFINITIONS
+             ${emu64_ref_names})
+set_property(SOURCE "${AC_ROOT}/src/static/libforest/emu64/emu64.c" APPEND PROPERTY COMPILE_OPTIONS -Wno-register
+             -Wno-write-strings -Wno-enum-compare)
 # The one definition of each of MSL's math inlines (include/MSL_C/w_math.h).
 target_sources(ac_game PRIVATE adapter/msl_inlines.c)
 set_source_files_properties(adapter/msl_inlines.c PROPERTIES COMPILE_DEFINITIONS AC_PORT_MSL_INLINES)
@@ -315,6 +329,14 @@ add_test(NAME ac_port_play
                  "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/play"
                  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/play_test.cmake")
 set_tests_properties(ac_port_play PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_play: skipped, AC_DISC is not set")
+
+# ac_port --diff, each emu64 task drawn by the kit and by the console's emu64 and the two compared, on its own package
+# from the player's disc; skipped without one, when the script says so.
+add_test(NAME ac_port_diff
+         COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
+                 "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/diff"
+                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/diff_test.cmake")
+set_tests_properties(ac_port_diff PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_diff: skipped, AC_DISC is not set")
 
 # The seam audit (sonarlib's sl-seam-audit) over the translation units this build compiles, against the port's policy
 # of seam files (seam-policy.toml): every file that uses GX is listed, and no transitional entry is stale. No disc.

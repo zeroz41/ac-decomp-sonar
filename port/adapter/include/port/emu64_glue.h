@@ -43,6 +43,32 @@ void ac_emu64_forget_actor(const struct actor_s* actor);
    ends the run, exit 0. */
 void ac_emu64_frame_submitted(void);
 
+/* The differential test (port/README.md, --diff; sonarlib docs/roadmap.md, M6 step 6j): each task is drawn by the
+   kit and by the console's emu64, the reference, into frames of their own, and the two captures are compared.
+   ac_diff_enable is main.c's, before boot; ac_diff_enabled is for any game thread. */
+void ac_diff_enable(void);
+BOOL ac_diff_enabled(void);
+
+/* The reference's buffers, which OSInit takes from the bottom of the arena under --diff: emu64.c's two texture
+   caches and its palette buffer, each 32-byte aligned. */
+#define AC_DIFF_TEXTURE_DATA_SIZE 0xC000 /* emu64.c's TEX_BUFFER_DATA_SIZE */
+#define AC_DIFF_TEXTURE_BSS_SIZE 0x400   /* emu64.c's TEX_BUFFER_BSS_SIZE */
+#define AC_DIFF_PALETTES_SIZE 0x8000     /* GX's largest palette */
+
+/* emu64.c, the reference, under the names port/CMakeLists.txt gives it. Only the glue calls it, under --diff, but
+   for emu64_ref_set_buffers, which is OSInit's. */
+struct ucode_info_s;
+void emu64_ref_set_buffers(void* data, void* bss, void* palettes, u32 palettes_size);
+u32 emu64_ref_palette_overflows(void);
+void emu64_ref_init(void);
+void emu64_ref_cleanup(void);
+void emu64_ref_taskstart(void* gfx);
+void emu64_ref_set_ucode_info(int count, struct ucode_info_s* info);
+void emu64_ref_set_first_ucode(void* ucode);
+void emu64_ref_refresh(void);
+void emu64_ref_texture_cache_data_entry_set(void* begin, void* end);
+void emu64_ref_set_aflags(int idx, int value);
+
 #ifdef __cplusplus
 }
 #endif

@@ -20,6 +20,7 @@
 #include "dolphin/os/OSTime.h"
 #include "boot.h"
 
+#include <port/emu64_glue.h>
 #include <port/gx_sink.h>
 
 #include <sonar/base/log.h>
@@ -333,6 +334,17 @@ void OSInit(void) {
     if (result != SL_OK && result != SL_ERROR_ALREADY_INITIALIZED) {
         SL_ERROR("dolphin_os", "OSInit: no main memory: %d", (int)result);
         abort();
+    }
+    /* The differential test's reference, emu64.c, hands GX the textures and palettes it converts into its buffers,
+       which must lie in GX's address space, palettes below 0x02000000: under --diff they come from the bottom of the
+       arena before anything else allocates, each 32-byte aligned, so the heaps start 0x14400 bytes later. */
+    if (ac_diff_enabled()) {
+        u8* const lo = (u8*)(((uintptr_t)sl_dolphin_os_arena_lo() + 31u) & ~(uintptr_t)31u);
+        u8* const data = lo;
+        u8* const bss = data + AC_DIFF_TEXTURE_DATA_SIZE;
+        u8* const palettes = bss + AC_DIFF_TEXTURE_BSS_SIZE;
+        sl_dolphin_os_set_arena_lo(palettes + AC_DIFF_PALETTES_SIZE);
+        emu64_ref_set_buffers(data, bss, palettes, AC_DIFF_PALETTES_SIZE);
     }
     /* GX's address space, main memory's and the image's data ranges, before any other thread runs. */
     ac_gx_map_memory();

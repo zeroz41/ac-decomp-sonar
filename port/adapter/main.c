@@ -1,8 +1,9 @@
-/* ac_port --package <file> [--ticks <n>] [--validate]: Animal Crossing on sonarlib, headless and deterministic, from
-   boot to play's first frame (port/README.md). The program starts the library and the render module on the null
-   sink, makes the emu64 the glue records each task with, mounts the package as game:, starts the CPU model and the
-   runtime in deterministic mode, and calls boot's main, which never returns: the run ends at the submit of the frame
-   that holds play's first task (emu64_glue.c, from the GX glue's ac_frame_end) or at the tick limit. */
+/* ac_port --package <file> [--ticks <n>] [--validate] [--diff]: Animal Crossing on sonarlib, headless and
+   deterministic, from boot to play's first frame (port/README.md). The program starts the library and the render
+   module on the null sink, makes the emu64 the glue records each task with, mounts the package as game:, starts the
+   CPU model and the runtime in deterministic mode, and calls boot's main, which never returns: the run ends at the
+   submit of the frame that holds play's first task (emu64_glue.c, from the GX glue's ac_frame_end) or at the tick
+   limit. With --diff, each task is drawn also by the console's emu64 and the two are compared (emu64_glue.c). */
 #include "ac_port.h"
 
 #include <port/emu64_glue.h>
@@ -23,7 +24,7 @@
 
 int ac_boot_main(int argc, const char** argv); /* src/static/boot.c's main */
 
-static const char usage[] = "usage: ac_port --package <file> [--ticks <n>] [--validate]\n";
+static const char usage[] = "usage: ac_port --package <file> [--ticks <n>] [--validate] [--diff]\n";
 
 static uint64_t tick_limit = 3600;
 
@@ -73,6 +74,8 @@ int main(int argc, char** argv) {
                 return usage_error();
         } else if (strcmp(argv[i], "--validate") == 0) {
             emu64_flags |= SL_EMU64_VALIDATE; /* every use of a program hashes its ranges again */
+        } else if (strcmp(argv[i], "--diff") == 0) {
+            ac_diff_enable(); /* the differential test, before boot: OSInit takes the reference's buffers */
         } else {
             return usage_error();
         }
@@ -91,11 +94,12 @@ int main(int argc, char** argv) {
             return failed("sl_init", result);
     }
     {
-        /* The null sink: each frame is checked and hashed at submit, and nothing is presented. */
+        /* The null sink: each frame is checked and hashed at submit, and nothing is presented. --diff captures each
+           frame too. */
         sl_render_desc desc;
         memset(&desc, 0, sizeof desc);
         desc.sink = SL_RENDER_SINK_NULL;
-        desc.flags = SL_RENDER_HASH_FRAMES;
+        desc.flags = SL_RENDER_HASH_FRAMES | (ac_diff_enabled() ? SL_RENDER_CAPTURE_FRAMES : 0u);
         desc.max_views = 256;
         result = sl_render_init(&desc);
         if (result != SL_OK)

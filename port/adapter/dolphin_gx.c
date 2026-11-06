@@ -110,13 +110,13 @@ u64 ac_gx_bytes(void) {
     return bytes_total;
 }
 
-/* ---- GX's address space: main memory at 0, then the image's data ranges */
+/* ---- GX's address space: main memory at 0, then the image's data ranges, then its zero-initialized ranges */
 
 /* The registers that take a memory address as 32-byte blocks hold 24 bits of them. */
 #define AC_GX_SPACE_END 0x20000000u
 /* The front end masks a TLUT load's address to 25 bits. */
 #define AC_GX_TLUT_END 0x02000000u
-/* The most image data ranges the table maps. */
+/* The most image ranges the table maps, data and zero-initialized together. */
 #define AC_GX_RANGES 16
 
 typedef struct gx_region {
@@ -128,9 +128,42 @@ typedef struct gx_region {
 static gx_region regions[1 + AC_GX_RANGES];
 static u32 region_count;
 
+/* Maps count of the image's ranges, of the kind named, after the regions mapped so far; next is where the last ends. */
+static void map_ranges(const sl_mem_range* ranges, u32 count, const char* kind, u64* next) {
+    u32 i;
+    for (i = 0; i < count; i++) {
+        uintptr_t begin, end;
+        u64 size, address;
+        if (region_count >= 1 + AC_GX_RANGES) {
+            SL_WARN("gx", "GX address space: image %s range %" PRIu32 " not mapped: past the table's %d", kind,
+                    (uint32_t)i, AC_GX_RANGES);
+            continue;
+        }
+        begin = (uintptr_t)ranges[i].begin;
+        end = (uintptr_t)ranges[i].end;
+        size = (u64)(end - begin);
+        /* At the end of the region before, rounded up to 32, plus the range's offset within 32 bytes. */
+        address = ((*next + 31u) & ~(u64)31u) + (begin & 31u);
+        if (address + size > AC_GX_SPACE_END) {
+            SL_WARN("gx",
+                    "GX address space: image %s range %" PRIu32 ", 0x%" PRIx64 " bytes, not mapped: it would end "
+                    "past 0x%08x",
+                    kind, (uint32_t)i, (uint64_t)size, AC_GX_SPACE_END);
+            continue;
+        }
+        regions[region_count].host = (const u8*)ranges[i].begin;
+        regions[region_count].address = (u32)address;
+        regions[region_count].size = (u32)size;
+        region_count++;
+        *next = address + size;
+        SL_INFO("gx", "GX address space: image %s range %" PRIu32 ", 0x%08" PRIx64 " bytes at 0x%08" PRIx64, kind,
+                (uint32_t)i, (uint64_t)size, (uint64_t)address);
+    }
+}
+
 void ac_gx_map_memory(void) {
     sl_mem_range ranges[AC_GX_RANGES];
-    u32 count, i;
+    u32 count;
     u64 next;
     if (region_count != 0 || sl_dolphin_os_memory_base() == NULL)
         return;
@@ -140,35 +173,19 @@ void ac_gx_map_memory(void) {
     region_count = 1;
     SL_INFO("gx", "GX address space: main memory, 0x%08" PRIx32 " bytes at 0x00000000", (uint32_t)regions[0].size);
     next = regions[0].size;
+    /* The ranges past the table's are counted and not written; map_ranges warns for each. */
     count = sl_mem_image_data(ranges, AC_GX_RANGES);
-    for (i = 0; i < count; i++) {
-        uintptr_t begin, end;
-        u64 size, address;
-        if (i >= AC_GX_RANGES) {
-            SL_WARN("gx", "GX address space: image data range %" PRIu32 " not mapped: past the table's %d", (uint32_t)i,
-                    AC_GX_RANGES);
-            continue;
-        }
-        begin = (uintptr_t)ranges[i].begin;
-        end = (uintptr_t)ranges[i].end;
-        size = (u64)(end - begin);
-        /* At the end of the region before, rounded up to 32, plus the range's offset within 32 bytes. */
-        address = ((next + 31u) & ~(u64)31u) + (begin & 31u);
-        if (address + size > AC_GX_SPACE_END) {
-            SL_WARN("gx",
-                    "GX address space: image data range %" PRIu32 ", 0x%" PRIx64 " bytes, not mapped: it would end "
-                    "past 0x%08x",
-                    (uint32_t)i, (uint64_t)size, AC_GX_SPACE_END);
-            continue;
-        }
-        regions[region_count].host = (const u8*)ranges[i].begin;
-        regions[region_count].address = (u32)address;
-        regions[region_count].size = (u32)size;
-        region_count++;
-        next = address + size;
-        SL_INFO("gx", "GX address space: image data range %" PRIu32 ", 0x%08" PRIx64 " bytes at 0x%08" PRIx64,
-                (uint32_t)i, (uint64_t)size, (uint64_t)address);
-    }
+    map_ranges(ranges, count < AC_GX_RANGES ? count : AC_GX_RANGES, "data", &next);
+    if (count > AC_GX_RANGES)
+        SL_WARN("gx", "GX address space: image data ranges %d to %" PRIu32 " not mapped: past the table's %d",
+                AC_GX_RANGES, (uint32_t)count - 1, AC_GX_RANGES);
+    /* Zero-initialized statics, such as buffers the game fills at run time and gives GX. */
+    count = sl_mem_image_zero_data(ranges, AC_GX_RANGES);
+    map_ranges(ranges, count < AC_GX_RANGES ? count : AC_GX_RANGES, "zero-initialized", &next);
+    if (count > AC_GX_RANGES)
+        SL_WARN("gx",
+                "GX address space: image zero-initialized ranges %d to %" PRIu32 " not mapped: past the table's %d",
+                AC_GX_RANGES, (uint32_t)count - 1, AC_GX_RANGES);
 }
 
 u32 ac_gx_address(const void* pointer) {
@@ -182,6 +199,20 @@ u32 ac_gx_address(const void* pointer) {
     }
     unmapped++;
     return 0;
+}
+
+BOOL ac_gx_find_address(const void* pointer, u32* address) {
+    const u8* const p = (const u8*)pointer;
+    u32 i;
+    if (p == NULL)
+        return FALSE;
+    for (i = 0; i < region_count; i++) {
+        if (p >= regions[i].host && p < regions[i].host + regions[i].size) {
+            *address = regions[i].address + (u32)(p - regions[i].host);
+            return TRUE;
+        }
+    }
+    return FALSE;
 }
 
 u32 ac_gx_tlut_address(const void* pointer) {
@@ -226,6 +257,8 @@ static const void* gx_memory(void* user, uint32_t address, size_t size) {
 /* ---- The front end, and the frame from the game's frame begin to its end */
 
 static sl_gxf* gxf;
+static sl_gxf* ref_gxf;   /* the differential test's reference's (ac_gx_reference_begin), made at the first */
+static BOOL to_reference; /* hand-overs go to ref_gxf */
 static sl_frame* frame;
 static BOOL frame_open;
 static BOOL frame_recorded; /* the open frame had its sl_gxf_record */
@@ -234,12 +267,22 @@ static u64 nested;
 static u64 refused_frames;
 static u64 refused_records;
 
-/* The bytes written since the last hand-over go to the front end, created at the first. On a thread that is not
-   a game thread they are dropped. */
+/* A front end on GX's address space; NULL when out of memory. */
+static sl_gxf* create_gxf(void) {
+    sl_gxf_desc desc;
+    memset(&desc, 0, sizeof desc);
+    desc.memory = gx_memory;
+    desc.max_vertices = 0;
+    return sl_gxf_create(&desc);
+}
+
+/* The bytes written since the last hand-over go to the front end, created at the first, or to the reference's from
+   ac_gx_reference_begin to ac_gx_reference_end. On a thread that is not a game thread they are dropped. */
 static void hand_over(void) {
     const u64 offset = bytes_total - pending_size;
     size_t error_offset = 0;
     sl_gx_dl_result result;
+    sl_gxf* target;
     if (sl_os_thread_current().id == 0) {
         if (pending_size != 0)
             gx_error(offset, "bytes dropped: handed over on a thread that is not a game thread", (int)pending_size);
@@ -247,20 +290,23 @@ static void hand_over(void) {
         return;
     }
     if (gxf == NULL) {
-        sl_gxf_desc desc;
-        memset(&desc, 0, sizeof desc);
-        desc.memory = gx_memory;
-        desc.max_vertices = 0;
-        gxf = sl_gxf_create(&desc);
+        gxf = create_gxf();
         if (gxf == NULL) {
             gx_error(offset, "bytes dropped: no GX front end, out of memory", (int)pending_size);
             pending_size = 0;
             return;
         }
     }
+    target = to_reference ? ref_gxf : gxf;
+    if (target == NULL) {
+        if (pending_size != 0)
+            gx_error(offset, "bytes dropped: no reference GX front end, out of memory", (int)pending_size);
+        pending_size = 0;
+        return;
+    }
     if (pending_size == 0)
         return;
-    result = sl_gxf_commands(gxf, pending, pending_size, &error_offset);
+    result = sl_gxf_commands(target, pending, pending_size, &error_offset);
     if (result != SL_GX_DL_OK)
         gx_error(offset + error_offset, "sl_gxf_commands failed", (int)result);
     pending_size = 0;
@@ -316,6 +362,51 @@ BOOL ac_frame_task(struct sl_frame** task_frame) {
     record();
     *task_frame = frame;
     return frame != NULL;
+}
+
+void ac_frame_split(BOOL begin) {
+    if (!frame_open)
+        return;
+    if (!begin) {
+        if (frame != NULL)
+            sl_frame_submit(frame);
+        frame = NULL;
+        return;
+    }
+    frame_recorded = FALSE;
+    frame = sl_frame_begin();
+    if (frame == NULL)
+        refused_frames++;
+}
+
+/* The SDK's GX state when the reference began, and the main front end's state on its way to the reference's.
+   Static: the register and vertex states are large. */
+static struct __GXData_struct saved_gx;
+static sl_gx_register_state state_registers;
+static sl_gx_vertex_state state_vertex;
+static uint32_t state_xf[SL_GXF_XF_MEMORY_WORDS];
+
+void ac_gx_reference_begin(void) {
+    hand_over();
+    if (ref_gxf == NULL)
+        ref_gxf = create_gxf();
+    if (gxf != NULL && ref_gxf != NULL) {
+        sl_gxf_get_state(gxf, &state_registers, &state_vertex, state_xf);
+        sl_gxf_set_state(ref_gxf, &state_registers, &state_vertex, state_xf);
+    }
+    saved_gx = *gx;
+    to_reference = TRUE;
+}
+
+void ac_gx_reference_end(struct sl_frame* reference_frame) {
+    hand_over();
+    if (reference_frame != NULL && ref_gxf != NULL) {
+        const sl_result result = sl_gxf_record(ref_gxf, reference_frame);
+        if (result != SL_OK && refused_records++ == 0)
+            SL_WARN("gx", "the GX front end's first refused record: %s", sl_result_string(result));
+    }
+    *gx = saved_gx;
+    to_reference = FALSE;
 }
 
 void ac_gx_get_counts(ac_gx_counts* counts) {

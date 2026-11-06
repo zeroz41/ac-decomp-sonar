@@ -115,3 +115,9 @@ path = "src/static/dvderr.c"
 category = "GX"
 kind = "transitional"
 note = "includes dolphin/gx.h; its error screen draws through emu64's task"
+
+[file.emu64]
+path = "src/static/libforest/emu64/"
+category = "GX"
+kind = "transitional"
+note = "the console's emu64, the differential test's reference (step 6j): emu64.c draws through GX, and emu64_utility.c and emu64_print.cpp, which it includes, name GX's types"

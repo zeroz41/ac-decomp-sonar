@@ -55,12 +55,13 @@ const char* emu64::segchk(uaddr segment) {
     uaddr partial_addr = seg2k0(segment);
     u32 addr = convert_partial_address(partial_addr);
 
+    /* sonarlib port: the %08x prints take a uaddr as u32, as addr already is, the console's width */
     str[0] = '\0';
     if (segment == partial_addr) {
         if (addr == partial_addr) {
-            snprintf(str, sizeof(str), "0x%08x", segment);
+            snprintf(str, sizeof(str), "0x%08x", (u32)segment);
         } else {
-            snprintf(str, sizeof(str), "0x%08x /* PADDR=0x%08x */", segment, addr);
+            snprintf(str, sizeof(str), "0x%08x /* PADDR=0x%08x */", (u32)segment, addr);
         }
     } else {
         const char* s;
@@ -105,15 +106,16 @@ const char* emu64::segchk(uaddr segment) {
 
         if (addr == partial_addr) {
             if (s != nullptr) {
-                snprintf(str, sizeof(str), "%s /* 0x%08x */", s, partial_addr);
+                snprintf(str, sizeof(str), "%s /* 0x%08x */", s, (u32)partial_addr);
             } else {
-                snprintf(str, sizeof(str), "0x%08x /* ### 0x%08x */", segment, partial_addr);
+                snprintf(str, sizeof(str), "0x%08x /* ### 0x%08x */", (u32)segment, (u32)partial_addr);
             }
         } else {
             if (s != nullptr) {
-                snprintf(str, sizeof(str), "%s /* 0x%08x PADDR=0x%08x */", s, partial_addr, addr);
+                snprintf(str, sizeof(str), "%s /* 0x%08x PADDR=0x%08x */", s, (u32)partial_addr, addr);
             } else {
-                snprintf(str, sizeof(str), "0x%08x /* ### 0x%08x PADDR=0x%08x */", segment, partial_addr, addr);
+                snprintf(str, sizeof(str), "0x%08x /* ### 0x%08x PADDR=0x%08x */", (u32)segment, (u32)partial_addr,
+                         addr);
             }
         }
     }

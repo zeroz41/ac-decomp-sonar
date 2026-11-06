@@ -50,7 +50,7 @@ ctest --test-dir port/build
 
 ```sh
 port/build/ac-import <disc> <package> <cache>
-port/build/ac_port --package <package> [--ticks <n>] [--validate]
+port/build/ac_port --package <package> [--ticks <n>] [--validate] [--diff]
 ```
 
 `ac_port` mounts the package as `game:`, starts sonarlib's os and runtime in deterministic mode at NTSC's video rate, from a fixed calendar (2001-12-14 12:00:00), and calls the game's `main`. When the game has submitted play's first frame it prints the frame line and exits 0:
@@ -62,6 +62,33 @@ ac_port: play tick <t> retrace <r> gx <bytes> dvd <reads> <bytes> hash <h> insta
 ```
 
 on one line: the ticks and retraces run, the GX bytes written outside display lists, the DVD reads and their bytes; the hash of the frame submitted last; from emu64's kit, the instances its last task recorded, its compiles, the vertex and list holes it replayed, its draws worked out on the CPU, its refusals and its views past the render module's 256; from the render module, its invalid frames, problems and overflows; the actors the glue drew without an owner, being outside main memory; and from the GX glue, the hand-overs the front end failed, the pointers it could not map to a GX address, emu64's tasks with no frame open, the frame begins and ends out of order, and the frames the render module refused. If `n` ticks pass first (3600 by default) it prints the same fields as `ac_port: limit …` and exits 1. Wrong arguments exit 2, and a failure before the game starts exits 1. `--validate` creates the kit with `SL_EMU64_VALIDATE`, so every use of a program hashes the ranges it read again, and a static list the game rewrote is compiled again rather than drawn stale; its line must match a plain run's. The test `ac_port_play` imports the disc and runs `ac_port` twice and once with `--validate`, and all three must print the same line, with instances, a hash, and no invalid frame, view past 256 or overflow, and the GX glue's five counts all 0.
+
+On `GAFE01_00` the three runs print, as the reference line:
+
+```
+ac_port: play tick 712 retrace 712 gx 514337 dvd 227 6686462 hash 4b6269a823855fb9 instances 48 compiles 920 holes 3/832 cpu 3 refused 0 views 0 invalid 0 problems 0 overflows 0 unowned 5 gx-errors 0 unmapped 0 outside 0 nested 0 refused-frames 0
+```
+
+### The emu64 differential test
+
+`--diff` draws every emu64 task twice from the same game state, through the kit and through the console's emu64 (`src/static/libforest/emu64/emu64.c`, built into `ac_port` as the reference), and compares the two (sonarlib's validation.md, Differential tests, and roadmap.md, M6 step 6j). The reference draws through the SDK's GX units into a second GX front end. Each of the two goes into a frame of its own with captures on, the kit's first, and the game's frame begins again after them for the task's fader and 2D, so a `--diff` tick submits four frames. Without the flag none of the reference runs and no frame is captured. A task whose frame or capture is refused, or in which the reference's palettes overflowed, counts as refused and is not compared. The kit's draws are labeled by the command that drew them, which the glue names as a field of the task's lists and its index (`polygon_opaque 412`), as `static` and its GX address, or as `unknown`. For each task that differs it prints, at most 16 times a run:
+
+```
+ac_port: diff tick <tick> triangle <t> vertex <v> field <field> index <i> kit <draw> <name> reference <draw>
+```
+
+and at the end, before the play line, the tasks compared, the triangles of the equal tasks summed over both captures, and the draws each skipped:
+
+```
+ac_port: diff tasks <n> equal <n> different <n> refused <n> triangles <n> skipped <n> <n>
+```
+
+The test `ac_port_diff` imports the disc and runs `ac_port --diff`, which must reach play's first frame and exit 0 with tasks compared, none different and none refused; it prints the differences, the diff line and the play line, and is skipped without a disc. The reference rewrites the display lists it runs as the console's emu64 does, so the kit recompiles three programs whose hash fails and the play line's compiles and hash differ from a plain run's; neither is compared. On `GAFE01_00`:
+
+```
+ac_port: diff tasks 338 equal 338 different 0 refused 0 triangles 3976 skipped 0 0
+ac_port: play tick 712 retrace 712 gx 1627029 dvd 227 6686462 hash a8b722393cbeb168 instances 48 compiles 923 holes 3/832 cpu 3 refused 0 views 0 invalid 0 problems 0 overflows 0 unowned 5 gx-errors 0 unmapped 0 outside 0 nested 0 refused-frames 0
+```
 
 ### The seam audit
 

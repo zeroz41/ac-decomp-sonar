@@ -12,6 +12,9 @@
 // #include "va_args.h"
 #include "jsyswrap.h"
 #include "dolphin/PPCArch.h"
+#ifdef SONAR_PORT
+#include <sonar/mem.h> /* sonarlib port: sl_mem_image_data for texture_cache_select */
+#endif
 
 // this pragma may be unnecessary
 #pragma inline_depth(1024)
@@ -32,8 +35,10 @@ void guMtxXFM1F_dol6w1(MtxP mtx, GXProjectionType type, float x, float y, float 
 
 static aflags_c aflags;
 u8 emu64::nChans = 0;
+#ifndef SONAR_PORT
 static u8 texture_buffer_data[TEX_BUFFER_DATA_SIZE] ATTRIBUTE_ALIGN(32);
 static u8 texture_buffer_bss[TEX_BUFFER_BSS_SIZE] ATTRIBUTE_ALIGN(32);
+#endif
 
 static tmem_t tmem_map[TMEM_ENTRIES];
 
@@ -61,6 +66,58 @@ static texture_cache_funcs texture_cache_bss_func = {
     &texture_cache_alloc,
 };
 
+#ifdef SONAR_PORT
+/* sonarlib port: GX reads the textures and palettes emu64 converts from main memory, so the buffers come from there
+   through emu64_ref_set_buffers */
+static texture_cache_t texture_cache_data = {
+    &texture_cache_data_func, nullptr, nullptr, nullptr, nullptr, nullptr, FALSE, 0,
+};
+
+static texture_cache_t texture_cache_bss = {
+    &texture_cache_bss_func, nullptr, nullptr, nullptr, nullptr, nullptr, FALSE, 0,
+};
+
+/* sonarlib port: the palettes handed to GX, copied in GX's byte order from the bottom up and started over with the
+   .bss cache */
+static u8* palette_buffer_start;
+static u8* palette_buffer_end;
+static u8* palette_buffer_current;
+static u32 palette_overflows;
+
+extern "C" void emu64_ref_set_buffers(void* data, void* bss, void* palettes, u32 palettes_size) {
+    texture_cache_data.buffer_start = (u8*)data;
+    texture_cache_data.buffer_current = (u8*)data;
+    texture_cache_data.buffer_end = (u8*)data + TEX_BUFFER_DATA_SIZE;
+    texture_cache_bss.buffer_start = (u8*)bss;
+    texture_cache_bss.buffer_current = (u8*)bss;
+    texture_cache_bss.buffer_end = (u8*)bss + TEX_BUFFER_BSS_SIZE;
+    palette_buffer_start = (u8*)palettes;
+    palette_buffer_current = (u8*)palettes;
+    palette_buffer_end = (u8*)palettes + palettes_size;
+}
+
+/* sonarlib port: the palette copies that did not fit */
+extern "C" u32 emu64_ref_palette_overflows(void) {
+    return palette_overflows;
+}
+
+/* sonarlib port: count host-order entries from src, stored big-endian in the palette buffer and kept 32-byte aligned
+   as GX's palettes are; nullptr, counted, when they do not fit */
+static void* palette_copy(const void* src, u32 count) {
+    u32 size = (count * sizeof(u16) + 31) & ~31u;
+    u8* copy = palette_buffer_current;
+
+    if (copy == nullptr || size > (u32)(palette_buffer_end - copy)) {
+        palette_overflows++;
+        return nullptr;
+    }
+    for (u32 i = 0; i < count; i++) {
+        sl_store_be16(copy + i * sizeof(u16), ((const u16*)src)[i]);
+    }
+    palette_buffer_current = copy + size;
+    return copy;
+}
+#else
 static texture_cache_t texture_cache_data = {
     &texture_cache_data_func,
     &texture_buffer_data[0],
@@ -82,6 +139,7 @@ static texture_cache_t texture_cache_bss = {
     FALSE,
     0,
 };
+#endif
 
 #include "../src/static/libforest/emu64/emu64_utility.c"
 
@@ -347,10 +405,36 @@ extern void emu64_texture_cache_data_entry_set(void* begin, void* end) {
     texture_cache_data_entry_num++;
 }
 
+#ifdef SONAR_PORT
+/* sonarlib port: the host's link has no _f_rodata or _e_data; the program's data ranges stand in, as they do for
+   the kit */
+static BOOL in_image_data(void* addr) {
+    static sl_mem_range ranges[16];
+    static u32 count = 0xFFFFFFFF;
+
+    if (count == 0xFFFFFFFF) {
+        count = sl_mem_image_data(ranges, 16);
+        if (count > 16) {
+            count = 16;
+        }
+    }
+    for (u32 i = 0; i < count; i++) {
+        if (addr >= ranges[i].begin && addr < ranges[i].end) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+#endif
+
 static texture_cache_t* texture_cache_select(void* addr) {
     int i;
 
+#ifdef SONAR_PORT
+    if (aflags[AFLAGS_SKIP_TEXTURE_CONV] >= 1 || in_image_data(addr)) {
+#else
     if (aflags[AFLAGS_SKIP_TEXTURE_CONV] >= 1 || (addr >= _f_rodata && addr <= _e_data)) {
+#endif
         return &texture_cache_data;
     }
 
@@ -678,6 +762,9 @@ void emu64::emu64_init() {
 
     texture_cache_bss.is_overflow = false;
     texture_cache_bss.buffer_current = texture_cache_bss.buffer_start;
+#ifdef SONAR_PORT
+    palette_buffer_current = palette_buffer_start; /* sonarlib port: the palettes start over with the .bss cache */
+#endif
 
     int overflow = texture_cache_data.is_overflow;
     if (overflow) {
@@ -821,6 +908,19 @@ void emu64::texconv_tile(u8* addr, u8* converted_addr, unsigned int wd, unsigned
                     if (fmt == G_IM_FMT_RGBA) {
                         unsigned int x_ofs = (blk_x + y_ofs * wd) * sizeof(u16);
                         unsigned int ofs = this->tmem_swap(x_ofs, line_siz);
+#ifdef SONAR_PORT
+                        /* sonarlib port: the texels are the console's big-endian bytes, and GX reads the converted
+                           ones in that order */
+                        u8* src = addr + ofs;
+
+                        sl_store_be16(converted_addr + 0, rgba5551_to_rgb5a3(sl_load_be16(src + 0)));
+                        sl_store_be16(converted_addr + 2, rgba5551_to_rgb5a3(sl_load_be16(src + 2)));
+
+                        ofs = this->tmem_swap(x_ofs + 4, line_siz);
+                        src = addr + ofs;
+                        sl_store_be16(converted_addr + 4, rgba5551_to_rgb5a3(sl_load_be16(src + 0)));
+                        sl_store_be16(converted_addr + 6, rgba5551_to_rgb5a3(sl_load_be16(src + 2)));
+#else
                         u16* src = (u16*)(addr + ofs);
 
                         *(u16*)(converted_addr + 0) = rgba5551_to_rgb5a3(src[0]);
@@ -830,6 +930,7 @@ void emu64::texconv_tile(u8* addr, u8* converted_addr, unsigned int wd, unsigned
                         src = (u16*)(addr + ofs);
                         *(u16*)(converted_addr + 4) = rgba5551_to_rgb5a3(src[0]);
                         *(u16*)(converted_addr + 6) = rgba5551_to_rgb5a3(src[1]);
+#endif
                     } else if (fmt == G_IM_FMT_IA) {
                         unsigned int x_ofs = (blk_x + y_ofs * wd) * sizeof(u16);
                         unsigned int ofs = this->tmem_swap(x_ofs, line_siz);
@@ -896,7 +997,12 @@ void emu64::texconv_tile(u8* addr, u8* converted_addr, unsigned int wd, unsigned
 
 void emu64::tlutconv_rgba5551(u16* rgba5551_p, u16* rgb5a3_p, unsigned int count) {
     for (unsigned int i = 0; i < count; i++) {
+#ifdef SONAR_PORT
+        /* sonarlib port: the game's palette is host-order u16s, and GX reads the converted entry big-endian */
+        sl_store_be16(rgb5a3_p++, rgba5551_to_rgb5a3(*rgba5551_p++));
+#else
         *rgb5a3_p++ = rgba5551_to_rgb5a3(*rgba5551_p++);
+#endif
     }
 }
 
@@ -3683,8 +3789,18 @@ void emu64::dl_G_LOADTLUT() {
                         aligned_addr = (void*)((uaddr)tlut_addr & (~0x1F));
                     }
 
+#ifdef SONAR_PORT
+                    /* sonarlib port: the game's palette is host-order u16s, so GX gets a big-endian copy of what it
+                       would read; a copy that does not fit is not loaded */
+                    aligned_addr = palette_copy(aligned_addr, count);
+                    if (aligned_addr != nullptr) {
+                        GXInitTlutObj(&this->tlut_objs[tlut_name], aligned_addr, GX_TL_RGB5A3, count);
+                        GXLoadTlut(&this->tlut_objs[tlut_name], tlut_name);
+                    }
+#else
                     GXInitTlutObj(&this->tlut_objs[tlut_name], aligned_addr, GX_TL_RGB5A3, count);
                     GXLoadTlut(&this->tlut_objs[tlut_name], tlut_name);
+#endif
 
                     EMU64_INFOF("GXInitTlutObj %08x %d pal_no=%d\n", tlut_addr, count, tlut_name);
                 }
@@ -3709,7 +3825,13 @@ void emu64::dl_G_LOADTLUT() {
             } else {
                 /* Convert TLUT */
                 if (this->now_setimg.setimg2.isDolphin) {
+#ifdef SONAR_PORT
+                    /* sonarlib port: the game's palette is host-order u16s, so GX gets a big-endian copy; a copy that
+                       does not fit is not loaded */
+                    tlut = palette_copy((void*)addr, count);
+#else
                     tlut = (void*)addr;
+#endif
                 } else {
                     tlut = this->tlutconv_new((u16*)addr, EMU64_TLUT_RGBA5551, count);
                 }
@@ -4128,7 +4250,12 @@ void emu64::dl_G_SETTIMG() {
 #endif
 
     this->now_setimg.setimg2 = *setimg2;
+#ifdef SONAR_PORT
+    /* sonarlib port: the image address is a host pointer, which a u32 would cut */
+    this->now_setimg.setimg2.imgaddr = (uaddr)this->seg2k0(setimg2->imgaddr);
+#else
     this->now_setimg.setimg2.imgaddr = (u32)this->seg2k0(setimg2->imgaddr);
+#endif
 }
 
 void emu64::dl_G_SETENVCOLOR() {
@@ -4170,10 +4297,18 @@ void emu64::dl_G_SETFILLCOLOR() {
     if (EMU_COLOR_U32(this->fill_color) != this->gfx.setcolor.color) {
         EMU_COLOR_SET_U32(this->fill_color, this->gfx.setcolor.color);
 
+#ifdef SONAR_PORT
+        /* sonarlib port: the console reads the word's first halfword, its high half */
+        u16 color = (u16)(this->gfx.setcolor.color >> 16);
+        this->fill_tev_color.color.r = (color >> 8) & 0xF8;
+        this->fill_tev_color.color.g = (color >> 3) & 0xF8;
+        this->fill_tev_color.color.b = (color << 2) & 0xF8;
+#else
         u16* color = (u16*)&this->gfx.setcolor.color;
         this->fill_tev_color.color.r = (*color >> 8) & 0xF8;
         this->fill_tev_color.color.g = (*color >> 3) & 0xF8;
         this->fill_tev_color.color.b = (*color << 2) & 0xF8;
+#endif
 
         this->dirty_flags[EMU64_DIRTY_FLAG_FILL_COLOR] = true;
         this->dirty_flags[EMU64_DIRTY_FLAG_FILL_TEV_COLOR] = true;

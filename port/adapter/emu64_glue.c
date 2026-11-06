@@ -1,8 +1,10 @@
-/* What the game calls of emu64 (src/static/libforest/emu64/emu64.c, which the port does not compile), on sonarlib's
-   kits/emu64 (sonarlib docs/roadmap.md, M6 steps 6g and 6h): each task is recorded on the kit into the frame the GX
+/* What the game calls of emu64 (src/static/libforest/emu64/emu64.c, whose entry points the port renames), on
+   sonarlib's kits/emu64 (sonarlib docs/roadmap.md, M6 steps 6g and 6h): each task is recorded on the kit into the frame the GX
    glue holds open from JW_BeginFrame to JW_EndFrame (port/gx_sink.h), the game's edits on the kit's path come here
    (port/emu64_glue.h), and the program's proof stops the run at play's first frame, after the submit of the frame
-   that holds play's first task (port/README.md). */
+   that holds play's first task (port/README.md). Under --diff each task is drawn also by the console's emu64, the
+   reference, built into the program under emu64_ref_ names, and the kit's and the reference's frames are compared
+   (M6 step 6j). */
 #include "game.h"
 #include "graph.h"
 #include "m_actor.h"
@@ -17,6 +19,7 @@
 #include <sonar/dolphin_os/os.h>
 #include <sonar/emu64/emu64.h>
 #include <sonar/render.h>
+#include <sonar/render_capture.h>
 #include <sonar/runtime.h>
 
 #include <inttypes.h>
@@ -58,32 +61,65 @@ void ac_emu64_start(sl_emu64* made) {
     emu = made;
 }
 
+/* ---- The differential test (--diff): the calls the reference runs inside the switch, kept until the next task */
+
+static BOOL diff;
+static BOOL ref_init;        /* emu64_init was called since the last task */
+static BOOL ref_ucode_info;  /* emu64_set_ucode_info was, with these arguments */
+static int ref_ucode_count;
+static ucode_info* ref_ucode_infos;
+static BOOL ref_first_ucode; /* emu64_set_first_ucode was, with this argument */
+static void* ref_first_ucode_arg;
+
+void ac_diff_enable(void) {
+    diff = TRUE;
+}
+
+BOOL ac_diff_enabled(void) {
+    return diff;
+}
+
 void emu64_init(void) {
+    if (diff)
+        ref_init = TRUE;
 }
 
 void emu64_set_ucode_info(int count, ucode_info* info) {
-    (void)count;
-    (void)info;
+    if (!diff)
+        return;
+    ref_ucode_info = TRUE;
+    ref_ucode_count = count;
+    ref_ucode_infos = info;
 }
 
 void emu64_set_first_ucode(void* ucode) {
-    (void)ucode;
+    if (!diff)
+        return;
+    ref_first_ucode = TRUE;
+    ref_first_ucode_arg = ucode;
 }
 
+/* The reference's cleanup runs inside the switch, after its task. */
 void emu64_cleanup(void) {
 }
 
 void emu64_refresh(void) {
     sl_emu64_refresh(emu);
+    if (diff)
+        emu64_ref_refresh();
 }
 
 void emu64_texture_cache_data_entry_set(void* begin, void* end) {
     sl_emu64_static_range(emu, begin, end);
+    if (diff)
+        emu64_ref_texture_cache_data_entry_set(begin, end);
 }
 
 void emu64_set_aflags(int idx, int value) {
     if (idx > 0 && idx < AC_AFLAGS_MAX)
         aflags[idx] = (u8)value;
+    if (diff)
+        emu64_ref_set_aflags(idx, value);
 }
 
 int emu64_get_aflags(int idx) {
@@ -183,11 +219,155 @@ void ac_port_report(const char* what) {
     fflush(stderr);
 }
 
-/* The task's lists, recorded on the kit into the open frame after the front end's draws so far. The proof's check
-   marks play's first task: the frame that holds it ends the run at its submit (ac_emu64_frame_submitted). */
+/* ---- The differential test's comparison and report */
+
+#define AC_DIFF_LINES 16 /* the most difference lines a run prints */
+
+static u64 diff_tasks;
+static u64 diff_equal;
+static u64 diff_different;
+static u64 diff_refused;
+static u64 diff_triangles;  /* over both captures of the equal tasks */
+static u64 diff_skipped[2]; /* the kit's and the reference's, over the tasks compared */
+static u32 diff_lines;
+
+/* GRAPH's lists' field names less _thaga, in list_fields' order. */
+static const char* const list_names[AC_EMU64_LISTS] = {
+    "work",  "line_opaque", "line_translucent", "overlay",   "polygon_opaque", "polygon_translucent",
+    "font",  "shadow",      "light",            "bg_opaque", "bg_translucent",
+};
+
+/* sl_capture_field's names, in lower case, by value. */
+static const char* const field_names[] = {
+    "same",    "count",   "primitive", "view",   "material", "params",  "draw_color",
+    "texture", "sampler", "position",  "normal", "color",    "texcoord",
+};
+
+/* A kit draw's label, the host address of the command that drew it, named: its list and index within one of the
+   game's lists, static and its GX address in main memory or a mapped image range, else unknown. */
+static void label_name(uint64_t label, char* name, size_t size) {
+    const u8* const p = (const u8*)(uintptr_t)label;
+    u32 address;
+    int i;
+    if (game_class_p != NULL && game_class_p->graph != NULL) {
+        for (i = 0; i < AC_EMU64_LISTS; i++) {
+            const THA_GA* const list = list_of(game_class_p->graph, i);
+            const u8* const buf = (const u8*)list->thaGfx.buf_p;
+            const u8* const head = (const u8*)list->thaGfx.head_p;
+            if (buf != NULL && p >= buf && p < head) {
+                snprintf(name, size, "%s %" PRIu64, list_names[i], (uint64_t)((size_t)(p - buf) / sizeof(Gfx)));
+                return;
+            }
+        }
+    }
+    if (ac_gx_find_address(p, &address)) {
+        snprintf(name, size, "static 0x%08" PRIx32, (uint32_t)address);
+        return;
+    }
+    snprintf(name, size, "unknown");
+}
+
+static void diff_report(const sl_capture* kit, const sl_capture_difference* d) {
+    char name[64];
+    const char* const field =
+        (u32)d->field < sizeof field_names / sizeof field_names[0] ? field_names[d->field] : "unknown";
+    if (diff_lines >= AC_DIFF_LINES)
+        return;
+    diff_lines++;
+    if (d->draw[0] < kit->draw_count)
+        label_name(kit->draws[d->draw[0]].label, name, sizeof name);
+    else
+        snprintf(name, sizeof name, "none");
+    printf("ac_port: diff tick %" PRIu64 " triangle %" PRIu32 " vertex %" PRIu32 " field %s index %" PRIu32
+           " kit %" PRIu32 " %s reference %" PRIu32 "\n",
+           sl_tick_count(), d->triangle, d->vertex, field, d->index, d->draw[0], name, d->draw[1]);
+    fflush(stdout);
+}
+
+/* A frame of its own, submitted, and its capture; NULL when the frame was refused or gave no capture. */
+static sl_capture* frame_capture(sl_frame* frame) {
+    if (frame == NULL || sl_frame_submit(frame) != SL_OK)
+        return NULL;
+    return sl_capture_take();
+}
+
+/* The reference's calls since the last task, in the console's order, then its task and cleanup. */
+static void reference_task(Gfx* gfx) {
+    if (ref_init)
+        emu64_ref_init();
+    if (ref_ucode_info)
+        emu64_ref_set_ucode_info(ref_ucode_count, ref_ucode_infos);
+    if (ref_first_ucode)
+        emu64_ref_set_first_ucode(ref_first_ucode_arg);
+    ref_init = ref_ucode_info = ref_first_ucode = FALSE;
+    emu64_ref_taskstart(gfx);
+    emu64_ref_cleanup();
+}
+
+/* The task drawn by the kit and by the reference, each into a frame of its own between the two halves of the
+   game's, and the two captures compared. */
+static void diff_task(Gfx* gfx) {
+    ac_gx_counts before, after;
+    sl_frame* frame;
+    sl_frame* kit_frame;
+    sl_frame* ref_frame;
+    sl_capture* kit;
+    sl_capture* ref;
+    sl_capture_difference d;
+    u32 overflows;
+    BOOL refused;
+    ac_gx_get_counts(&before);
+    if (!ac_frame_task(&frame)) {
+        ac_gx_get_counts(&after);
+        if (after.outside == before.outside) { /* the game's frame was refused: neither draws, as without --diff */
+            diff_tasks++;
+            diff_refused++;
+        }
+        return;
+    }
+    ac_frame_split(FALSE);
+
+    kit_frame = sl_frame_begin();
+    if (kit_frame != NULL)
+        sl_emu64_task(emu, kit_frame, (const sl_emu64_gfx*)gfx);
+    kit = frame_capture(kit_frame);
+
+    overflows = emu64_ref_palette_overflows();
+    ref_frame = sl_frame_begin();
+    ac_gx_reference_begin();
+    reference_task(gfx);
+    ac_gx_reference_end(ref_frame);
+    ref = frame_capture(ref_frame);
+    refused = kit == NULL || ref == NULL || emu64_ref_palette_overflows() != overflows;
+
+    diff_tasks++;
+    if (refused) {
+        diff_refused++;
+    } else if (sl_capture_compare(kit, ref, NULL, &d)) {
+        diff_equal++;
+        diff_triangles += (u64)kit->triangle_count + ref->triangle_count;
+    } else {
+        diff_different++;
+        diff_report(kit, &d);
+    }
+    if (kit != NULL && ref != NULL) {
+        diff_skipped[0] += kit->skipped;
+        diff_skipped[1] += ref->skipped;
+    }
+    sl_capture_free(kit);
+    sl_capture_free(ref);
+
+    ac_frame_split(TRUE);
+}
+
+/* The task's lists, recorded on the kit into the open frame after the front end's draws so far, or under --diff
+   compared with the reference's. The proof's check marks play's first task: the frame that holds it ends the run at
+   its submit (ac_emu64_frame_submitted). */
 void emu64_taskstart(Gfx* gfx) {
     sl_frame* frame;
-    if (ac_frame_task(&frame))
+    if (diff)
+        diff_task(gfx);
+    else if (ac_frame_task(&frame))
         sl_emu64_task(emu, frame, (const sl_emu64_gfx*)gfx);
     if (game_class_p != NULL && game_class_p->exec == play_main)
         play_task = TRUE;
@@ -195,6 +375,11 @@ void emu64_taskstart(Gfx* gfx) {
 
 void ac_emu64_frame_submitted(void) {
     if (play_task) {
+        if (diff)
+            printf("ac_port: diff tasks %" PRIu64 " equal %" PRIu64 " different %" PRIu64 " refused %" PRIu64
+                   " triangles %" PRIu64 " skipped %" PRIu64 " %" PRIu64 "\n",
+                   (uint64_t)diff_tasks, (uint64_t)diff_equal, (uint64_t)diff_different, (uint64_t)diff_refused,
+                   (uint64_t)diff_triangles, (uint64_t)diff_skipped[0], (uint64_t)diff_skipped[1]);
         ac_port_report("play");
         _Exit(0);
     }

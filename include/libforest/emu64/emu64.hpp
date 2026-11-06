@@ -636,7 +636,11 @@ class emu64 : public emu64_print {
                       unsigned int start_wd, unsigned int start_ht, unsigned int end_wd, unsigned int end_ht,
                       unsigned int line_siz);
     unsigned int tmem_swap(unsigned int ofs, unsigned int blk_siz) {
+#ifdef SONAR_PORT
+        u16 block = sl_int_divwu(ofs, blk_siz); /* sonarlib port: the console's divwu gives 0 where the host traps */
+#else
         u16 block = ofs / blk_siz;
+#endif
         return ofs ^ ((block >> 1) & 4);
     }
     void tlutconv_rgba5551(u16* rgba5551_p, u16* rgb5a3_p, unsigned int count);

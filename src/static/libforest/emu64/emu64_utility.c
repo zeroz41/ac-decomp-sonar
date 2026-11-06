@@ -180,6 +180,24 @@ void guMtxNormalize(GC_Mtx mtx) {
 
 /* TODO: Mtx -> N64Mtx, GC_Mtx -> Mtx */
 void N64Mtx_to_DOLMtx(const Mtx* n64, MtxP gc) {
+#ifdef SONAR_PORT
+    /* sonarlib port: the game writes the matrix as words, and on a little-endian host a word's halves lie in the other
+       order from the console's, so element k is read from host-order word k / 2 (integer) and 8 + k / 2 (fraction),
+       the high half for an even k, as the kit reads it */
+    const u32* w = (const u32*)n64;
+    int i;
+    int r;
+
+    for (i = 0; i < 4; i++) {
+        for (r = 0; r < 3; r++) {
+            int k = 4 * i + r;
+            s16 fixed = (s16)(w[k / 2] >> (k & 1 ? 0 : 16));
+            u16 frac = (u16)(w[8 + k / 2] >> (k & 1 ? 0 : 16));
+
+            gc[r][i] = fastcast_float(&fixed) + fastcast_float(&frac) * (1.0f / 65536.0f);
+        }
+    }
+#else
     s16* fixed = ((s16*)n64) + 0;
     u16* frac = ((u16*)n64) + 16;
     int i;
@@ -192,6 +210,7 @@ void N64Mtx_to_DOLMtx(const Mtx* n64, MtxP gc) {
         fixed += 4;
         frac += 4;
     }
+#endif
 }
 
 /* @unused my_guMtxL2F(MtxP, const N64Mtx*) */
