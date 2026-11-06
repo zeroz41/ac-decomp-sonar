@@ -1,4 +1,34 @@
-#if DEBUG
+#ifdef SONAR_PORT /* sonarlib port: the writers are out of line on the host (GXVert.h), on the port's sink */
+#include <dolphin/gx.h>
+
+#include "gx/__gx.h"
+
+#define GX_SINK_u8(x) ac_gx_write_u8(x)
+#define GX_SINK_s8(x) ac_gx_write_u8((u8)(x))
+#define GX_SINK_u16(x) ac_gx_write_u16(x)
+#define GX_SINK_s16(x) ac_gx_write_u16((u16)(x))
+#define GX_SINK_u32(x) ac_gx_write_u32(x)
+#define GX_SINK_s32(x) ac_gx_write_u32((u32)(x))
+#define GX_SINK_f32(x) ac_gx_write_f32(x)
+
+#define FUNC_1PARAM(name, T) \
+void name##1##T(T x) { GX_SINK_##T(x); }
+
+#define FUNC_2PARAM(name, T) \
+void name##2##T(T x, T y) { GX_SINK_##T(x); GX_SINK_##T(y); }
+
+#define FUNC_3PARAM(name, T) \
+void name##3##T(T x, T y, T z) { GX_SINK_##T(x); GX_SINK_##T(y); GX_SINK_##T(z); }
+
+#define FUNC_4PARAM(name, T) \
+void name##4##T(T x, T y, T z, T w) { GX_SINK_##T(x); GX_SINK_##T(y); GX_SINK_##T(z); GX_SINK_##T(w); }
+
+#define FUNC_INDEX8(name) \
+void name##1x8(u8 x) { ac_gx_write_u8(x); }
+
+#define FUNC_INDEX16(name) \
+void name##1x16(u16 x) { ac_gx_write_u16(x); }
+#elif DEBUG
 #include <dolphin/gx.h>
 
 #include "gx/__gx.h"
@@ -20,6 +50,9 @@ void name##1x8(u8 x) { GXWGFifo.u8 = x; }
 
 #define FUNC_INDEX16(name) \
 void name##1x16(u16 x) { GXWGFifo.u16 = x; }
+#endif
+
+#if DEBUG || defined(SONAR_PORT) /* sonarlib port: built on the host, on the sink; the console builds it under DEBUG */
 
 // GXCmd
 FUNC_1PARAM(GXCmd, u8)

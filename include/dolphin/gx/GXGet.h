@@ -20,6 +20,9 @@ void GXGetLightPos(GXLightObj* lt_obj, f32* x, f32* y, f32* z);
 void GXGetLightColor(GXLightObj* lt_obj, GXColor* color);
 void GXGetVtxAttrFmt(GXVtxFmt idx, GXAttr attr, GXCompCnt* compCnt, GXCompType* compType,
                      u8* shift);
+void GXGetVtxDesc(GXAttr attr, GXAttrType* type);
+void GXGetVtxDescv(GXVtxDescList* vcd);
+void GXGetVtxAttrFmtv(GXVtxFmt fmt, GXVtxAttrFmtList* vat);
 
 #ifdef __cplusplus
 }

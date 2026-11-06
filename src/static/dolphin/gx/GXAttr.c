@@ -125,10 +125,10 @@ void __GXCalculateVLim(void) {
     static u8 tbl1[] = { 0, 4, 1, 2 };
     static u8 tbl2[] = { 0, 8, 1, 2 };
     static u8 tbl3[] = { 0, 12, 1, 2 };
-    unsigned long vlm;
+    u32 vlm;
     s32 b;
-    unsigned long vl;
-    unsigned long vh;
+    u32 vl;
+    u32 vh;
 
     if (gx->vNum != 0) {
         vl = gx->vcdLo;
@@ -447,7 +447,7 @@ void GXGetVtxAttrFmtv(GXVtxFmt fmt, GXVtxAttrFmtList *vat)
 void GXSetArray(GXAttr attr, const void *base_ptr, u8 stride)
 {
     GXAttr cpAttr;
-    unsigned long phyAddr;
+    u32 phyAddr;
 
     attr;  // needed to match
 
@@ -457,7 +457,11 @@ void GXSetArray(GXAttr attr, const void *base_ptr, u8 stride)
     }
     CHECK_ATTRNAME3(872, attr);
     cpAttr = attr - GX_VA_POS;
+#ifdef SONAR_PORT /* sonarlib port: the address as the port's sink maps it (port/adapter/dolphin_gx.c) */
+    phyAddr = ac_gx_address(base_ptr);
+#else
     phyAddr = (u32)base_ptr & 0x3FFFFFFF;
+#endif
     GX_WRITE_SOME_REG2(8, cpAttr | 0xA0, phyAddr, cpAttr - 12);
     GX_WRITE_SOME_REG3(8, cpAttr | 0xB0, stride, cpAttr - 12);
 }

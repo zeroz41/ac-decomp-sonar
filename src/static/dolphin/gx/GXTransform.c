@@ -108,6 +108,55 @@ void GXGetProjectionv(f32 *ptr)
     ptr[6] = gx->projMtx[5];
 }
 
+#ifdef SONAR_PORT /* sonarlib port: the paired-single writers in C, the same floats in the same order, to the port's sink */
+static void WriteMTXPS4x3(f32 mtx[3][4])
+{
+    int i;
+    int j;
+
+    for (i = 0; i < 3; i++) {
+        for (j = 0; j < 4; j++) {
+            GX_WRITE_F32(mtx[i][j]);
+        }
+    }
+}
+
+static void WriteMTXPS3x3from3x4(f32 mtx[3][4])
+{
+    int i;
+    int j;
+
+    for (i = 0; i < 3; i++) {
+        for (j = 0; j < 3; j++) {
+            GX_WRITE_F32(mtx[i][j]);
+        }
+    }
+}
+
+static void WriteMTXPS3x3(f32 mtx[3][3])
+{
+    int i;
+    int j;
+
+    for (i = 0; i < 3; i++) {
+        for (j = 0; j < 3; j++) {
+            GX_WRITE_F32(mtx[i][j]);
+        }
+    }
+}
+
+static void WriteMTXPS4x2(f32 mtx[2][4])
+{
+    int i;
+    int j;
+
+    for (i = 0; i < 2; i++) {
+        for (j = 0; j < 4; j++) {
+            GX_WRITE_F32(mtx[i][j]);
+        }
+    }
+}
+#else
 static asm void WriteMTXPS4x3(register f32 mtx[3][4], register volatile f32 *dest)
 {
     psq_l f0, 0x00(mtx), 0, qr0
@@ -165,6 +214,7 @@ static asm void WriteMTXPS4x2(register f32 mtx[2][4], register volatile f32 *des
     psq_st f2, 0(dest), 0, qr0
     psq_st f3, 0(dest), 0, qr0
 }
+#endif
 
 #define GX_WRITE_MTX_ELEM(addr, value) \
 do { \
@@ -198,6 +248,8 @@ void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
     GX_WRITE_MTX_ELEM(addr + 9, mtx[2][1]);
     GX_WRITE_MTX_ELEM(addr + 10, mtx[2][2]);
     GX_WRITE_MTX_ELEM(addr + 11, mtx[2][3]);
+#elif defined(SONAR_PORT) /* sonarlib port: the writers in C, to the port's sink */
+    WriteMTXPS4x3(mtx);
 #else
     WriteMTXPS4x3(mtx, &GXWGFifo.f32);
 #endif
@@ -250,6 +302,8 @@ void GXLoadNrmMtxImm(f32 mtx[3][4], u32 id)
     GX_WRITE_MTX_ELEM(addr + 6, mtx[2][0]);
     GX_WRITE_MTX_ELEM(addr + 7, mtx[2][1]);
     GX_WRITE_MTX_ELEM(addr + 8, mtx[2][2]);
+#elif defined(SONAR_PORT) /* sonarlib port: the writers in C, to the port's sink */
+    WriteMTXPS3x3from3x4(mtx);
 #else
     WriteMTXPS3x3from3x4(mtx, &GXWGFifo.f32);
 #endif
@@ -277,6 +331,8 @@ void GXLoadNrmMtxImm3x3(f32 mtx[3][3], u32 id)
     GX_WRITE_MTX_ELEM(addr + 6, mtx[2][0]);
     GX_WRITE_MTX_ELEM(addr + 7, mtx[2][1]);
     GX_WRITE_MTX_ELEM(addr + 8, mtx[2][2]);
+#elif defined(SONAR_PORT) /* sonarlib port: the writers in C, to the port's sink */
+    WriteMTXPS3x3(mtx);
 #else
     WriteMTXPS3x3(mtx, &GXWGFifo.f32);
 #endif
@@ -340,6 +396,12 @@ void GXLoadTexMtxImm(f32 mtx[][4], u32 id, GXTexMtxType type)
         GX_WRITE_MTX_ELEM(addr + 9, mtx[2][1]);
         GX_WRITE_MTX_ELEM(addr + 10, mtx[2][2]);
         GX_WRITE_MTX_ELEM(addr + 11, mtx[2][3]);
+    }
+#elif defined(SONAR_PORT) /* sonarlib port: the writers in C, to the port's sink */
+    if (type == GX_MTX3x4) {
+        WriteMTXPS4x3(mtx);
+    } else {
+        WriteMTXPS4x2(mtx);
     }
 #else
     if (type == GX_MTX3x4) {

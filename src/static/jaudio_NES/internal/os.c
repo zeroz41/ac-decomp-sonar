@@ -2,6 +2,9 @@
 #include "dolphin/os.h"
 #include "jaudio_NES/dummyrom.h"
 #include "jaudio_NES/sample.h"
+#ifdef SONAR_PORT
+#include <sonar/os.h>
+#endif
 
 extern void Z_osWritebackDCacheAll() {
 }
@@ -42,7 +45,13 @@ extern s32 Z_osSendMesg(OSMesgQueue* mq, OSMesg msg, s32 flags) {
 
 extern s32 Z_osRecvMesg(OSMesgQueue* mq, OSMesg* msg, s32 flags) {
     if (flags == OS_MESG_BLOCK) {
+#ifdef SONAR_PORT /* sonarlib port: a spin loop waits for the next fixed point (sonarlib platform.md, Spin loops) */
+        while (!mq->validCount) {
+            sl_os_thread_sleep(1);
+        }
+#else
         while (!mq->validCount) {};
+#endif
     }
 
     if (mq->validCount == 0) {

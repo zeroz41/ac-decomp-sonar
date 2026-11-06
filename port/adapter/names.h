@@ -7,8 +7,12 @@
 
 #ifndef __cplusplus
 #include <math.h>
+#else
+#include <cstdio>
+#include <cstdlib>
 #endif
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #if __has_include(<strings.h>)
@@ -18,6 +22,12 @@
 #define bcmp ac_bcmp
 #define bcopy ac_bcopy
 #define bzero ac_bzero
+
+/* libc64's allocator and formatter (src/static/libc64/), which the game keeps; the host's C library, which sonarlib
+   and the host's own libraries call, keeps its own. */
+#define malloc ac_malloc
+#define free ac_free
+#define sprintf ac_sprintf
 
 /* MSL's math, which the game keeps for the console's results; the host's library keeps its own. */
 #define acos ac_acos

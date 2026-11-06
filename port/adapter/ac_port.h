@@ -7,6 +7,8 @@
 #include <sonar/audio.h>
 #include <sonar/fs.h>
 
+#include <port/gx_sink.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -31,6 +33,14 @@ const u8* ac_aram_memory(u32* size);
 sl_result ac_audio_init(const sl_audio_desc* desc);
 /* Stops it, as sl_audio_shutdown. Main thread. */
 void ac_audio_shutdown(void);
+
+/* The DVD glue's reads since start-up and the bytes they read (dolphin_dvd.c). Game thread. */
+u64 ac_dvd_reads(void);
+u64 ac_dvd_read_bytes(void);
+
+/* Prints the proof's line, "ac_port: <what> tick <t> retrace <r> gx <bytes> dvd <reads> <bytes>", to stdout and
+   flushes it (emu64_glue.c). */
+void ac_port_report(const char* what);
 
 #ifdef __cplusplus
 }

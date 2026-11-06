@@ -1,5 +1,5 @@
 /* JSystem's system font, JFWSystem's default, which the game keeps in its executable (JUTFontData_Ascfont_fix12.s).
-   The bytes are the console's, big-endian, as JUTResFont reads them. */
+   ac-font converts its integers to the host's byte order, as JUTResFont reads them in place (importer/font.hpp). */
 
 #include <stdalign.h>
 

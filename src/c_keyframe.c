@@ -598,6 +598,14 @@ inline s16* cKF_Animation_R_getDataTable(cKF_Animation_R_c* keyframe) {
     return keyframe->data_table;
 }
 
+#ifdef SONAR_PORT /* sonarlib port: a C99 inline definition alone gives the host's linker no copy for a call the
+                     compiler does not inline, so this unit emits one of each */
+extern inline u8* cKF_Animation_R_getFlagTable(cKF_Animation_R_c* keyframe);
+extern inline s16* cKF_Animation_R_getFixedTable(cKF_Animation_R_c* keyframe);
+extern inline s16* cKF_Animation_R_getKeyTable(cKF_Animation_R_c* keyframe);
+extern inline s16* cKF_Animation_R_getDataTable(cKF_Animation_R_c* keyframe);
+#endif
+
 extern int cKF_SkeletonInfo_R_play(cKF_SkeletonInfo_R_c* keyframe) {
     int state;
     int jointIndex;

@@ -36,7 +36,7 @@ void GXBeginDisplayList(void *list, u32 size)
     GXSetCPUFifo((GXFifoObj *)&DisplayListFifo);
 }
 
-unsigned long GXEndDisplayList(void)
+u32 GXEndDisplayList(void)
 {
     u32 ov;
     // u32 reg;
@@ -49,7 +49,11 @@ unsigned long GXEndDisplayList(void)
         __GXSetDirtyState();
     }
     // reg = __piReg[5];
+#ifdef SONAR_PORT /* sonarlib port: the port's sink keeps the list's overflow (port/adapter/dolphin_gx.c) */
+    ov = ac_gx_take_overflow();
+#else
     ov = (__piReg[5] >> 26) & 1;
+#endif
     __GXSaveCPUFifoAux(&DisplayListFifo);
     ASSERTMSGLINE(198, !ov, "GXEndDisplayList: display list commands overflowed buffer");
     GXSetCPUFifo((GXFifoObj *)OldCPUFifo);
@@ -84,6 +88,10 @@ void GXCallDisplayList(void *list, u32 nbytes)
         __GXSendFlushPrim();
     }
     GX_WRITE_U8(0x40);
+#ifdef SONAR_PORT /* sonarlib port: the list's address as the port's sink maps it */
+    GX_WRITE_U32(ac_gx_address(list));
+#else
     GX_WRITE_U32(list);
+#endif
     GX_WRITE_U32(nbytes);
 }

@@ -2,12 +2,15 @@
 #define _DOLPHIN_GXPERF
 
 #include <dolphin/types.h>
+#include <dolphin/gx/GXEnum.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 void GXReadXfRasMetric(u32* xf_wait_in, u32* xf_wait_out, u32* ras_busy, u32* clocks);
+void GXSetGPMetric(GXPerf0 perf0, GXPerf1 perf1);
+void GXClearGPMetric(void);
 
 #ifdef __cplusplus
 }

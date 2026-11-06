@@ -6,6 +6,9 @@
 #include "dolphin/ar.h"
 #include "string.h"
 #include "dolphin/os/OSTime.h"
+#ifdef SONAR_PORT
+#include <sonar/os.h>
+#endif
 
 /* The DRAM side of a transfer is dst; src and dst of a load to ARAM are a file offset and an ARAM address */
 typedef struct DVDCall_ {
@@ -256,8 +259,14 @@ extern s32 DVDT_LoadtoARAM_Main(void* arg) {
         u32 readSize;
         u8* buf = ADVD_BUFFER[buffer_load];
         buffer_load = (buffer_load + 1) % buffers;
+#ifdef SONAR_PORT /* sonarlib port: a spin loop waits for the next fixed point (sonarlib platform.md, Spin loops) */
+        while (buffer_full == buffers) {
+            sl_os_thread_sleep(1);
+        }
+#else
         while (buffer_full == buffers)
             ;
+#endif
 
         if (call->length < buffersize) {
             readSize = ALIGN_NEXT(call->length, 32);
@@ -282,8 +291,14 @@ extern s32 DVDT_LoadtoARAM_Main(void* arg) {
 
     DVDClose(&finfo);
 
+#ifdef SONAR_PORT /* sonarlib port: a spin loop waits for the next fixed point (sonarlib platform.md, Spin loops) */
+    while (buffer_full != 0) {
+        sl_os_thread_sleep(1);
+    }
+#else
     while (buffer_full != 0)
         ;
+#endif
 
     OSGetTick();
 
@@ -329,8 +344,14 @@ extern s32 DVDT_ARAMtoDRAM_Main(void* arg) {
     ARQPostRequest(&req, (uaddr)call, ARQ_TYPE_ARAM_TO_MRAM, ARQ_PRIORITY_HIGH, call->src, call->dst, call->length,
                    ARAM_DMAfinish2);
 
+#ifdef SONAR_PORT /* sonarlib port: a spin loop waits for the next fixed point (sonarlib platform.md, Spin loops) */
+    while (buffer_full2 != 0) {
+        sl_os_thread_sleep(1);
+    }
+#else
     while (buffer_full2 != 0)
         ;
+#endif
 
     __DoFinish(call, call->length);
 
@@ -346,8 +367,14 @@ extern s32 DVDT_DRAMtoARAM_Main(void* arg) {
     ARQPostRequest(&req, (uaddr)call, ARQ_TYPE_MRAM_TO_ARAM, ARQ_PRIORITY_HIGH, call->dst, call->src, call->length,
                    ARAM_DMAfinish2);
 
+#ifdef SONAR_PORT /* sonarlib port: a spin loop waits for the next fixed point (sonarlib platform.md, Spin loops) */
+    while (buffer_full2 != 0) {
+        sl_os_thread_sleep(1);
+    }
+#else
     while (buffer_full2 != 0)
         ;
+#endif
 
     __DoFinish(call, call->length);
 

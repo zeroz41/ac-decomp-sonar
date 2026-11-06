@@ -19,6 +19,13 @@ u32 *__piReg;
 GXBool __GXinBegin;
 #endif
 
+#ifdef SONAR_PORT /* sonarlib port: no write gather pipe; the commands go to the port's sink (port/adapter/dolphin_gx.c) */
+/* The console's register blocks at their sizes, zeroed: CP 0x80 bytes, PE 0x100, PI 0x100, MI 0x80. */
+static u16 sonar_cp_regs[0x80 / sizeof(u16)];
+static u16 sonar_pe_regs[0x100 / sizeof(u16)];
+static u32 sonar_pi_regs[0x100 / sizeof(u32)];
+static u16 sonar_mem_regs[0x80 / sizeof(u16)];
+#else
 asm BOOL IsWriteGatherBufferEmpty(void)
 {
     sync
@@ -42,6 +49,7 @@ static void DisableWriteGatherPipe(void)
     hid2 &= ~0x40000000;
     PPCMthid2(hid2);
 }
+#endif
 
 static GXTexRegion *__GXDefaultTexRegionCallback(const GXTexObj *t_obj, GXTexMapID unused)
 {
@@ -85,6 +93,17 @@ GXFifoObj *GXInit(void *base, u32 size)
     gx->tcsManEnab = FALSE;
     gx->tevTcEnab = FALSE;
     GXSetMisc(GX_MT_XF_FLUSH, 0);
+#ifdef SONAR_PORT /* sonarlib port: the registers are host arrays, and there is no write gather pipe to enable */
+    __piReg = sonar_pi_regs;
+    __cpReg = sonar_cp_regs;
+    __peReg = sonar_pe_regs;
+    __memReg = sonar_mem_regs;
+    __GXFifoInit();
+    GXInitFifoBase(&FifoObj, base, size);
+    GXSetCPUFifo(&FifoObj);
+    GXSetGPFifo(&FifoObj);
+    __GXPEInit();
+#else
     __piReg = OSPhysicalToUncached(0xC003000);
     __cpReg = OSPhysicalToUncached(0xC000000);
     __peReg = OSPhysicalToUncached(0xC001000);
@@ -95,6 +114,7 @@ GXFifoObj *GXInit(void *base, u32 size)
     GXSetGPFifo(&FifoObj);
     __GXPEInit();
     EnableWriteGatherPipe();
+#endif
 
     gx->genMode = 0;
     SET_REG_FIELD(0, gx->genMode, 8, 24, 0);

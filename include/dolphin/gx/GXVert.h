@@ -22,13 +22,81 @@ typedef union {
   f64 f64;
 } PPCWGPipe;
 
-#ifdef __MWERKS__
+#ifdef SONAR_PORT /* sonarlib port: no write gather pipe; the writers below go to the port's sink (GXVert.c) */
+#elif defined(__MWERKS__)
 volatile PPCWGPipe GXWGFifo AT_ADDRESS(GXFIFO_ADDR);
 #else
 #define GXWGFifo (*(volatile PPCWGPipe*)GXFIFO_ADDR)
 #endif
 
-#ifdef TARGET_PC
+#ifdef SONAR_PORT /* sonarlib port: the writers out of line, defined on the port's sink (GXVert.c) */
+
+void GXCmd1u8(u8 x);
+void GXCmd1u16(u16 x);
+void GXCmd1u32(u32 x);
+
+void GXParam1u8(u8 x);
+void GXParam1u16(u16 x);
+void GXParam1u32(u32 x);
+void GXParam1s8(s8 x);
+void GXParam1s16(s16 x);
+void GXParam1s32(s32 x);
+void GXParam1f32(f32 x);
+void GXParam3f32(f32 x, f32 y, f32 z);
+void GXParam4f32(f32 x, f32 y, f32 z, f32 w);
+
+void GXPosition3f32(f32 x, f32 y, f32 z);
+void GXPosition3u16(u16 x, u16 y, u16 z);
+void GXPosition3s16(s16 x, s16 y, s16 z);
+void GXPosition3u8(u8 x, u8 y, u8 z);
+void GXPosition3s8(s8 x, s8 y, s8 z);
+
+void GXPosition2f32(f32 x, f32 y);
+void GXPosition2u16(u16 x, u16 y);
+void GXPosition2s16(s16 x, s16 y);
+void GXPosition2u8(u8 x, u8 y);
+void GXPosition2s8(s8 x, s8 y);
+
+void GXPosition1x16(u16 index);
+void GXPosition1x8(u8 index);
+
+void GXNormal3f32(f32 x, f32 y, f32 z);
+void GXNormal3s16(s16 x, s16 y, s16 z);
+void GXNormal3s8(s8 x, s8 y, s8 z);
+
+void GXNormal1x16(u16 index);
+void GXNormal1x8(u8 index);
+
+void GXColor4u8(u8 r, u8 g, u8 b, u8 a);
+
+void GXColor3u8(u8 r, u8 g, u8 b);
+
+void GXColor1u32(u32 clr);
+void GXColor1u16(u16 clr);
+
+void GXColor1x16(u16 index);
+void GXColor1x8(u8 index);
+
+void GXTexCoord2f32(f32 s, f32 t);
+void GXTexCoord2u16(u16 s, u16 t);
+void GXTexCoord2s16(s16 s, s16 t);
+void GXTexCoord2u8(u8 s, u8 t);
+void GXTexCoord2s8(s8 s, s8 t);
+
+void GXTexCoord1f32(f32 s);
+void GXTexCoord1u16(u16 s);
+void GXTexCoord1s16(s16 s);
+void GXTexCoord1u8(u8 s);
+void GXTexCoord1s8(s8 s);
+
+void GXTexCoord1x16(u16 index);
+void GXTexCoord1x8(u8 index);
+
+void GXMatrixIndex1u8(u8 index);
+
+static inline void GXEnd(void) {}
+
+#elif defined(TARGET_PC)
 
 void GXPosition3f32(f32 x, f32 y, f32 z);
 void GXPosition3u16(u16 x, u16 y, u16 z);

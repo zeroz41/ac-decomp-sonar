@@ -46,6 +46,8 @@ void GXSetCopyClear(GXColor clear_clr, u32 clear_z);
 void GXAdjustForOverscan(GXRenderModeObj* rmin, GXRenderModeObj* rmout, u16 hor, u16 ver);
 void GXCopyDisp(void* dest, GXBool clear);
 void GXSetDispCopyGamma(GXGamma gamma);
+void GXSetDispCopyFrame2Field(GXCopyMode mode);
+void GXClearBoundingBox(void);
 void GXSetDispCopySrc(u16 left, u16 top, u16 wd, u16 ht);
 void GXSetDispCopyDst(u16 wd, u16 ht);
 f32 GXGetYScaleFactor(u16 efbHeight, u16 xfbHeight);

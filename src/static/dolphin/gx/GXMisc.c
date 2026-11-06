@@ -10,6 +10,9 @@ static GXDrawSyncCallback TokenCB;
 static GXDrawDoneCallback DrawDoneCB;
 static u8 DrawDone;
 static OSThreadQueue FinishQueue;
+#ifdef SONAR_PORT /* sonarlib port: the last draw sync token, which the PE's token register held */
+static u16 LastToken;
+#endif
 
 void GXSetMisc(GXMiscToken token, u32 val)
 {
@@ -54,14 +57,20 @@ void GXFlush(void)
 	GX_WRITE_U32(0);
 	GX_WRITE_U32(0);
 	GX_WRITE_U32(0);
+#ifdef SONAR_PORT /* sonarlib port: the port's sink discards what was written outside a display list */
+    ac_gx_flush();
+#else
     PPCSync();
+#endif
 }
 
 void GXResetWriteGatherPipe(void)
 {
+#ifndef SONAR_PORT /* sonarlib port: no write gather pipe */
     while (PPCMfwpar() & 1) {
     }
     PPCMtwpar(OSUncachedToPhysical((void *)GXFIFO_ADDR));
+#endif
 }
 
 static inline void __GXAbortWait(u32 clocks)
@@ -84,8 +93,10 @@ void __GXAbort(void) {
 
 void GXAbortFrame(void)
 {
+#ifndef SONAR_PORT /* sonarlib port: no GPU frame to abort */
     __GXAbort();
     __GXCleanGPFifo();
+#endif
 }
 
 void GXSetDrawSync(u16 token)
@@ -104,12 +115,22 @@ void GXSetDrawSync(u16 token)
     GXFlush();
     OSRestoreInterrupts(enabled);
     gx->bpSentNot = GX_FALSE;
+#ifdef SONAR_PORT /* sonarlib port: the token arrives at once; the callback is called as its interrupt did */
+    LastToken = token;
+    if (TokenCB != NULL) {
+        TokenCB(token);
+    }
+#endif
 }
 
 u16 GXReadDrawSync(void)
 {
+#ifdef SONAR_PORT /* sonarlib port: the last token set */
+    return LastToken;
+#else
     u16 token = __peReg[7];
     return token;
+#endif
 }
 
 void GXSetDrawDone(void)
@@ -122,8 +143,16 @@ void GXSetDrawDone(void)
     reg = 0x45000002;
     GX_WRITE_RAS_REG(reg);
     GXFlush();
+#ifdef SONAR_PORT /* sonarlib port: the draw is done at once; the callback is called as the finish interrupt did */
+    DrawDone = 1;
+    OSRestoreInterrupts(enabled);
+    if (DrawDoneCB != NULL) {
+        DrawDoneCB();
+    }
+#else
     DrawDone = 0;
     OSRestoreInterrupts(enabled);
+#endif
 }
 
 void GXWaitDrawDone(void)
@@ -267,6 +296,10 @@ void GXPokeZMode(GXBool compare_enable, GXCompare func, GXBool update_enable)
 
 void GXPeekARGB(u16 x, u16 y, u32 *color)
 {
+#ifdef SONAR_PORT /* sonarlib port: no embedded frame buffer to read */
+    *color = 0;
+}
+#else
     u32 addr = (u32)OSPhysicalToUncached(0x08000000);
 
     SET_REG_FIELD(741, addr, 10, 2, x);
@@ -274,9 +307,13 @@ void GXPeekARGB(u16 x, u16 y, u32 *color)
     SET_REG_FIELD(743, addr, 2, 22, 0);
     *color = *(u32 *)addr;
 }
+#endif
 
 void GXPokeARGB(u16 x, u16 y, u32 color)
 {
+#ifdef SONAR_PORT /* sonarlib port: no embedded frame buffer to write */
+}
+#else
     u32 addr = (u32)OSPhysicalToUncached(0x08000000);
 
     SET_REG_FIELD(751, addr, 10, 2, x);
@@ -284,9 +321,14 @@ void GXPokeARGB(u16 x, u16 y, u32 color)
     SET_REG_FIELD(753, addr, 2, 22, 0);
     *(u32 *)addr = color;
 }
+#endif
 
 void GXPeekZ(u16 x, u16 y, u32 *z)
 {
+#ifdef SONAR_PORT /* sonarlib port: no embedded frame buffer to read */
+    *z = 0;
+}
+#else
     u32 addr = (u32)OSPhysicalToUncached(0x08000000);
 
     SET_REG_FIELD(761, addr, 10, 2, x);
@@ -294,9 +336,13 @@ void GXPeekZ(u16 x, u16 y, u32 *z)
     SET_REG_FIELD(763, addr, 2, 22, 1);
     *z = *(u32 *)addr;
 }
+#endif
 
 void GXPokeZ(u16 x, u16 y, u32 z)
 {
+#ifdef SONAR_PORT /* sonarlib port: no embedded frame buffer to write */
+}
+#else
     u32 addr = (u32)OSPhysicalToUncached(0x08000000);
 
     SET_REG_FIELD(771, addr, 10, 2, x);
@@ -304,6 +350,7 @@ void GXPokeZ(u16 x, u16 y, u32 z)
     SET_REG_FIELD(773, addr, 2, 22, 1);
     *(u32 *)addr = z;
 }
+#endif
 
 GXDrawSyncCallback GXSetDrawSyncCallback(GXDrawSyncCallback cb)
 {
@@ -317,6 +364,7 @@ GXDrawSyncCallback GXSetDrawSyncCallback(GXDrawSyncCallback cb)
     return oldcb;
 }
 
+#ifndef SONAR_PORT /* sonarlib port: no PE interrupts; GXSetDrawSync calls the token callback */
 static void GXTokenInterruptHandler(__OSInterrupt interrupt, OSContext *context)
 {
     u16 token;
@@ -335,6 +383,7 @@ static void GXTokenInterruptHandler(__OSInterrupt interrupt, OSContext *context)
     SET_REG_FIELD(0, reg, 1, 2, 1);
     __peReg[5] = reg;
 }
+#endif
 
 GXDrawDoneCallback GXSetDrawDoneCallback(GXDrawDoneCallback cb)
 {
@@ -348,6 +397,7 @@ GXDrawDoneCallback GXSetDrawDoneCallback(GXDrawDoneCallback cb)
     return oldcb;
 }
 
+#ifndef SONAR_PORT /* sonarlib port: no PE interrupts; GXSetDrawDone calls the draw-done callback */
 static void GXFinishInterruptHandler(__OSInterrupt interrupt, OSContext *context)
 {
     OSContext exceptionContext;
@@ -366,15 +416,20 @@ static void GXFinishInterruptHandler(__OSInterrupt interrupt, OSContext *context
     }
     OSWakeupThread(&FinishQueue);
 }
+#endif
 
 void __GXPEInit(void)
 {
     u32 reg;
+#ifdef SONAR_PORT /* sonarlib port: no PE interrupts (GXSetDrawSync, GXSetDrawDone) */
+    OSInitThreadQueue(&FinishQueue);
+#else
     __OSSetInterruptHandler(0x12, GXTokenInterruptHandler);
     __OSSetInterruptHandler(0x13, GXFinishInterruptHandler);
     OSInitThreadQueue(&FinishQueue);
     __OSUnmaskInterrupts(0x2000);
     __OSUnmaskInterrupts(0x1000);
+#endif
     reg = __peReg[5];
     SET_REG_FIELD(0, reg, 1, 2, 1);
     SET_REG_FIELD(0, reg, 1, 3, 1);

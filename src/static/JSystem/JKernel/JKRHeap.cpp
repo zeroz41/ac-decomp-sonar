@@ -298,6 +298,117 @@ bool JKRHeap::isSubHeap(JKRHeap* heap) const {
     return false;
 }
 
+#ifdef SONAR_PORT /* sonarlib port: the operator new rule (sonarlib docs/porting-model.md, Statically linked modules) */
+
+#include <sonar/dolphin_os/os.h>
+#include <sonar/os.h>
+
+#include <cstddef>
+#include <stdint.h>
+#include <stdlib.h>
+
+/* The host's allocator, under its own names: names.h gives malloc and free to libc64. */
+#pragma push_macro("malloc")
+#pragma push_macro("free")
+#undef malloc
+#undef free
+static void* host_alloc(size_t size, size_t alignment) {
+    void* memory = nullptr;
+    if (alignment < alignof(std::max_align_t)) {
+        alignment = alignof(std::max_align_t);
+    }
+    if (size == 0) {
+        size = 1;
+    }
+#ifdef _WIN32
+    memory = _aligned_malloc(size, alignment);
+#else
+    if (posix_memalign(&memory, alignment, size) != 0) {
+        memory = nullptr;
+    }
+#endif
+    return memory;
+}
+
+static void host_free(void* memory) {
+#ifdef _WIN32
+    _aligned_free(memory);
+#else
+    free(memory);
+#endif
+}
+#pragma pop_macro("free")
+#pragma pop_macro("malloc")
+
+/* A thread the game does not own, or a game thread before the game's heaps exist, allocates from the host. */
+static void* game_new(size_t byteCount, int alignment) {
+    if (sl_os_thread_current().id == 0 || JKRHeap::sCurrentHeap == nullptr) {
+        return host_alloc(byteCount, (size_t)(alignment < 0 ? -alignment : alignment));
+    }
+    return JKRHeap::alloc(byteCount, alignment, nullptr);
+}
+
+/* The address picks the allocator: JKR's heaps lie in main memory, the host's allocations never do. */
+static void game_delete(void* memory) {
+    const u8* base = (const u8*)sl_dolphin_os_memory_base();
+    if (base != nullptr && (const u8*)memory >= base && (const u8*)memory < base + sl_dolphin_os_memory_size()) {
+        JKRHeap::free(memory, nullptr);
+    } else {
+        host_free(memory);
+    }
+}
+
+void* operator new(size_t byteCount) {
+    return game_new(byteCount, 4);
+}
+void* operator new(size_t byteCount, int alignment) {
+    return game_new(byteCount, alignment);
+}
+void* operator new(size_t byteCount, std::align_val_t alignment) {
+    return game_new(byteCount, (int)alignment);
+}
+void* operator new(size_t byteCount, JKRHeap* heap, int alignment) {
+    return JKRHeap::alloc(byteCount, alignment, heap);
+}
+
+void* operator new[](size_t byteCount) {
+    return game_new(byteCount, 4);
+}
+void* operator new[](size_t byteCount, int alignment) {
+    return game_new(byteCount, alignment);
+}
+void* operator new[](size_t byteCount, std::align_val_t alignment) {
+    return game_new(byteCount, (int)alignment);
+}
+void* operator new[](size_t byteCount, JKRHeap* heap, int alignment) {
+    return JKRHeap::alloc(byteCount, alignment, heap);
+}
+
+void operator delete(void* memory) {
+    game_delete(memory);
+}
+void operator delete(void* memory, size_t) noexcept {
+    game_delete(memory);
+}
+void operator delete(void* memory, std::align_val_t) noexcept {
+    game_delete(memory);
+}
+void operator delete(void* memory, size_t, std::align_val_t) noexcept {
+    game_delete(memory);
+}
+void operator delete[](void* memory) {
+    game_delete(memory);
+}
+void operator delete[](void* memory, size_t) noexcept {
+    game_delete(memory);
+}
+void operator delete[](void* memory, std::align_val_t) noexcept {
+    game_delete(memory);
+}
+void operator delete[](void* memory, size_t, std::align_val_t) noexcept {
+    game_delete(memory);
+}
+#else
 void* operator new(size_t byteCount) {
     return JKRHeap::alloc(byteCount, 4, nullptr);
 }
@@ -325,6 +436,7 @@ void operator delete(void* memory) {
 void operator delete[](void* memory) {
     JKRHeap::free(memory, nullptr);
 }
+#endif
 
 /*JKRHeap::TState::TState(const JKRHeap::TState::TArgument &arg, const JKRHeap::TState::TLocation &location)
 {

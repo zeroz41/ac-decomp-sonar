@@ -212,7 +212,11 @@ void GXInitTexObj(GXTexObj *obj, void *image_ptr, u16 width, u16 height, GXTexFm
     SET_REG_FIELD(0x266, t->image0, 10, 10, height - 1);
     SET_REG_FIELD(0x267, t->image0, 4, 20, format & 0xF);
     ASSERTMSGLINEV(0x26D, ((u32)image_ptr & 0x1F) == 0, "%s: %s pointer not aligned to 32B", "GXInitTexObj", "image");
+#ifdef SONAR_PORT /* sonarlib port: the address as the port's sink maps it (port/adapter/dolphin_gx.c) */
+    imageBase = (ac_gx_address(image_ptr) >> 5) & 0x01FFFFFF;
+#else
     imageBase = (u32)((u32)image_ptr >> 5) & 0x01FFFFFF;
+#endif
     SET_REG_FIELD(0x26F, t->image3, 21, 0, imageBase);
     switch (format & 0xF) {
     case 0:
@@ -319,7 +323,11 @@ void GXInitTexObjData(GXTexObj *obj, void *image_ptr)
     ASSERTMSGLINE(0x31E, obj, "Texture Object Pointer is null");
     CHECK_GXBEGIN(0x320, "GXInitTexObjData");
     ASSERTMSGLINEV(0x323, ((u32)image_ptr & 0x1F) == 0, "%s: %s pointer not aligned to 32B", "GXInitTexObjData", "image");
+#ifdef SONAR_PORT /* sonarlib port: the address as the port's sink maps it (port/adapter/dolphin_gx.c) */
+    imageBase = (ac_gx_address(image_ptr) >> 5) & 0x01FFFFFF;
+#else
     imageBase = ((u32)image_ptr >> 5) & 0x01FFFFFF;
+#endif
     SET_REG_FIELD(0x326, t->image3, 21, 0, imageBase);
 }
 
@@ -364,7 +372,11 @@ void GXGetTexObjAll(const GXTexObj *obj, void **image_ptr, u16 *width, u16 *heig
     const __GXTexObjInt *t = (const __GXTexObjInt *)obj;
 
     ASSERTMSGLINE(0x37E, obj, "Texture Object Pointer is null");
+#ifdef SONAR_PORT /* sonarlib port: the address back to its pointer, as the port's sink maps it */
+    *image_ptr = ac_gx_pointer(GET_REG_FIELD(t->image3, 21, 0) << 5);
+#else
     *image_ptr = (void *)(GET_REG_FIELD(t->image3, 21, 0) << 5);
+#endif
     *width = (u32)GET_REG_FIELD(t->image0, 10, 0) + 1;
     *height = (u32)GET_REG_FIELD(t->image0, 10, 10) + 1;
     *format = t->fmt;
@@ -378,7 +390,11 @@ void *GXGetTexObjData(const GXTexObj *to)
     const __GXTexObjInt *t = (const __GXTexObjInt *)to;
 
     ASSERTMSGLINE(0x38B, to, "Texture Object Pointer is null");
+#ifdef SONAR_PORT /* sonarlib port: the address back to its pointer, as the port's sink maps it */
+    return ac_gx_pointer(GET_REG_FIELD(t->image3, 21, 0) << 5);
+#else
     return (void *)(GET_REG_FIELD(t->image3, 21, 0) << 5);
+#endif
 }
 
 u16 GXGetTexObjWidth(const GXTexObj *to)
@@ -587,7 +603,11 @@ void GXInitTlutObj(GXTlutObj *tlut_obj, void *lut, GXTlutFmt fmt, u16 n_entries)
     ASSERTMSGLINEV(0x47D, ((u32)lut & 0x1F) == 0, "%s: %s pointer not aligned to 32B", "GXInitTlutObj", "Tlut");
     t->tlut = 0;
     SET_REG_FIELD(0x480, t->tlut, 2, 10, fmt);
+#ifdef SONAR_PORT /* sonarlib port: the address as the port's sink maps it (port/adapter/dolphin_gx.c) */
+    SET_REG_FIELD(0x481, t->loadTlut0, 21, 0, ac_gx_address(lut) >> 5);
+#else
     SET_REG_FIELD(0x481, t->loadTlut0, 21, 0, ((u32)lut & 0x3FFFFFFF) >> 5);
+#endif
     SET_REG_FIELD(0x482, t->loadTlut0, 8, 24, 0x64);
     t->numEntries = n_entries;
 }
@@ -597,7 +617,11 @@ void GXGetTlutObjAll(const GXTlutObj *tlut_obj, void **data, GXTlutFmt *format, 
     const __GXTlutObjInt *t = (const __GXTlutObjInt *)tlut_obj;
 
     ASSERTMSGLINE(0x497, tlut_obj, "TLut Object Pointer is null");
+#ifdef SONAR_PORT /* sonarlib port: the address back to its pointer, as the port's sink maps it */
+    *data = ac_gx_pointer(GET_REG_FIELD(t->loadTlut0, 21, 0) << 5);
+#else
     *data = (void *)(GET_REG_FIELD(t->loadTlut0, 21, 0) << 5);
+#endif
     *format = GET_REG_FIELD(t->tlut, 2, 10);
     *numEntries = t->numEntries;
 }
@@ -607,7 +631,11 @@ void *GXGetTlutObjData(const GXTlutObj *tlut_obj)
     const __GXTlutObjInt *t = (const __GXTlutObjInt *)tlut_obj;
 
     ASSERTMSGLINE(0x4A0, tlut_obj, "TLut Object Pointer is null");
+#ifdef SONAR_PORT /* sonarlib port: the address back to its pointer, as the port's sink maps it */
+    return ac_gx_pointer(GET_REG_FIELD(t->loadTlut0, 21, 0) << 5);
+#else
     return (void *)(GET_REG_FIELD(t->loadTlut0, 21, 0) << 5);
+#endif
 }
 
 GXTlutFmt GXGetTlutObjFmt(const GXTlutObj *tlut_obj)

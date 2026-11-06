@@ -1,4 +1,8 @@
+#ifdef SONAR_PORT /* sonarlib port: the console's include path finds this in include/libc */
+#include <libc/math.h>
+#else
 #include <math.h>
+#endif
 
 #include <dolphin/gx.h>
 #include <dolphin/types.h>
@@ -433,6 +437,9 @@ static f32 idata[12][3] = {
     { -0.8506508f, -0.5257311f,  0.0f },
 };
 
+#ifdef SONAR_PORT /* sonarlib port: the host's strings.h declares a function index */
+#define index GXDraw_index
+#endif
 static u8 index[20][3] = {
     {  0,  4,  1 },
     {  0,  9,  4 },

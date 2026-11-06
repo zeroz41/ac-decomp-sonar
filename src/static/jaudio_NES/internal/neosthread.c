@@ -63,7 +63,12 @@ extern void* neosproc(void* param) {
     tmp_buf = (s16*)OSAlloc2(DAC_SIZE * 2);
 
     /* Initialize neos */
+#ifdef SONAR_PORT /* sonarlib port: jaudio divides this heap in console bytes and its structures are larger on the host,
+                     so the misc heap gets 0x20000 more, as audiomemory does */
+    s32 tmp = AGC.acmdBufSize + 0x20000;
+#else
     s32 tmp = AGC.acmdBufSize;
+#endif
     u64* acmdBuf = (u64*)OSAlloc2(tmp);
     Nas_InitAudio(acmdBuf, tmp);
     NeosSync();

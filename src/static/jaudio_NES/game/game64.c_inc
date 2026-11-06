@@ -584,7 +584,12 @@ f32 SOU_ONGEN_AREA1 = 540.f;
 f32 SOU_ONGEN_AREA2 = 533.f;
 f32 sou_md_bgm_boost_pasent = 1.f;
 
+#ifdef SONAR_PORT /* sonarlib port: neosproc takes 0x20000 more for jaudio's heap, whose structures are larger on the
+                     host */
+u8 audiomemory[0x90000 + 0x20000] ATTRIBUTE_ALIGN(32);
+#else
 u8 audiomemory[0x90000] ATTRIBUTE_ALIGN(32);
+#endif
 s16* SOU_FIR_STATE;
 s16 SOU_FIR_STATE_COPY[12];
 
@@ -3565,6 +3570,12 @@ extern void Na_RestartPrepare() {
 }
 
 extern u8 Na_CheckRestartReady() {
+#ifdef SONAR_PORT /* sonarlib port: only an audio frame's task replies to the spec change, and a jaudio that has run
+                     no frame has nothing to restart */
+    if (AG.frame_audio_task_count == 0) {
+        return TRUE;
+    }
+#endif
     return Nap_CheckSpecChange();
 }
 

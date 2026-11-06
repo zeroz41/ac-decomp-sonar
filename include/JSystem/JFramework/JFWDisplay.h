@@ -11,6 +11,9 @@
 #include "JSystem/JUtility/JUTXfb.h"
 #include "JSystem/JUtility/TColor.h"
 #include "types.h"
+#ifdef SONAR_PORT
+#include <sonar/runtime.h>
+#endif
 
 typedef void (*JFWDisplayUnkFunc)(void);
 
@@ -162,6 +165,9 @@ class JFWDisplay {
     void setFrameRate(u16 framerate) {
         mFrameRate = framerate;
         mTickRate = 0;
+#ifdef SONAR_PORT /* sonarlib port: the frame's retraces are the runtime tick's length, as the console's wait counted them */
+        sl_clock_set_retraces_per_tick(framerate == 0 ? 1 : framerate);
+#endif
     }
 
     static JFWDisplay* sManager; // 0x80415718

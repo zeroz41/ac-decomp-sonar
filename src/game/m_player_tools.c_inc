@@ -12,7 +12,11 @@ static u8 tol_sponge_1_main1_tex_txt[] ATTRIBUTE_ALIGN(32) = {
 };
 
 // clang-format off
+#ifdef SONAR_PORT /* sonarlib port: the game writes into this display list, and the host maps const data read-only */
+static Gfx tol_sponge_1_model[] = {
+#else
 static const Gfx tol_sponge_1_model[] = {
+#endif
     gsSPTexture(0, 0, 0, 0, G_ON),
     gsDPSetRenderMode(G_RM_FOG_SHADE_A, G_RM_AA_ZB_TEX_EDGE2),
     gsDPSetCombineLERP(TEXEL0, 0, SHADE, 0, 0, 0, 0, TEXEL0, PRIMITIVE, 0, COMBINED, 0, 0, 0, 0, COMBINED),

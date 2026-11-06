@@ -332,6 +332,18 @@ void OSInit(void) {
         SL_ERROR("dolphin_os", "OSInit: no main memory: %d", (int)result);
         abort();
     }
+    /* Boot's main thread, which the program attached to core os, becomes the SDK's default thread at its main
+       priority. Its stack is the host's, so stackBase and stackEnd stay 0. */
+    {
+        static OSThread boot_thread;
+        if (!sl_dolphin_os_thread_bind_current(&boot_thread, 16)) {
+            SL_ERROR("dolphin_os", "OSInit: the calling thread cannot be bound");
+            abort();
+        }
+        boot_thread.priority = boot_thread.base = 16;
+        boot_thread.val = (void*)-1;
+        sync_thread(&boot_thread);
+    }
     sl_os_boot_reset(NULL, ac_nmi_save_area, sizeof ac_nmi_save_area, NULL);
 }
 

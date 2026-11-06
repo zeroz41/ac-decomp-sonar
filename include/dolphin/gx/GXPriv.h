@@ -25,8 +25,14 @@ typedef struct GXLightObj_ {
 
 #define GX_FIFO_ADDR 0xCC008000
 
+#ifdef SONAR_PORT /* sonarlib port: the write gather pipe is the port's sink (port/adapter/dolphin_gx.c) */
+#include <port/gx_sink.h>
+#define GX_WRITE_U8(v) (ac_gx_write_u8(v))
+#define GX_WRITE_U32(v) (ac_gx_write_u32(v))
+#else
 #define GX_WRITE_U8(v) (GXWGFifo.u8 = v)
 #define GX_WRITE_U32(v) (GXWGFifo.u32 = v)
+#endif
 
 typedef struct GXData {
   u16 cpSRreg;

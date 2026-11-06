@@ -200,10 +200,14 @@ void BootSound(uaddr a, u32 b) {
     bootsound_size = b;
     Bank_Init();
     Wavegroup_Init();
+#ifdef SONAR_PORT /* sonarlib port: NIN_WAVE and NIN_BANK are in the console's layout and jaudio reads them in place,
+                     so the boot sound is not registered until audio's import converts it */
+#else
     int unused1 = Wavegroup_Regist(NIN_WAVE, 0);
     int unused2 = Bank_Regist(NIN_BANK, 0);
     Jac_RegisterARAMCallback(dummy_callback);
     int unused3 = WaveScene_Set(0, 0);
     int unused4 = DVDT_CheckPass(0, 0, __OK);
     Jac_RegisterARAMCallback(0);
+#endif
 }

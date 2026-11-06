@@ -27,7 +27,9 @@ sonar_decomp_read_units(PREFIX AC OBJDIFF "${AC_ROOT}/objdiff.json")
 #   keeps the game's Famicom front end, whose famicom_init declines to start, and stubs the core's entry points;
 #   the console's hardware set-up, which the host has no counterpart for: the memory map and the DSP tasks that
 #   unlock the memory card and answer the Game Boy Advance;
-#   foresta.rel's start-up, which runs its static constructors: the port links foresta in (boot.c's LoadLink).
+#   foresta.rel's start-up, which runs its static constructors: the port links foresta in (boot.c's LoadLink);
+#   emu64, with the files it includes, until its entry points run on sonarlib's kit (roadmap M6 step 6g): the glue
+#   defines what the game calls of it (adapter/emu64_glue.c).
 set(replaced_sources
     "^src/static/dolphin/"
     "^src/static/TRK_MINNOW_DOLPHIN/"
@@ -35,7 +37,8 @@ set(replaced_sources
     "^src/static/Famicom/ks_nes_(core|draw)\\.cpp$"
     "^src/static/libforest/ReconfigBATs\\.c$"
     "^src/static/jaudio_NES/internal/dsp_(cardunlock|GBAKey)\\.c$"
-    "^src/executor\\.c$")
+    "^src/executor\\.c$"
+    "^src/static/libforest/emu64/emu64\\.c$")
 set(msl_math "^src/static/MSL_C\\.PPCEABI\\.bare\\.H/((e|k|s|w)_[a-z0-9_]+|float)\\.c$")
 set(units "")
 foreach(unit IN LISTS AC_UNITS)
@@ -52,9 +55,11 @@ foreach(unit IN LISTS AC_UNITS)
     if(source MATCHES "^src/static/MSL_C\\.PPCEABI\\.bare\\.H/" AND NOT source MATCHES "${msl_math}")
         set(replaced TRUE)
     endif()
-    # The SDK's calendar arithmetic, which touches no hardware, and its matrix library, whose paired-single
-    # assembly has C fallbacks on sonarlib's paired singles.
-    if(source MATCHES "^src/static/dolphin/(os/OSTime|mtx/(mtx|mtx44|mtxvec|vec))\\.c$")
+    # The SDK's calendar arithmetic, which touches no hardware; its matrix library, whose paired-single assembly has
+    # C fallbacks on sonarlib's paired singles; the pad's clamping, which is arithmetic; and its GX units, which write
+    # into the glue's sink (adapter/dolphin_gx.c), except the FIFO's, which the glue replaces.
+    if(source MATCHES "^src/static/dolphin/(os/OSTime|mtx/(mtx|mtx44|mtxvec|vec)|pad/Padclamp|gx/GX[A-Za-z]+)\\.c$"
+       AND NOT source STREQUAL "src/static/dolphin/gx/GXFifo.c")
         set(replaced FALSE)
     endif()
     if(NOT replaced)
@@ -84,6 +89,17 @@ target_compile_options(ac_headers INTERFACE ${adapter_includes})
 
 add_library(ac_game OBJECT)
 sonar_decomp_add_units(ac_game PREFIX AC ROOT "${AC_ROOT}" UNITS ${units} DROP_DEFINES MUST_MATCH)
+# The SDK's GX units that the console's build does not list (objdiff.json), built as its listed GX units are: the
+# immediate-mode writers, the shapes, the display-list saver and the verifier, the last three under DEBUG only.
+set(gx_unlisted_sources "")
+foreach(name IN ITEMS GXDraw GXSave GXVerifRAS GXVerifXF GXVerify GXVert)
+    list(APPEND gx_unlisted_sources "${AC_ROOT}/src/static/dolphin/gx/${name}.c")
+endforeach()
+get_source_file_property(gx_defines "${AC_ROOT}/src/static/dolphin/gx/GXAttr.c" COMPILE_DEFINITIONS)
+get_source_file_property(gx_options "${AC_ROOT}/src/static/dolphin/gx/GXAttr.c" COMPILE_OPTIONS)
+set_source_files_properties(${gx_unlisted_sources} PROPERTIES COMPILE_DEFINITIONS "${gx_defines}"
+                            COMPILE_OPTIONS "${gx_options}")
+target_sources(ac_game PRIVATE ${gx_unlisted_sources})
 # The boot's main and foresta's, which the port links into one program.
 set_property(SOURCE "${AC_ROOT}/src/static/boot.c" APPEND PROPERTY COMPILE_DEFINITIONS main=ac_boot_main)
 set_property(SOURCE "${AC_ROOT}/src/main.c" APPEND PROPERTY COMPILE_DEFINITIONS main=ac_foresta_main)
@@ -103,15 +119,36 @@ target_sources(ac_game PRIVATE adapter/dolphin_ai.c adapter/dolphin_dsp.c)
 # The NES emulator's entry points, which halt: its core is excluded below.
 target_sources(ac_game PRIVATE adapter/famicom_core.cpp)
 set_source_files_properties(adapter/famicom_core.cpp PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
+# The SDK's DVD functions on the package mounted as game:, for the disc revision this build is for.
+target_sources(ac_game PRIVATE adapter/dolphin_dvd.c)
+set_source_files_properties(adapter/dolphin_dvd.c PROPERTIES COMPILE_DEFINITIONS "AC_PORT_DISC_VERSION=\"${AC_VERSION}\"")
+# The SDK's video and controller functions on sonarlib's VI and PAD kits.
+target_sources(ac_game PRIVATE adapter/dolphin_vi.c adapter/dolphin_pad.c)
+# The sink the SDK's GX units write into, and the FIFO functions of GXFifo.c, which it replaces.
+target_sources(ac_game PRIVATE adapter/dolphin_gx.c)
+# What the game calls of emu64, and the proof's stop at play's first frame.
+target_sources(ac_game PRIVATE adapter/emu64_glue.c)
+set_source_files_properties(adapter/emu64_glue.c PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
+# The out-of-line copies of the game's C99 inlines.
+target_sources(ac_game PRIVATE adapter/game_inlines.c)
+set_source_files_properties(adapter/game_inlines.c PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
 # JSystem's system font, which the game keeps in its executable (JUTFontData_Ascfont_fix12.s): the decompilation's
-# build extracts it, and this writes its bytes for the adapter to include.
+# build extracts it, and ac-font converts it to the host's byte order for the adapter to include, as JUTResFont reads
+# its integers in place.
+add_executable(ac-font importer/font.cpp importer/font_main.cpp)
+set_target_properties(ac-font PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS ON)
+target_link_libraries(ac-font PRIVATE sonar::base sonar::core)
 set(system_font "${AC_BUILD}/bin/assets/JSystem/JUtility/FontData/Ascfont_fix12.bfn")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${system_font}")
-file(READ "${system_font}" system_font_hex HEX)
-string(REGEX REPLACE "(..)" "0x\\1," system_font_bytes "${system_font_hex}")
-file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/assets/Ascfont_fix12.inc" CONTENT "${system_font_bytes}\n" @ONLY)
-target_sources(ac_game PRIVATE adapter/jsystem_font.c)
-set_source_files_properties(adapter/jsystem_font.c PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_BINARY_DIR}/assets")
+set(system_font_include "${CMAKE_CURRENT_BINARY_DIR}/assets/Ascfont_fix12.inc")
+add_custom_command(OUTPUT "${system_font_include}"
+                   COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/assets"
+                   COMMAND ac-font "${system_font}" "${system_font_include}"
+                   DEPENDS ac-font "${system_font}"
+                   COMMENT "Converting the system font"
+                   VERBATIM)
+target_sources(ac_game PRIVATE adapter/jsystem_font.c "${system_font_include}")
+set_source_files_properties(adapter/jsystem_font.c PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_BINARY_DIR}/assets"
+                            OBJECT_DEPENDS "${system_font_include}")
 # The decompilation's libc headers stand in for MSL's; the port takes the host's (porting-model.md, Floating-point
 # determinism, for the math library).
 set_target_properties(ac_game PROPERTIES C_STANDARD 11 C_EXTENSIONS ON CXX_STANDARD 20 CXX_EXTENSIONS ON)
@@ -129,7 +166,13 @@ endif()
 # The original compiler took C++98, which allowed narrowing in braced initializers.
 target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>)
 target_link_libraries(ac_game PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
-                      sonar::kit_jaudio)
+                      sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::fmt_card)
+
+# The program (README.md, ac_port): the game and its glue, from boot to play's first frame.
+add_executable(ac_port adapter/main.c $<TARGET_OBJECTS:ac_game>)
+set_target_properties(ac_port PROPERTIES C_STANDARD 11 C_EXTENSIONS ON LINKER_LANGUAGE CXX)
+target_link_libraries(ac_port PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
+                      sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::fmt_card)
 
 # The importer (README.md, The package): ac-import writes the package the game reads from boot to Town's first frame
 # from the player's disc, converting the structures the game reads in place (sonarlib docs/roadmap.md, M6 step 6c).
@@ -255,3 +298,17 @@ target_link_libraries(ac_import_disc_test PRIVATE ac_import_lib sonar::core sona
 add_dependencies(ac_import_disc_test ac-import)
 add_test(NAME ac_import_disc COMMAND ac_import_disc_test "$<TARGET_FILE:ac-import>" "${AC_DISC}" "${AC_VERSION}")
 set_tests_properties(ac_import_disc PROPERTIES SKIP_RETURN_CODE 77)
+
+# ac-font's conversion on a font built by hand.
+add_executable(ac_font_test tests/font_test.cpp importer/font.cpp)
+set_target_properties(ac_font_test PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS ON)
+target_link_libraries(ac_font_test PRIVATE sonar::base)
+add_test(NAME ac_font COMMAND ac_font_test)
+
+# ac_port from boot to play's first frame, twice, on a package ac-import writes from the player's disc; skipped
+# without one, when the script says so.
+add_test(NAME ac_port_play
+         COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
+                 "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/play"
+                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/play_test.cmake")
+set_tests_properties(ac_port_play PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_play: skipped, AC_DISC is not set")
