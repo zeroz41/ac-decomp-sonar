@@ -7,7 +7,8 @@
 # version, the disc and the settings, with the keys' locations at the decomp's symbols. Then
 # ac-import writes the package, ac_port --goldens writes the port's frames for the same scenes, on the GPU sink with no
 # window through SDL's offscreen video driver and lavapipe's Vulkan, seeded with Dolphin's qrand seed, and sl-capture
-# compares them. It prints every line. When AC_DISC names no disc, AC_DOLPHIN no Dolphin, there is no lavapipe or no
+# compares them. Then the same with --reference, the console's emu64 drawing instead of the kit (M6 step 7b), into
+# port-reference. It prints every line. When AC_DISC names no disc, AC_DOLPHIN no Dolphin, there is no lavapipe or no
 # sl-capture, or the disc is another version than GAFE01_00, whose addresses these are, it prints the line the test's
 # SKIP_REGULAR_EXPRESSION matches and returns.
 cmake_minimum_required(VERSION 3.25)
@@ -81,26 +82,35 @@ if(NOT result EQUAL 0)
     message(FATAL_ERROR "ac_port_goldens: ac-import failed (${result}):\n${output}${errors}")
 endif()
 
-file(REMOVE_RECURSE "${OUT_DIR}/port")
-file(MAKE_DIRECTORY "${OUT_DIR}/port")
-execute_process(COMMAND "${CMAKE_COMMAND}" -E env SDL_VIDEO_DRIVER=offscreen "VK_DRIVER_FILES=${AC_LAVAPIPE_ICD}"
-                        "${AC_PORT}" --package "${package}" --goldens "${SCENES}" "${OUT_DIR}/port"
-                        --qrand-seed "${seed}"
-                RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 600)
-string(REGEX MATCH "ac_port: goldens [^\n]*" line "${output}")
-message("ac_port: seed ${seed}, exit ${result}\n${line}")
-if(NOT result EQUAL 0 OR line STREQUAL "")
-    string(LENGTH "${errors}" length)
-    if(length GREATER 4000)
-        math(EXPR from "${length} - 4000")
-        string(SUBSTRING "${errors}" ${from} -1 errors)
+# The kit's frames into port, and the reference's, drawn by the console's emu64, into port-reference.
+foreach(drawer IN ITEMS port port-reference)
+    set(options "")
+    if(drawer STREQUAL "port-reference")
+        set(options --reference)
     endif()
-    message(FATAL_ERROR "ac_port_goldens: the port did not write every scene:\n${output}${errors}")
-endif()
+    file(REMOVE_RECURSE "${OUT_DIR}/${drawer}")
+    file(MAKE_DIRECTORY "${OUT_DIR}/${drawer}")
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env SDL_VIDEO_DRIVER=offscreen "VK_DRIVER_FILES=${AC_LAVAPIPE_ICD}"
+                            "${AC_PORT}" --package "${package}" ${options} --goldens "${SCENES}" "${OUT_DIR}/${drawer}"
+                            --qrand-seed "${seed}"
+                    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 600)
+    string(REGEX MATCH "ac_port: goldens [^\n]*" line "${output}")
+    message("ac_port ${options}: seed ${seed}, exit ${result}\n${line}")
+    if(NOT result EQUAL 0 OR line STREQUAL "")
+        string(LENGTH "${errors}" length)
+        if(length GREATER 4000)
+            math(EXPR from "${length} - 4000")
+            string(SUBSTRING "${errors}" ${from} -1 errors)
+        endif()
+        message(FATAL_ERROR "ac_port_goldens: the ${drawer} run did not write every scene:\n${output}${errors}")
+    endif()
 
-execute_process(COMMAND "${SL_CAPTURE}" compare --reference "${reference}" --port "${OUT_DIR}/port" --scenes "${SCENES}"
-                RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors)
-message("${output}${errors}")
-if(NOT result EQUAL 0)
-    message(FATAL_ERROR "ac_port_goldens: the port's frames differ from Dolphin's (pictures in ${OUT_DIR}/port)")
-endif()
+    execute_process(COMMAND "${SL_CAPTURE}" compare --reference "${reference}" --port "${OUT_DIR}/${drawer}"
+                            --scenes "${SCENES}"
+                    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors)
+    message("${output}${errors}")
+    if(NOT result EQUAL 0)
+        message(FATAL_ERROR
+                "ac_port_goldens: the ${drawer} frames differ from Dolphin's (pictures in ${OUT_DIR}/${drawer})")
+    endif()
+endforeach()

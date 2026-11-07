@@ -36,7 +36,7 @@ The other files on the first frame's path stay as the console's bytes, as the ga
 
 ## The program
 
-`ac_port` (`adapter/main.c`) runs the game on sonarlib. By default it runs headless, in deterministic mode, from boot to play's first frame (sonarlib's `docs/roadmap.md`, M6 steps 6f, 6g and 6h); with `--window` it shows the game in a window in real time (step 6k) and plays its sound (step 6l). Each frame runs from `JW_BeginFrame` to `JW_EndFrame`: the GX the game writes is recorded into it by sonarlib's GX front end and emu64's tasks by sonarlib's `kits/emu64`, and it is submitted to the render module. Headless that is the null sink, and the run opens no window and reads no device; the game's sound is mixed on sonarlib's null audio sink, counted and not heard.
+`ac_port` (`adapter/main.c`) runs the game on sonarlib. By default it runs headless, in deterministic mode, from boot to play's first frame (sonarlib's `docs/roadmap.md`, M6 steps 6f, 6g and 6h); with `--window` it shows the game in a window in real time (step 6k) and plays its sound (step 6l). `--goldens` and `--measure` run headless on the GPU sink with no window (steps 6n and 7b). Each frame runs from `JW_BeginFrame` to `JW_EndFrame`: the GX the game writes is recorded into it by sonarlib's GX front end and emu64's tasks by sonarlib's `kits/emu64`, and it is submitted to the render module. Headless that is the null sink, and the run opens no window and reads no device; the game's sound is mixed on sonarlib's null audio sink, counted and not heard.
 
 ### The threads
 
@@ -52,7 +52,7 @@ ac_port: play tick <t> retrace <r> gx <bytes> dvd <reads> <bytes> hash <h> insta
     gx-errors <n> unmapped <n> outside <n> nested <n> refused-frames <n> audio <n> loud <n> dsp <n> sound <h>
 ```
 
-on one line: the ticks and retraces run, the GX bytes written outside display lists, the DVD reads and their bytes; the hash of the frame submitted last; from emu64's kit, the instances its last task recorded, its compiles, the vertex and list holes it replayed, its draws worked out on the CPU, its refusals and its views past the render module's 256; from the render module, its invalid frames, problems and overflows; the actors the glue drew without an owner, being outside main memory; and from the GX glue, the hand-overs the front end failed, the pointers it could not map to a GX address, emu64's tasks with no frame open, the frame begins and ends out of order, and the frames the render module refused; then, from sonarlib's audio mix statistics (`sl_audio_get_mix_stats`), the output frames mixed, those with a sample at 1/256 of full scale or above, and the hash of every output sample; and the DSP glue's frames whose rendered channels hold a sample at 1/256 of full scale or above ([Boot sound](#boot-sound)). If `n` ticks pass first (3600 by default) it prints the same fields as `ac_port: limit …` and exits 1. Wrong arguments exit 2, and a failure before the game starts exits 1, a package from another importer version saying to import the disc again. `--validate` creates the kit with `SL_EMU64_VALIDATE`, so every use of a program hashes the ranges it read again, and a static list the game rewrote is compiled again rather than drawn stale; its line must match a plain run's. The test `ac_port_play` imports the disc and runs `ac_port` twice and once with `--validate`, and all three must print the same line, with instances, a hash, and no invalid frame, view past 256 or overflow, the GX glue's five counts all 0, audio frames above 0 and `dsp` above 0: the boot jingle sounded. Headless runs pace the mix by alarms in deterministic mode, so the audio fields match too. The title's music starts after play's first frame, so the loud frames here are the jingle's.
+on one line: the ticks and retraces run, the GX bytes written outside display lists, the DVD reads and their bytes; the hash of the frame submitted last; from emu64's kit, the instances its last task recorded, its compiles, the vertex and list holes it replayed, its draws worked out on the CPU, its refusals and its views past the render module's 256; from the render module, its invalid frames, problems and overflows; the actors the glue drew without an owner, being outside main memory; and from the GX glue, the hand-overs the front end failed, the pointers it could not map to a GX address, emu64's tasks with no frame open, the frame begins and ends out of order, and the frames the render module refused; then, from sonarlib's audio mix statistics (`sl_audio_get_mix_stats`), the output frames mixed, those with a sample at 1/256 of full scale or above, and the hash of every output sample; and the DSP glue's frames whose rendered channels hold a sample at 1/256 of full scale or above ([Boot sound](#boot-sound)). If `n` ticks pass first (3600 by default) it prints the same fields as `ac_port: limit …` and exits 1. Wrong arguments exit 2, and a failure before the game starts exits 1, a package from another importer version saying to import the disc again. `--reference` draws with the console's emu64 instead of the kit ([Measured runs](#measured-runs)), and names the line `reference`. `--validate` creates the kit with `SL_EMU64_VALIDATE`, so every use of a program hashes the ranges it read again, and a static list the game rewrote is compiled again rather than drawn stale; its line must match a plain run's. The test `ac_port_play` imports the disc and runs `ac_port` twice and once with `--validate`, and all three must print the same line, with instances, a hash, and no invalid frame, view past 256 or overflow, the GX glue's five counts all 0, audio frames above 0 and `dsp` above 0: the boot jingle sounded. Headless runs pace the mix by alarms in deterministic mode, so the audio fields match too. The title's music starts after play's first frame, so the loud frames here are the jingle's.
 
 On `GAFE01_00` the three runs print, as the reference line:
 
@@ -98,7 +98,7 @@ The test `ac_boot_sound` lays out the two extracts again, walks each image throu
 
 ### The emu64 differential test
 
-`--diff` draws every emu64 task twice from the same game state, through the kit and through the console's emu64 (`src/static/libforest/emu64/emu64.c`, built into `ac_port` as the reference), and compares the two (sonarlib's validation.md, Differential tests, and roadmap.md, M6 step 6j). The reference draws through the SDK's GX units into a second GX front end. Each of the two goes into a frame of its own with captures on, the kit's first, and the game's frame begins again after them for the task's fader and 2D, so a `--diff` tick submits four frames. Without the flag none of the reference runs and no frame is captured. A task whose frame or capture is refused, or in which the reference's palettes overflowed, counts as refused and is not compared. The kit's draws are labeled by the command that drew them, which the glue names as a field of the task's lists and its index (`polygon_opaque 412`), as `static` and its GX address, or as `unknown`. For each task that differs it prints, at most 16 times a run:
+`--diff` draws every emu64 task twice from the same game state, through the kit and through the console's emu64 (`src/static/libforest/emu64/emu64.c`, built into `ac_port` as the reference), and compares the two (sonarlib's validation.md, Differential tests, and roadmap.md, M6 step 6j). The reference draws through the SDK's GX units into a second GX front end. Each of the two goes into a frame of its own with captures on, the kit's first, and the game's frame begins again after them for the task's fader and 2D, so a `--diff` tick submits four frames. Without the flag none of the reference runs and no frame is captured, unless `--reference` draws every frame with it ([Measured runs](#measured-runs)). A task whose frame or capture is refused, or in which the reference's palettes overflowed, counts as refused and is not compared. The kit's draws are labeled by the command that drew them, which the glue names as a field of the task's lists and its index (`polygon_opaque 412`), as `static` and its GX address, or as `unknown`. For each task that differs it prints, at most 16 times a run:
 
 ```
 ac_port: diff tick <tick> triangle <t> vertex <v> field <field> index <i> kit <draw> <name> reference <draw>
@@ -132,7 +132,52 @@ The scenes are the Nintendo logo fading in (`logo_in_03` to `_31`), held (`logo_
 
 `--qrand-seed <hex>` seeds `qrand` with that value at `init_rnd` instead of the clock (`sys_math.c`). Dolphin's clock at `init_rnd` includes its disc reads' time, so the title demo's player and falling petals match only with Dolphin's seed, which the test reads from Dolphin's trace (`__qrand_idum`'s first value after its start).
 
-The test `ac_port_goldens` runs sonarlib's `sl-capture dolphin` on the disc with `AC_DOLPHIN`, Dolphin 2609's `dolphin-emu-nogui`, into a cache in the build tree (`goldens/dolphin`, given relative to `goldens/` as Dolphin's MemoryWatcher socket path must be short), then `ac-import`, `ac_port --goldens` with Dolphin's seed through SDL's offscreen driver and lavapipe, and `sl-capture compare`, printing every line; a scene fails when more than 1% of its pixels differ by more than 16, and its difference is written as `goldens/port/<scene>_diff.png`. It is skipped without the disc, Dolphin, lavapipe or sl-capture, or for a disc other than `GAFE01_00`. On `GAFE01_00` the logo's scenes differ in at most 0.35% of their pixels, at its edges and in its gradient, and play's in at most 0.44%, at edges and in the petals' blending.
+The test `ac_port_goldens` runs sonarlib's `sl-capture dolphin` on the disc with `AC_DOLPHIN`, Dolphin 2609's `dolphin-emu-nogui`, into a cache in the build tree (`goldens/dolphin`, given relative to `goldens/` as Dolphin's MemoryWatcher socket path must be short), then `ac-import`, `ac_port --goldens` with Dolphin's seed through SDL's offscreen driver and lavapipe, and `sl-capture compare`, printing every line; a scene fails when more than 1% of its pixels differ by more than 16, and its difference is written as `goldens/port/<scene>_diff.png`. It is skipped without the disc, Dolphin, lavapipe or sl-capture, or for a disc other than `GAFE01_00`. On `GAFE01_00` the logo's scenes differ in at most 0.35% of their pixels, at its edges and in its gradient, and play's in at most 0.44%, at edges and in the petals' blending. The test then captures the scenes again with `--reference` into `goldens/port-reference` and compares them with the same Dolphin frames: they pass within the same figures, differing from the kit's by at most 0.001% of the pixels.
+
+### Measured runs
+
+`--measure` times the title demo from play's first frame to the tick limit, frame by frame (sonarlib's validation.md, Performance budgets, Measured runs, and roadmap.md, M6 step 7b). The run is headless and deterministic, as a plain run is, but on sonarlib's GPU sink with no window, and play's first frame does not end it. The process's main thread opens sonarlib's `sonar/measure.h` with the tick limit and serves. From the frame that holds play's first task, the GX glue's `ac_frame_end` calls `ac_measure_frame` after its submit, which hands the frame to `sl_measure_frame` and waits while the main thread presents it once. At the limit, on the game thread, it stops the measuring and prints two lines, then exits 0:
+
+```
+ac_port: measure <kit|reference> frames <n> ticks <n> game <median> <max> <total> prepare <median> <max> <total>
+    present <median> <max> <total> draws <n> calls <n> pipelines <n> buffers <n> textures <n> storage <n> pushes <n>
+ac_port: measured tick <t> ...
+```
+
+the first on one line: the frames presented and the ticks from the first measured frame to the last, which the game's total covers; the game's time a frame from one hand-over to the next, the render worker's preparation and the present's own work, in nanoseconds; and what the presents drew, from `sl_render_stats`. The second has the play line's fields at the limit. When the limit comes before play's first frame it prints the `limit` line and exits 1. `--measure` with `--window`, `--goldens` or `--diff` exits 2.
+
+`--reference` draws every frame with the console's emu64 in place of the kit, as `--diff`'s reference does, but into the game's own frame through the main GX front end, every task, keeping the GX state it leaves as on the console. The kit is not created and the glue's calls on it are skipped; the owner markers are not written, so `unowned` and the kit's fields read 0. `OSInit` carves the reference's buffers from the arena as under `--diff`, so the heaps start 0x14400 bytes later and the frame hash is the reference's own. Its lines end with ` palette-overflows <n>`, emu64's palettes refused past its buffer. With `--measure` its measure line reads `reference`, and with `--goldens` its frames are captured; with `--window`, `--diff` or `--validate` it exits 2. On `GAFE01_00` its run to play's first frame prints:
+
+```
+ac_port: reference tick 557 retrace 557 gx 1696436 dvd 486 15148254 hash 356699db24314616 instances 0 compiles 0 holes 0/0 cpu 0 refused 0 views 0 invalid 0 problems 0 overflows 0 unowned 0 gx-errors 0 unmapped 0 outside 0 nested 0 refused-frames 0 audio 296800 loud 187636 dsp 355 sound 4c7e56f94e94c11e palette-overflows 0
+```
+
+the game's fields the play line's.
+
+The test `ac_port_measure` imports the disc and runs `ac_port` and `ac_port --reference` to play's first frame, whose game fields (tick, retrace, DVD, audio, loud, dsp and sound) must be the same, with no palette overflowed. Then `--measure --ticks 1200` twice and `--measure --reference --ticks 1200` twice, through SDL's offscreen driver and lavapipe: each must exit 0 with both lines, the same in its two runs once the nine times are taken out, with frames, ticks, draws and calls, and with nothing invalid, overflowed or refused and the GX glue's five counts 0. The kit's and the reference's measure the same frames and ticks with the same game fields. It prints every line, and is skipped without the disc or lavapipe. Each measured run takes about 7 seconds on lavapipe. On `GAFE01_00` they measure 643 frames over 642 ticks:
+
+```
+ac_port: measure kit frames 643 ticks 642 ... draws 118552 calls 118552 pipelines 13682 buffers 127981 textures 78510 storage 3606 pushes 357806
+ac_port: measure reference frames 643 ticks 642 ... draws 114125 calls 114125 pipelines 13682 buffers 4248 textures 78510 storage 0 pushes 177862
+```
+
+The baseline that sonarlib's merging steps (M6 steps 7c to 7e) are measured against: `--measure` and `--measure --reference` with `--ticks 4100`, the title demo's town to just before its end at tick 4193, three runs of each, each figure the median of the three runs'. They ran on an Intel Core Ultra 7 265K (20 threads, the `powersave` governor) with an NVIDIA GeForce RTX 3090 on NVIDIA's driver 615.78.08, Vulkan 1.4, Linux 7.2, the port's RelWithDebInfo build, through SDL's offscreen driver. Both measure 3539 frames over 3542 ticks.
+
+| | game | prepare | present | CPU a tick (game) |
+|---|---|---|---|---|
+| the kit, median | 0.38 ms | 0.068 ms | 0.17 ms | 0.48 ms |
+| the kit, maximum | 22.1 ms | 5.7 ms | 8.5 ms | |
+| the reference, median | 1.94 ms | 0.061 ms | 0.17 ms | 2.06 ms |
+| the reference, maximum | 13.2 ms | 0.70 ms | 3.4 ms | |
+
+The CPU a tick is the game's total over the ticks. Each count is the same in every run; a present averages:
+
+| | draws | draw calls | pipelines | buffers | textures | storage | pushes |
+|---|---|---|---|---|---|---|---|
+| the kit | 161.5 | 161.5 | 17.1 | 163.8 | 108.5 | 5.9 | 487.5 |
+| the reference | 150.2 | 150.2 | 16.9 | 7.7 | 108.5 | 0 | 239.0 |
+
+The kit binds a vertex buffer for nearly every draw, the reference about 8 a present, and the kit's game time a frame is a fifth of the reference's, which runs the console's emu64 on the CPU every frame. By tick 4100 the reference has written 883 MB of GX outside display lists, the kit 5.7 MB.
 
 ### The seam audit
 

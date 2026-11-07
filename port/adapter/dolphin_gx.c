@@ -348,18 +348,22 @@ void ac_frame_begin(void) {
 }
 
 void ac_frame_end(void) {
+    BOOL submitting;
     if (!frame_open) {
         nested++;
         return;
     }
     record();
-    if (frame != NULL) {
+    submitting = frame != NULL;
+    if (submitting) {
         sl_frame_submit(frame);
         submitted = TRUE;
     }
     frame = NULL;
     frame_open = FALSE;
     ac_emu64_frame_submitted();
+    if (submitting)
+        ac_measure_frame();
 }
 
 BOOL ac_frame_task(struct sl_frame** task_frame) {

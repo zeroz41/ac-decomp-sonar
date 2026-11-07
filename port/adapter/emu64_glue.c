@@ -4,7 +4,9 @@
    (port/emu64_glue.h), and the program's proof stops the run at play's first frame, after the submit of the frame
    that holds play's first task (port/NOTES.md). Under --diff each task is drawn also by the console's emu64, the
    reference, built into the program under emu64_ref_ names, and the kit's and the reference's frames are compared
-   (M6 step 6j). Under --goldens each frame goes to sonar/goldens.h with the keys Dolphin reads (M6 step 6n). */
+   (M6 step 6j). Under --goldens each frame goes to sonar/goldens.h with the keys Dolphin reads (M6 step 6n). Under
+   --reference the kit is not made, and the reference draws every task into the game's own frame instead (M6 step
+   7b). */
 #include "game.h"
 #include "graph.h"
 #include "m_actor.h"
@@ -31,6 +33,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* The kit reads the port's Gfx as its own command, and an N64 matrix as 0x40 bytes. */
 _Static_assert(sizeof(Gfx) == sizeof(sl_emu64_gfx), "the port's Gfx is the kit's command");
@@ -54,6 +57,7 @@ static u64 unowned;    /* actors drawn outside main memory, without owners */
 static BOOL play_task; /* play's first task was recorded */
 static BOOL window;    /* --window: the run goes on after play's first frame */
 static BOOL goldens;   /* --goldens: so does it, and each frame goes to the goldens */
+static BOOL measure;   /* --measure: so does it */
 static atomic_uint_fast64_t goldens_frames;
 static atomic_int play_reached; /* play's first frame was submitted; the presenter reads it */
 
@@ -69,9 +73,10 @@ void ac_emu64_start(sl_emu64* made) {
     emu = made;
 }
 
-/* ---- The differential test (--diff): the calls the reference runs inside the switch, kept until the next task */
+/* ---- The reference (--diff, --reference): the calls it runs inside the switch, kept until the next task */
 
 static BOOL diff;
+static BOOL reference; /* --reference: no kit; the reference draws each task into the game's frame */
 static BOOL ref_init;        /* emu64_init was called since the last task */
 static BOOL ref_ucode_info;  /* emu64_set_ucode_info was, with these arguments */
 static int ref_ucode_count;
@@ -87,13 +92,21 @@ BOOL ac_diff_enabled(void) {
     return diff;
 }
 
+void ac_reference_enable(void) {
+    reference = TRUE;
+}
+
+BOOL ac_reference_enabled(void) {
+    return reference;
+}
+
 void emu64_init(void) {
-    if (diff)
+    if (diff || reference)
         ref_init = TRUE;
 }
 
 void emu64_set_ucode_info(int count, ucode_info* info) {
-    if (!diff)
+    if (!diff && !reference)
         return;
     ref_ucode_info = TRUE;
     ref_ucode_count = count;
@@ -101,7 +114,7 @@ void emu64_set_ucode_info(int count, ucode_info* info) {
 }
 
 void emu64_set_first_ucode(void* ucode) {
-    if (!diff)
+    if (!diff && !reference)
         return;
     ref_first_ucode = TRUE;
     ref_first_ucode_arg = ucode;
@@ -112,21 +125,23 @@ void emu64_cleanup(void) {
 }
 
 void emu64_refresh(void) {
-    sl_emu64_refresh(emu);
-    if (diff)
+    if (emu != NULL)
+        sl_emu64_refresh(emu);
+    if (diff || reference)
         emu64_ref_refresh();
 }
 
 void emu64_texture_cache_data_entry_set(void* begin, void* end) {
-    sl_emu64_static_range(emu, begin, end);
-    if (diff)
+    if (emu != NULL)
+        sl_emu64_static_range(emu, begin, end);
+    if (diff || reference)
         emu64_ref_texture_cache_data_entry_set(begin, end);
 }
 
 void emu64_set_aflags(int idx, int value) {
     if (idx > 0 && idx < AC_AFLAGS_MAX)
         aflags[idx] = (u8)value;
-    if (diff)
+    if (diff || reference)
         emu64_ref_set_aflags(idx, value);
 }
 
@@ -137,7 +152,8 @@ int emu64_get_aflags(int idx) {
 }
 
 void ac_emu64_written(const void* begin, const void* end) {
-    sl_emu64_written(emu, begin, end);
+    if (emu != NULL)
+        sl_emu64_written(emu, begin, end);
 }
 
 /* The actor's offset from main memory's base, FALSE for an actor outside it. */
@@ -170,10 +186,11 @@ static Gfx* write_marker(THA_GA* list, uint64_t owner) {
 void ac_emu64_owner_open(GRAPH* graph, ACTOR* actor, ac_emu64_marks* marks) {
     uint64_t offset;
     int i;
-    if (!actor_offset(actor, &offset)) {
+    if (emu == NULL || !actor_offset(actor, &offset)) {
         for (i = 0; i < AC_EMU64_LISTS; i++)
             marks->at[i] = NULL;
-        unowned++;
+        if (emu != NULL)
+            unowned++; /* with no kit, the lists are the console's */
         return;
     }
     /* A list graph_ct gives no buffer (the line lists) gets none. */
@@ -200,7 +217,7 @@ void ac_emu64_owner_close(GRAPH* graph, const ac_emu64_marks* marks) {
 void ac_emu64_forget_actor(const ACTOR* actor) {
     uint64_t offset;
     int i;
-    if (!actor_offset(actor, &offset))
+    if (emu == NULL || !actor_offset(actor, &offset))
         return;
     for (i = 0; i < AC_EMU64_LISTS; i++)
         sl_emu64_forget(emu, owner_of(offset, i));
@@ -211,7 +228,9 @@ void ac_port_report(const char* what) {
     sl_render_stats render;
     ac_gx_counts gx;
     sl_audio_mix_stats audio;
-    sl_emu64_get_stats(emu, &kit);
+    memset(&kit, 0, sizeof kit); /* no kit under --reference */
+    if (emu != NULL)
+        sl_emu64_get_stats(emu, &kit);
     sl_render_get_stats(&render);
     ac_gx_get_counts(&gx);
     sl_audio_get_mix_stats(&audio);
@@ -219,13 +238,16 @@ void ac_port_report(const char* what) {
            " hash %016" PRIx64 " instances %" PRIu32 " compiles %" PRIu64 " holes %" PRIu64 "/%" PRIu64 " cpu %" PRIu64
            " refused %" PRIu64 " views %" PRIu64 " invalid %" PRIu64 " problems %" PRIu64 " overflows %" PRIu64
            " unowned %" PRIu64 " gx-errors %" PRIu64 " unmapped %" PRIu64 " outside %" PRIu64 " nested %" PRIu64
-           " refused-frames %" PRIu64 " audio %" PRIu64 " loud %" PRIu64 " dsp %" PRIu64 " sound %016" PRIx64 "\n",
+           " refused-frames %" PRIu64 " audio %" PRIu64 " loud %" PRIu64 " dsp %" PRIu64 " sound %016" PRIx64,
            what, sl_tick_count(), sl_retrace_count(), (uint64_t)ac_gx_bytes(), (uint64_t)ac_dvd_reads(),
            (uint64_t)ac_dvd_read_bytes(), sl_render_frame_hash(), kit.instances, kit.compiles, kit.vertex_holes,
            kit.list_holes, kit.cpu_draws, kit.refused, kit.view_overflows, render.frames_invalid, render.problems,
            render.overflows, (uint64_t)unowned, (uint64_t)gx.errors, (uint64_t)gx.unmapped, (uint64_t)gx.outside,
            (uint64_t)gx.nested, (uint64_t)gx.refused_frames, audio.frames, audio.loud_frames,
            (uint64_t)ac_dsp_sounding_frames(), audio.hash);
+    if (reference)
+        printf(" palette-overflows %" PRIu32, (uint32_t)emu64_ref_palette_overflows());
+    printf("\n");
     fflush(stdout);
     fflush(stderr);
 }
@@ -372,14 +394,19 @@ static void diff_task(Gfx* gfx) {
 }
 
 /* The task's lists, recorded on the kit into the open frame after the front end's draws so far, or under --diff
-   compared with the reference's. The proof's check marks play's first task: the frame that holds it ends the run at
-   its submit (ac_emu64_frame_submitted). */
+   compared with the reference's. Under --reference the reference draws them through the GX front end into the open
+   frame, and the GX state it leaves stays, as on the console. The proof's check marks play's first task: the frame
+   that holds it ends the run at its submit (ac_emu64_frame_submitted). */
 void emu64_taskstart(Gfx* gfx) {
     sl_frame* frame;
-    if (diff)
+    if (diff) {
         diff_task(gfx);
-    else if (ac_frame_task(&frame))
-        sl_emu64_task(emu, frame, (const sl_emu64_gfx*)gfx);
+    } else if (ac_frame_task(&frame)) {
+        if (reference)
+            reference_task(gfx);
+        else
+            sl_emu64_task(emu, frame, (const sl_emu64_gfx*)gfx);
+    }
     if (game_class_p != NULL && game_class_p->exec == play_main)
         play_task = TRUE;
 }
@@ -390,6 +417,10 @@ void ac_window_enable(void) {
 
 void ac_goldens_enable(void) {
     goldens = TRUE;
+}
+
+void ac_measure_enable(void) {
+    measure = TRUE;
 }
 
 /* The keys Dolphin reads at the decomp's symbols (port/NOTES.md, Goldens), and the part of the frame buffer the VI
@@ -442,8 +473,8 @@ void ac_emu64_frame_submitted(void) {
                    " triangles %" PRIu64 " skipped %" PRIu64 " %" PRIu64 "\n",
                    (uint64_t)diff_tasks, (uint64_t)diff_equal, (uint64_t)diff_different, (uint64_t)diff_refused,
                    (uint64_t)diff_triangles, (uint64_t)diff_skipped[0], (uint64_t)diff_skipped[1]);
-        ac_port_report("play");
-        if (!window && !goldens)
+        ac_port_report(reference ? "reference" : "play");
+        if (!window && !goldens && !measure)
             _Exit(0);
         atomic_store(&play_reached, 1);
     }

@@ -1,7 +1,8 @@
-/* ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--window | --goldens <scenes> <dir>]
-           [--qrand-seed <hex>]: Animal Crossing on sonarlib (port/NOTES.md, The program). The process's main thread starts the library and the render module, makes the emu64 the glue records
-   each task with, mounts the package as game:, starts the CPU model, and creates the game thread "main", which starts
-   the runtime and calls boot's main, which never returns.
+/* ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--reference]
+           [--window | --goldens <scenes> <dir> | --measure] [--qrand-seed <hex>]: Animal Crossing on sonarlib
+   (port/NOTES.md, The program). The process's main thread starts the library and the render module, makes the emu64
+   the glue records each task with, mounts the package as game:, starts the CPU model, and creates the game thread
+   "main", which starts the runtime and calls boot's main, which never returns.
 
    Headless, the default: deterministic, on the null sinks, the game's sound mixed and counted but not heard. The main
    thread joins "main", and the run ends at the submit of the frame that holds play's first task (emu64_glue.c, from
@@ -15,7 +16,15 @@
    --goldens: headless and deterministic, but on the GPU sink with no window, writing the frames the scenes file names
    into the directory (sonar/goldens.h, port/NOTES.md, Goldens). The GX glue's frame begin hands each frame's keys to
    the goldens (emu64_glue.c), play's first frame ends no run, and the main thread serves the captures until every
-   scene is written, or until the tick limit stops them. --qrand-seed gives init_rnd's seed (sys_math.c). */
+   scene is written, or until the tick limit stops them. --qrand-seed gives init_rnd's seed (sys_math.c).
+
+   --measure: headless and deterministic, on the GPU sink with no window, timing each frame from play's first to the
+   tick limit (sonar/measure.h, port/NOTES.md, Measured runs). The GX glue's frame end hands each frame to the
+   measured run, which waits while the main thread presents it; at the limit the game thread prints the measure line
+   and the report, named measured, and the run ends, exit 0.
+
+   --reference: the kit is not made, and the console's emu64 draws every task through the GX front end into the
+   game's own frame (emu64_glue.c), headless, with --goldens or with --measure. */
 #include "ac_port.h"
 
 #include <port/emu64_glue.h>
@@ -26,6 +35,7 @@
 #include <sonar/fs.h>
 #include <sonar/goldens.h>
 #include <sonar/input.h>
+#include <sonar/measure.h>
 #include <sonar/mem.h>
 #include <sonar/os.h>
 #include <sonar/render.h>
@@ -43,14 +53,18 @@
 
 int ac_boot_main(int argc, const char** argv); /* src/static/boot.c's main */
 
-static const char usage[] = "usage: ac_port --package <file> [--ticks <n>] [--validate] [--diff]\n"
-                            "               [--window | --goldens <scenes> <dir>] [--qrand-seed <hex>]\n";
+static const char usage[] = "usage: ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--reference]\n"
+                            "               [--window | --goldens <scenes> <dir> | --measure] [--qrand-seed <hex>]\n";
 
 static uint64_t tick_limit = 3600;
 static int ticks_given;          /* --ticks */
 static int window;               /* --window */
 static const char* goldens;      /* --goldens's scenes file */
 static const char* goldens_dir;  /* and its output directory */
+static int measure;              /* --measure */
+static uint64_t measured;        /* frames handed to the measured run */
+static uint64_t measured_first;  /* the tick of the first */
+static uint64_t measured_last;   /* and of the latest */
 static int seed_given;           /* --qrand-seed */
 static u32 seed;
 
@@ -68,8 +82,46 @@ static int failed(const char* call, sl_result result) {
     return 1;
 }
 
+void ac_measure_frame(void) {
+    sl_result result;
+    if (!measure || !ac_play_reached())
+        return;
+    if (measured++ == 0)
+        measured_first = sl_tick_count();
+    measured_last = sl_tick_count();
+    result = sl_measure_frame();
+    if (result != SL_OK)
+        _Exit(failed("sl_measure_frame", result));
+}
+
+/* The measure line: the frames, the ticks from the first measured frame's to the last's, each time's median, maximum
+   and total in nanoseconds, then what render counted at the presents, which are all the measured ones. */
+static void measure_report(void) {
+    sl_measure_stats stats;
+    sl_render_stats render;
+    const sl_measure_time* times[3];
+    int i;
+    memset(&stats, 0, sizeof stats);
+    (void)sl_measure_get_stats(&stats);
+    sl_render_get_stats(&render);
+    times[0] = &stats.game;
+    times[1] = &stats.prepare;
+    times[2] = &stats.present;
+    printf("ac_port: measure %s frames %" PRIu64 " ticks %" PRIu64, ac_reference_enabled() ? "reference" : "kit",
+           stats.frames, measured_last - measured_first);
+    for (i = 0; i < 3; i++)
+        printf(" %s %" PRIu64 " %" PRIu64 " %" PRIu64, i == 0 ? "game" : i == 1 ? "prepare" : "present",
+               times[i]->median_ns, times[i]->max_ns, times[i]->total_ns);
+    printf(" draws %" PRIu64 " calls %" PRIu64 " pipelines %" PRIu64 " buffers %" PRIu64 " textures %" PRIu64
+           " storage %" PRIu64 " pushes %" PRIu64 "\n",
+           render.draws, render.draw_calls, render.pipeline_binds, render.buffer_binds, render.texture_binds,
+           render.storage_binds, render.uniform_pushes);
+}
+
 /* Ends the run once the runtime has begun the limit's ticks without a frame of play; with --goldens, stops the
-   captures, and the main thread ends the run. */
+   captures, and the main thread ends the run. With --measure, once play was reached, stops the measured run and
+   prints its line and the report, here on the game thread at a retrace, while no present runs: the game thread
+   waits in sl_measure_frame for each. */
 static void stop_at_limit(void* user, uint64_t retrace) {
     (void)user;
     (void)retrace;
@@ -77,6 +129,12 @@ static void stop_at_limit(void* user, uint64_t retrace) {
         if (goldens != NULL) {
             sl_goldens_stop();
             return;
+        }
+        if (measure && ac_play_reached()) {
+            sl_measure_stop();
+            measure_report();
+            ac_port_report("measured");
+            _Exit(0);
         }
         ac_port_report("limit");
         _Exit(1);
@@ -211,6 +269,11 @@ int main(int argc, char** argv) {
             emu64_flags |= SL_EMU64_VALIDATE; /* every use of a program hashes its ranges again */
         } else if (strcmp(argv[i], "--diff") == 0) {
             ac_diff_enable(); /* the differential test, before boot: OSInit takes the reference's buffers */
+        } else if (strcmp(argv[i], "--reference") == 0) {
+            ac_reference_enable(); /* before boot, as --diff */
+        } else if (strcmp(argv[i], "--measure") == 0) {
+            measure = 1;
+            ac_measure_enable(); /* play's first frame ends no run */
         } else if (strcmp(argv[i], "--window") == 0 && goldens == NULL) {
             window = 1;
             ac_window_enable(); /* play's first frame ends no run */
@@ -228,6 +291,10 @@ int main(int argc, char** argv) {
     }
     if (package == NULL || (goldens != NULL && ac_diff_enabled()))
         return usage_error(); /* the goldens take the frames the kit draws, which --diff draws twice */
+    if (measure && (window || goldens != NULL || ac_diff_enabled()))
+        return usage_error(); /* the measured run presents each frame once, headless */
+    if (ac_reference_enabled() && (window || ac_diff_enabled() || (emu64_flags & SL_EMU64_VALIDATE) != 0))
+        return usage_error(); /* the reference runs headless, without the kit */
 
     {
         sl_init_desc desc;
@@ -247,11 +314,11 @@ int main(int argc, char** argv) {
             return failed("sl_window_init", result);
     }
     {
-        /* Headless, the null sink; --window and --goldens, the GPU sink at 640 x 480. Each frame is checked and hashed
-           at submit. --diff captures each frame too. */
+        /* Headless, the null sink; --window, --goldens and --measure, the GPU sink at 640 x 480. Each frame is
+           checked and hashed at submit. --diff captures each frame too. */
         sl_render_desc desc;
         memset(&desc, 0, sizeof desc);
-        desc.sink = window || goldens != NULL ? SL_RENDER_SINK_GPU : SL_RENDER_SINK_NULL;
+        desc.sink = window || goldens != NULL || measure ? SL_RENDER_SINK_GPU : SL_RENDER_SINK_NULL;
         desc.flags = SL_RENDER_HASH_FRAMES | (ac_diff_enabled() ? SL_RENDER_CAPTURE_FRAMES : 0u);
         desc.max_views = 256;
         result = sl_render_init(&desc);
@@ -263,9 +330,15 @@ int main(int argc, char** argv) {
         if (result != SL_OK)
             return failed("sl_goldens_open", result);
     }
-    {
+    if (measure) {
+        /* A median from every frame: at most one a tick. */
+        result = sl_measure_open(tick_limit < UINT32_MAX ? (uint32_t)tick_limit : UINT32_MAX);
+        if (result != SL_OK)
+            return failed("sl_measure_open", result);
+    }
+    if (!ac_reference_enabled()) {
         /* emu64's texture cache takes the executable's read-only and initialized data as static (emu64.c's
-           _f_rodata to _e_data), the game's own and foresta's, linked in. */
+           _f_rodata to _e_data), the game's own and foresta's, linked in. --reference makes no kit. */
         sl_mem_range ranges[16];
         uint32_t count, n;
         sl_emu64* emu = sl_emu64_create(emu64_flags);
@@ -365,6 +438,12 @@ int main(int argc, char** argv) {
             present(shown);
         if (goldens != NULL)
             serve();
+        if (measure) {
+            /* Presents each frame the game thread hands over until the limit stops it; the game thread ends the run. */
+            result = sl_measure_serve();
+            if (result != SL_OK)
+                _Exit(failed("sl_measure_serve", result));
+        }
         /* "main" never returns: the run ends with _Exit. */
         sl_os_thread_join(game, NULL);
     }

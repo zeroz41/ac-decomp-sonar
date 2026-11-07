@@ -84,10 +84,12 @@ Options:
 | Option | What it does |
 |---|---|
 | `--window` | shows the game in a window, plays its sound, and reads the keyboard and gamepads |
-| `--ticks <n>` | headless: gives up after `n` game frames if play hasn't started (3600 by default); with `--window`: quits after `n` game frames (no limit by default) |
+| `--ticks <n>` | headless: gives up after `n` game frames if play hasn't started (3600 by default); with `--window` or `--measure`: quits after `n` game frames (no limit by default with `--window`) |
 | `--validate` | rechecks the game's display lists on every use |
 | `--diff` | draws each frame's 3D twice, once through sonarlib and once through the game's own renderer (emu64), and compares the two |
 | `--goldens <scenes> <dir>` | headless, on the GPU with no window: writes the frames a scenes file names into `dir`, for the goldens test |
+| `--measure` | headless, on the GPU with no window: runs to the tick limit, presenting each frame once, and prints how long the game, the renderer's preparation and each present took from play's first frame on, and what the presents drew |
+| `--reference` | draws every frame with the game's own renderer (emu64) through the GX front end instead of sonarlib's kit, to measure the kit against; with `--measure` or `--goldens`, not with `--window`, `--diff` or `--validate` |
 | `--qrand-seed <hex>` | seeds the game's random numbers with this value instead of the clock, as the goldens test does with Dolphin's |
 
 To run the tests:

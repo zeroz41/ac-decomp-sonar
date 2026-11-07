@@ -39,8 +39,9 @@ void ac_emu64_owner_close(struct graph_s* graph, const ac_emu64_marks* marks);
 /* The actor is gone: its eleven owners are forgotten, so a later actor at its address starts unmatched. */
 void ac_emu64_forget_actor(const struct actor_s* actor);
 
-/* The GX glue's ac_frame_end, after its submit: once the frame holds play's first task, prints the proof's line and
-   ends the run, exit 0, but under --window (ac_window_enable), where the run goes on. */
+/* The GX glue's ac_frame_end, after its submit: once the frame holds play's first task, prints the proof's line,
+   named reference under --reference, and ends the run, exit 0, but under --window, --goldens and --measure, where the
+   run goes on. */
 void ac_emu64_frame_submitted(void);
 
 /* The differential test (port/NOTES.md, --diff; sonarlib docs/roadmap.md, M6 step 6j): each task is drawn by the
@@ -49,14 +50,20 @@ void ac_emu64_frame_submitted(void);
 void ac_diff_enable(void);
 BOOL ac_diff_enabled(void);
 
-/* The reference's buffers, which OSInit takes from the bottom of the arena under --diff: emu64.c's two texture
-   caches and its palette buffer, each 32-byte aligned. */
+/* The reference run (port/NOTES.md, --reference; sonarlib docs/roadmap.md, M6 step 7b): the kit is not made, and the
+   console's emu64 draws every task through the GX front end into the game's own frame. ac_reference_enable is
+   main.c's, before boot; ac_reference_enabled is for any game thread. */
+void ac_reference_enable(void);
+BOOL ac_reference_enabled(void);
+
+/* The reference's buffers, which OSInit takes from the bottom of the arena under --diff and --reference: emu64.c's
+   two texture caches and its palette buffer, each 32-byte aligned. */
 #define AC_DIFF_TEXTURE_DATA_SIZE 0xC000 /* emu64.c's TEX_BUFFER_DATA_SIZE */
 #define AC_DIFF_TEXTURE_BSS_SIZE 0x400   /* emu64.c's TEX_BUFFER_BSS_SIZE */
 #define AC_DIFF_PALETTES_SIZE 0x8000     /* GX's largest palette */
 
-/* emu64.c, the reference, under the names port/CMakeLists.txt gives it. Only the glue calls it, under --diff, but
-   for emu64_ref_set_buffers, which is OSInit's. */
+/* emu64.c, the reference, under the names port/CMakeLists.txt gives it. Only the glue calls it, under --diff and
+   --reference, but for emu64_ref_set_buffers, which is OSInit's. */
 struct ucode_info_s;
 void emu64_ref_set_buffers(void* data, void* bss, void* palettes, u32 palettes_size);
 u32 emu64_ref_palette_overflows(void);

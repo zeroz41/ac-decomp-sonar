@@ -63,12 +63,20 @@ void ac_goldens_frame(void);
 /* The frames handed to the goldens. Any thread. */
 u64 ac_goldens_frames(void);
 
+/* --measure: play's first frame prints the play line and ends no run (emu64_glue.c). main.c's, before boot. */
+void ac_measure_enable(void);
+/* The GX glue's frame end, after its submit and ac_emu64_frame_submitted, for a frame submitted: from play's first
+   frame on, with the measured run on, calls sl_measure_frame, which waits until the main thread has presented it, and
+   keeps the tick; a failure stops the run with a message (main.c). Game thread. */
+void ac_measure_frame(void);
+
 /* Prints the proof's line, "ac_port: <what> tick <t> retrace <r> gx <bytes> dvd <reads> <bytes> hash <h> instances
    <n> compiles <n> holes <vertex>/<list> cpu <n> refused <n> views <overflows> invalid <frames> problems <n>
    overflows <n> unowned <n> gx-errors <n> unmapped <n> outside <n> nested <n> refused-frames <n> audio <n> loud <n>
    dsp <n> sound <h>", to stdout and flushes it (emu64_glue.c): the run's counts, the hash of the frame submitted last,
    the kit's counts with its last task's instances, the render module's, the GX glue's (ac_gx_get_counts), the audio
-   mix's (sl_audio_get_mix_stats) and the DSP's sounding frames (ac_dsp_sounding_frames). */
+   mix's (sl_audio_get_mix_stats) and the DSP's sounding frames (ac_dsp_sounding_frames). Under --reference the kit's
+   counts are 0 and the line ends with " palette-overflows <n>", emu64's palettes refused past its buffer. */
 void ac_port_report(const char* what);
 
 #ifdef __cplusplus

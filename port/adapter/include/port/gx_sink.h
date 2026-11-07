@@ -56,7 +56,8 @@ void ac_gx_flush(void);
    open is counted in nested and ignored. */
 void ac_frame_begin(void);
 /* JW_EndFrame's, after endRender: hands the sink's bytes to the front end, records them into the frame after what
-   it holds, and submits it. An end with no frame open is counted in nested and does nothing. */
+   it holds, and submits it, then calls ac_emu64_frame_submitted and, for a frame submitted, ac_measure_frame. An end
+   with no frame open is counted in nested and does nothing. */
 void ac_frame_end(void);
 /* emu64_taskstart's: hands the sink's bytes to the front end and records them into the open frame, then gives it in
    *frame for the task to record into. FALSE, with *frame NULL, when the frame was refused, or when no frame is

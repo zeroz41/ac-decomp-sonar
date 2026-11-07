@@ -335,10 +335,10 @@ void OSInit(void) {
         SL_ERROR("dolphin_os", "OSInit: no main memory: %d", (int)result);
         abort();
     }
-    /* The differential test's reference, emu64.c, hands GX the textures and palettes it converts into its buffers,
-       which must lie in GX's address space, palettes below 0x02000000: under --diff they come from the bottom of the
-       arena before anything else allocates, each 32-byte aligned, so the heaps start 0x14400 bytes later. */
-    if (ac_diff_enabled()) {
+    /* The reference, emu64.c, hands GX the textures and palettes it converts into its buffers, which must lie in GX's
+       address space, palettes below 0x02000000: under --diff and --reference they come from the bottom of the arena
+       before anything else allocates, each 32-byte aligned, so the heaps start 0x14400 bytes later. */
+    if (ac_diff_enabled() || ac_reference_enabled()) {
         u8* const lo = (u8*)(((uintptr_t)sl_dolphin_os_arena_lo() + 31u) & ~(uintptr_t)31u);
         u8* const data = lo;
         u8* const bss = data + AC_DIFF_TEXTURE_DATA_SIZE;
