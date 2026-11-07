@@ -158,8 +158,8 @@ the game's fields the play line's.
 The test `ac_port_measure` imports the disc and runs `ac_port` and `ac_port --reference` to play's first frame, whose game fields (tick, retrace, DVD, audio, loud, dsp and sound) must be the same, with no palette overflowed. Then `--measure --ticks 1200` twice and `--measure --reference --ticks 1200` twice, through SDL's offscreen driver and lavapipe: each must exit 0 with both lines, the same in its two runs once the twelve times are taken out, with frames, ticks, draws and calls, and with nothing invalid, overflowed or refused and the GX glue's five counts 0. The kit's and the reference's measure the same frames and ticks with the same game fields. It prints every line, and is skipped without the disc or lavapipe. Each measured run takes about 7 seconds on lavapipe. On `GAFE01_00` they measure 643 frames over 642 ticks:
 
 ```
-ac_port: measure kit frames 643 ticks 642 ... draws 118552 calls 118552 pipelines 13682 buffers 13663 textures 78510 storage 8106 pushes 0
-ac_port: measure reference frames 643 ticks 642 ... draws 114125 calls 114125 pipelines 13682 buffers 4248 textures 78510 storage 4248 pushes 0
+ac_port: measure kit frames 643 ticks 642 ... draws 118552 calls 85021 pipelines 13682 buffers 13663 textures 78510 storage 8106 pushes 0
+ac_port: measure reference frames 643 ticks 642 ... draws 114125 calls 83654 pipelines 13682 buffers 4248 textures 78510 storage 4248 pushes 0
 ```
 
 The baseline that sonarlib's merging steps (M6 steps 7c to 7g) are measured against: `--measure` and `--measure --reference` with `--ticks 4100`, the title demo's town to just before its end at tick 4193, three runs of each, each figure the median of the three runs'. They ran on an Intel Core Ultra 7 265K (20 threads, the `powersave` governor) with an NVIDIA GeForce RTX 3090 on NVIDIA's driver 615.78.08, Vulkan 1.4, Linux 7.2, the port's RelWithDebInfo build, through SDL's offscreen driver. Both measure 3539 frames over 3542 ticks.
@@ -227,6 +227,17 @@ After sonarlib's step 7f, in which the combiner's fragment shader indexes its ar
 | the reference, maximum | 12.8 ms | 0.98 ms | 3.4 ms | 3.2 ms | |
 
 Every count is the same as after step 7e. A frame took the GPU a median of 0.29 ms in both runs, against 0.88 ms in the kit's and 0.67 ms in the reference's after step 7e. The kit's CPU times fell with it: the game's median from 0.46 to 0.39 ms, the preparation's from 0.072 to 0.063 ms and the present's from 0.14 to 0.11 ms. The kit's game now takes longer than the GPU's frame, so its threads spend less time waiting for the GPU, which most likely raised those times after step 7e, as above. The reference's game took longer than the GPU's frame before as well, and its times are about as they were.
+
+After sonarlib's step 7g, in which consecutive calls that bind nothing new are drawn by one indirect call, the same runs on the same host, with a load average of 5 to 7 from other work:
+
+| | game | prepare | present | gpu | CPU a tick (game) |
+|---|---|---|---|---|---|
+| the kit, median | 0.38 ms | 0.061 ms | 0.11 ms | 0.28 ms | 0.46 ms |
+| the kit, maximum | 21.5 ms | 3.1 ms | 3.4 ms | 2.8 ms | |
+| the reference, median | 1.83 ms | 0.053 ms | 0.15 ms | 0.28 ms | 1.92 ms |
+| the reference, maximum | 12.8 ms | 0.95 ms | 3.8 ms | 2.8 ms | |
+
+Only the draw calls changed: the kit's runs encode 119.6 a present, were 161.5, and the reference's 111.9, were 150.2, about a quarter fewer each. Every other count is the same as after step 7f. On lavapipe the measured test's kit run encodes 85,021 calls, against 118,552 before, and the reference's 83,654, against 114,125. These runs were taken in turn with three of the build before the step, which measured the kit's present at 0.113 ms, its preparation at 0.064 ms and a frame on the GPU at 0.278 ms, against 0.112, 0.061 and 0.284 ms after it, and the reference's GPU at 0.270 ms, against 0.280: no change beyond the runs' spread, as expected of the 42 and 38 calls a present saved, which come to about 0.3 µs at the 8 to 9 ns a call `gpu_render_budget` measures (sonarlib's rendering.md, Cost). The reference's present rose from 0.141 to 0.148 ms, the build before the step's runs 0.139 to 0.146 ms and these 0.144 to 0.149 ms, as it did in the step's prototype, from 0.139 to 0.147 ms, while the kit's did not; its cause is not found.
 
 ### The seam audit
 
