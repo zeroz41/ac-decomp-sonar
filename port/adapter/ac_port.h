@@ -53,6 +53,16 @@ void ac_window_enable(void);
 /* Whether play's first frame was submitted. Any thread. */
 BOOL ac_play_reached(void);
 
+/* --goldens: play's first frame prints the play line and ends no run, and each frame's begin hands the frame submitted
+   before it to the goldens with its keys (emu64_glue.c). main.c's, before boot. */
+void ac_goldens_enable(void);
+/* The GX glue's frame begin, before it begins the frame, when a frame was submitted since the last: with the goldens
+   on, calls sl_goldens_frame for that frame with the keys as they stand, after its tick, and the VI's pan; a failure
+   stops the run with a message. Game thread. */
+void ac_goldens_frame(void);
+/* The frames handed to the goldens. Any thread. */
+u64 ac_goldens_frames(void);
+
 /* Prints the proof's line, "ac_port: <what> tick <t> retrace <r> gx <bytes> dvd <reads> <bytes> hash <h> instances
    <n> compiles <n> holes <vertex>/<list> cpu <n> refused <n> views <overflows> invalid <frames> problems <n>
    overflows <n> unowned <n> gx-errors <n> unmapped <n> outside <n> nested <n> refused-frames <n> audio <n> loud <n>

@@ -46,7 +46,11 @@ struct TColor : public GXColor {
         return toUInt32();
     }
     u32 toUInt32() const {
+#ifdef SONAR_PORT /* sonarlib port: the console's u32 is r in its high byte; the host's would put it in the low one */
+        return (u32)r << 24 | (u32)g << 16 | (u32)b << 8 | a;
+#else
         return *(u32*)&r;
+#endif
     }
 
     void set(u8 cR, u8 cG, u8 cB, u8 cA) {
@@ -57,7 +61,14 @@ struct TColor : public GXColor {
     }
 
     void set(u32 u32Color) {
+#ifdef SONAR_PORT /* sonarlib port: the console's u32 is r in its high byte; the host's would put it in the low one */
+        r = (u8)(u32Color >> 24);
+        g = (u8)(u32Color >> 16);
+        b = (u8)(u32Color >> 8);
+        a = (u8)u32Color;
+#else
         *(u32*)&r = u32Color;
+#endif
     }
 
     void set(GXColor gxColor) {

@@ -1,0 +1,23 @@
+# The port's goldens (port/NOTES.md, Goldens; sonarlib docs/roadmap.md, M6 step 6n): each scene is the first frame
+# whose keys hold every value its line gives, in hex, on the port and in Dolphin. fader is jc_fader's status (1 shown,
+# 2 fading in, 3 fading out), fader_time its ticks target << 16 | ticks run, menu_frame initial_menu's frame_count,
+# game_frame the game's frame_counter, play whether play's main runs (Dolphin's: play_main less foresta's text).
+# From the fade-out on, Dolphin shows a frame two frame-buffer changes sooner after its keys than in the fade-in, so
+# there the reference's fader_time and game_frame are two frames less than the port's; measured on Dolphin 2609 with
+# the cache's settings (port/NOTES.md, Goldens).
+logo_in_03 fader=2 fader_time=200003
+logo_in_08 fader=2 fader_time=200008
+logo_in_16 fader=2 fader_time=200010
+logo_in_24 fader=2 fader_time=200018
+logo_in_31 fader=2 fader_time=20001f
+logo_held menu_frame=64 fader=1
+logo_out_02 fader=3 port:fader_time=200002 ref:fader_time=200000
+logo_out_08 fader=3 port:fader_time=200008 ref:fader_time=200006
+logo_out_16 fader=3 port:fader_time=200010 ref:fader_time=20000e
+logo_out_24 fader=3 port:fader_time=200018 ref:fader_time=200016
+logo_out_31 fader=3 port:fader_time=20001f ref:fader_time=20001d
+play_40 port:game_frame=28 ref:game_frame=26 ref:play=2bb0c7 port:play=1
+play_50 port:game_frame=32 ref:game_frame=30 ref:play=2bb0c7 port:play=1
+play_60 port:game_frame=3c ref:game_frame=3a ref:play=2bb0c7 port:play=1
+play_70 port:game_frame=46 ref:game_frame=44 ref:play=2bb0c7 port:play=1
+play_80 port:game_frame=50 ref:game_frame=4e ref:play=2bb0c7 port:play=1

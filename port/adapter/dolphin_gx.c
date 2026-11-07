@@ -8,6 +8,8 @@
 #include "dolphin/os.h"
 #include "gx/__gx.h"
 
+#include "ac_port.h"
+
 #include <port/emu64_glue.h>
 #include <port/gx_sink.h>
 
@@ -262,6 +264,7 @@ static BOOL to_reference; /* hand-overs go to ref_gxf */
 static sl_frame* frame;
 static BOOL frame_open;
 static BOOL frame_recorded; /* the open frame had its sl_gxf_record */
+static BOOL submitted;      /* a frame was submitted since the last begin */
 static u64 outside;
 static u64 nested;
 static u64 refused_frames;
@@ -333,6 +336,10 @@ void ac_frame_begin(void) {
         nested++;
         return;
     }
+    if (submitted) {
+        submitted = FALSE;
+        ac_goldens_frame(); /* the frame submitted last, after its tick */
+    }
     frame_open = TRUE;
     frame_recorded = FALSE;
     frame = sl_frame_begin();
@@ -346,8 +353,10 @@ void ac_frame_end(void) {
         return;
     }
     record();
-    if (frame != NULL)
+    if (frame != NULL) {
         sl_frame_submit(frame);
+        submitted = TRUE;
+    }
     frame = NULL;
     frame_open = FALSE;
     ac_emu64_frame_submitted();

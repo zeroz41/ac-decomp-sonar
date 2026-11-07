@@ -388,6 +388,24 @@ add_test(NAME ac_port_window
                  "-DAC_LAVAPIPE_ICD=${AC_LAVAPIPE_ICD}" -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/window_test.cmake")
 set_tests_properties(ac_port_window PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_window: skipped, ")
 
+# The goldens: sonarlib's sl-capture runs Dolphin on the player's disc and caches its frames in the build tree, ac_port
+# --goldens writes the same scenes on the GPU sink with no window, offscreen through lavapipe, and sl-capture compares
+# them; skipped without the disc, Dolphin, lavapipe or sl-capture, when the script says so.
+set(AC_DOLPHIN "" CACHE FILEPATH "dolphin-emu-nogui, built from upstream's tag 2609, for ac_port_goldens")
+if(TARGET sl-capture)
+    add_custom_target(ac_capture_tool ALL DEPENDS sl-capture)
+    set(ac_sl_capture "$<TARGET_FILE:sl-capture>")
+else()
+    set(ac_sl_capture "")
+endif()
+add_test(NAME ac_port_goldens
+         COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
+                 "-DSL_CAPTURE=${ac_sl_capture}" "-DAC_DOLPHIN=${AC_DOLPHIN}" "-DAC_DISC=${AC_DISC}"
+                 "-DAC_VERSION=${AC_VERSION}" "-DSCENES=${CMAKE_CURRENT_SOURCE_DIR}/tests/goldens.scenes"
+                 "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/goldens" "-DAC_LAVAPIPE_ICD=${AC_LAVAPIPE_ICD}"
+                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/goldens_test.cmake")
+set_tests_properties(ac_port_goldens PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_goldens: skipped, ")
+
 # The seam audit (sonarlib's sl-seam-audit) over the translation units this build compiles, against the port's policy
 # of seam files (seam-policy.toml): every file that uses GX is listed, and no transitional entry is stale. No disc.
 add_custom_target(ac_seam_audit_tool ALL DEPENDS sl-seam-audit)

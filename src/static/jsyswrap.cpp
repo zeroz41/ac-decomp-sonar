@@ -10,6 +10,8 @@
 #include "libc64/malloc.h"
 #ifdef SONAR_PORT
 #include "JSystem/JKernel/JKRExpHeap.h"
+#include "JSystem/JUtility/JUTFader.h"
+#include <port/goldens.h>
 #endif
 #ifdef SONAR_PORT /* sonarlib port: the frame the GX front end and emu64's kit record into */
 #include <port/gx_sink.h>
@@ -38,6 +40,14 @@ static u16 video_pan_xorg = 0;
 static u16 video_pan_yorg = 0;
 static u16 video_pan_width = 0;
 static u16 video_pan_height = 0;
+
+#ifdef SONAR_PORT /* sonarlib port: the goldens' fader and fader_time keys */
+extern "C" void ac_fader_state(u32* status, u32* time) {
+    const JUTFader* const fader = (const JUTFader*)jc_fader;
+    *status = fader != nullptr ? (u32)fader->mStatus : 0;
+    *time = fader != nullptr ? (u32)fader->mTicksTarget << 16 | fader->mTicksRun : 0;
+}
+#endif
 
 static u32 SystemHeapSize = 0x16C7000;
 static u32 gameheap_len = 0x380000;

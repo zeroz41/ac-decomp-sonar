@@ -35,6 +35,17 @@ cmake --build port/build
 
 `AC_DISC` is optional. It points at your disc, either an image or an extracted folder, and is only used by the tests.
 
+The goldens test, `ac_port_goldens`, also needs Dolphin, as the reference the port's pictures are compared with. Build its headless player from upstream's tag 2609 and pass it as `AC_DOLPHIN`:
+
+```sh
+git clone --branch 2609 --recurse-submodules https://github.com/dolphin-emu/dolphin.git
+cmake -S dolphin -B dolphin/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_QT=OFF
+cmake --build dolphin/build --target dolphin-nogui
+cmake -S port -B port/build -G Ninja -DAC_DISC=orig/GAFE01_00 -DAC_DOLPHIN=$PWD/dolphin/build/Binaries/dolphin-emu-nogui
+```
+
+It runs with no window, through SDL's offscreen video driver and Mesa's lavapipe Vulkan driver, which it needs installed (`lvp_icd*.json`). The first run plays the disc in Dolphin, which takes under a minute, and keeps its frames in the build tree; later runs reuse them.
+
 ## How to run
 
 Import your disc once. This writes the game's data into a package file. Run it again when `ac_port` says the package is from another version of the port, as it does after an update that changes the package:
@@ -76,6 +87,8 @@ Options:
 | `--ticks <n>` | headless: gives up after `n` game frames if play hasn't started (3600 by default); with `--window`: quits after `n` game frames (no limit by default) |
 | `--validate` | rechecks the game's display lists on every use |
 | `--diff` | draws each frame's 3D twice, once through sonarlib and once through the game's own renderer (emu64), and compares the two |
+| `--goldens <scenes> <dir>` | headless, on the GPU with no window: writes the frames a scenes file names into `dir`, for the goldens test |
+| `--qrand-seed <hex>` | seeds the game's random numbers with this value instead of the clock, as the goldens test does with Dolphin's |
 
 To run the tests:
 

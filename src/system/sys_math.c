@@ -2,9 +2,16 @@
 #include "libultra/libultra.h"
 #include "libc64/qrand.h"
 #include "libc64/math64.h"
+#ifdef SONAR_PORT
+#include <port/goldens.h>
+#endif
 
 extern void init_rnd() {
+#ifdef SONAR_PORT /* sonarlib port: the goldens give Dolphin's seed (--qrand-seed) */
+    sqrand(ac_port_rnd_seed(osGetCount()));
+#else
     sqrand(osGetCount());
+#endif
 }
 
 #ifdef MUST_MATCH

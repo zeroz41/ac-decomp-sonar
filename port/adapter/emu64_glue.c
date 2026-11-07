@@ -4,7 +4,7 @@
    (port/emu64_glue.h), and the program's proof stops the run at play's first frame, after the submit of the frame
    that holds play's first task (port/NOTES.md). Under --diff each task is drawn also by the console's emu64, the
    reference, built into the program under emu64_ref_ names, and the kit's and the reference's frames are compared
-   (M6 step 6j). */
+   (M6 step 6j). Under --goldens each frame goes to sonar/goldens.h with the keys Dolphin reads (M6 step 6n). */
 #include "game.h"
 #include "graph.h"
 #include "m_actor.h"
@@ -15,12 +15,15 @@
 #include "ac_port.h"
 
 #include <port/emu64_glue.h>
+#include <port/goldens.h>
 
 #include <sonar/dolphin_os/os.h>
 #include <sonar/emu64/emu64.h>
+#include <sonar/goldens.h>
 #include <sonar/render.h>
 #include <sonar/render_capture.h>
 #include <sonar/runtime.h>
+#include <sonar/vi/vi.h>
 
 #include <inttypes.h>
 #include <stdatomic.h>
@@ -50,6 +53,8 @@ static sl_emu64* emu;
 static u64 unowned;    /* actors drawn outside main memory, without owners */
 static BOOL play_task; /* play's first task was recorded */
 static BOOL window;    /* --window: the run goes on after play's first frame */
+static BOOL goldens;   /* --goldens: so does it, and each frame goes to the goldens */
+static atomic_uint_fast64_t goldens_frames;
 static atomic_int play_reached; /* play's first frame was submitted; the presenter reads it */
 
 /* GRAPH's eleven display lists, in its field order (graph.h). */
@@ -383,6 +388,49 @@ void ac_window_enable(void) {
     window = TRUE;
 }
 
+void ac_goldens_enable(void) {
+    goldens = TRUE;
+}
+
+/* The keys Dolphin reads at the decomp's symbols (port/NOTES.md, Goldens), and the part of the frame buffer the VI
+   shows: from VIConfigure's, the whole of it, the EFB's 640 x 480 before. */
+void ac_goldens_frame(void) {
+    sl_golden_key keys[5];
+    sl_golden_rect shown = { 0, 0, 640, 480 };
+    sl_vi_pan pan;
+    u32 fader, fader_time;
+    sl_result result;
+    if (!goldens)
+        return;
+    ac_fader_state(&fader, &fader_time);
+    keys[0].name = "menu_frame";
+    keys[0].value = ac_initial_menu_frame();
+    keys[1].name = "fader";
+    keys[1].value = fader;
+    keys[2].name = "fader_time";
+    keys[2].value = fader_time;
+    keys[3].name = "game_frame";
+    keys[3].value = game_class_p != NULL ? (u32)game_class_p->frame_counter : 0;
+    keys[4].name = "play";
+    keys[4].value = game_class_p != NULL && game_class_p->exec == play_main;
+    if (sl_vi_get_pan(&pan) == SL_OK) {
+        shown.x = pan.x;
+        shown.y = pan.y;
+        shown.width = pan.width;
+        shown.height = pan.height;
+    }
+    atomic_fetch_add(&goldens_frames, 1);
+    result = sl_goldens_frame(keys, 5, &shown);
+    if (result != SL_OK) {
+        fprintf(stderr, "ac_port: sl_goldens_frame: %s\n", sl_result_string(result));
+        _Exit(1);
+    }
+}
+
+u64 ac_goldens_frames(void) {
+    return (u64)atomic_load(&goldens_frames);
+}
+
 BOOL ac_play_reached(void) {
     return atomic_load(&play_reached) != 0;
 }
@@ -395,7 +443,7 @@ void ac_emu64_frame_submitted(void) {
                    (uint64_t)diff_tasks, (uint64_t)diff_equal, (uint64_t)diff_different, (uint64_t)diff_refused,
                    (uint64_t)diff_triangles, (uint64_t)diff_skipped[0], (uint64_t)diff_skipped[1]);
         ac_port_report("play");
-        if (!window)
+        if (!window && !goldens)
             _Exit(0);
         atomic_store(&play_reached, 1);
     }

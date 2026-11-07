@@ -17,6 +17,9 @@
 #include "dolphin/os.h"
 #include "m_controller.h"
 #include "dvderr.h"
+#ifdef SONAR_PORT
+#include <port/goldens.h>
+#endif
 
 #define G_CC_LOGO 0, 0, 0, PRIMITIVE, TEXEL0, 0, PRIMITIVE, 0
 
@@ -245,6 +248,12 @@ static int frame_count;
 static Z_OSTime limit_time;
 static int select_done;
 static u8 menu_sub_frame;
+
+#ifdef SONAR_PORT /* sonarlib port: the goldens' menu_frame key */
+u32 ac_initial_menu_frame(void) {
+  return (u32)frame_count;
+}
+#endif
 
 extern void keycheck() {
   Z_OSTime now = osGetTime();

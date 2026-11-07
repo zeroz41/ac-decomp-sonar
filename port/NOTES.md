@@ -57,10 +57,10 @@ on one line: the ticks and retraces run, the GX bytes written outside display li
 On `GAFE01_00` the three runs print, as the reference line:
 
 ```
-ac_port: play tick 557 retrace 557 gx 546409 dvd 486 15148254 hash ad41ee3261159765 instances 48 compiles 1091 holes 3/1003 cpu 3 refused 0 views 0 invalid 0 problems 0 overflows 0 unowned 5 gx-errors 0 unmapped 0 outside 0 nested 0 refused-frames 0 audio 296800 loud 187636 dsp 355 sound 4c7e56f94e94c11e
+ac_port: play tick 557 retrace 557 gx 546409 dvd 486 15148254 hash 3331f638d12a9e75 instances 48 compiles 1091 holes 3/1003 cpu 3 refused 0 views 0 invalid 0 problems 0 overflows 0 unowned 6 gx-errors 0 unmapped 0 outside 0 nested 0 refused-frames 0 audio 296800 loud 187636 dsp 355 sound 4c7e56f94e94c11e
 ```
 
-With the game's sound running (step 6l), play's first frame comes at tick 557, not step 6k's 712, so the ticks, GX bytes, DVD reads (`audiorom.img`'s among them), frame hash, compiles and list holes changed; the instances and the other counts did not. With the boot jingle (step 6m), only `loud` (0 before) and the sound hash changed, and `dsp` is new.
+With the game's sound running (step 6l), play's first frame comes at tick 557, not step 6k's 712, so the ticks, GX bytes, DVD reads (`audiorom.img`'s among them), frame hash, compiles and list holes changed; the instances and the other counts did not. With the boot jingle (step 6m), only `loud` (0 before) and the sound hash changed, and `dsp` is new. With step 6n's edits the frame hash changed (`ad41ee3261159765` before), as the fader's quad now has its color in the console's order (`TColor.h`), and `unowned` is 6, not 5, as the NPCs now made, in buffers of the executable's, are outside main memory; nothing else changed.
 
 ### The window
 
@@ -110,12 +110,29 @@ and at the end, before the play line, the tasks compared, the triangles of the e
 ac_port: diff tasks <n> equal <n> different <n> refused <n> triangles <n> skipped <n> <n>
 ```
 
-The test `ac_port_diff` imports the disc and runs `ac_port --diff`, which must reach play's first frame and exit 0 with tasks compared, none different and none refused; it prints the differences, the diff line and the play line, and is skipped without a disc. The reference rewrites the display lists it runs as the console's emu64 does, so the kit recompiles three programs whose hash fails and the play line's compiles and hash differ from a plain run's; neither is compared. On `GAFE01_00`:
+The test `ac_port_diff` imports the disc and runs `ac_port --diff`, which must reach play's first frame and exit 0 with tasks compared, none different and none refused; it prints the differences, the diff line and the play line, and is skipped without a disc. The reference rewrites the display lists it runs as the console's emu64 does, so the kit recompiles three programs whose hash fails and the play line's compiles and hash differ from a plain run's; neither is compared. Since the game's sound (step 6l), play starts at tick 557 here too, so 357 tasks are compared, and since step 6n's NPC buffers `unowned` is 6. On `GAFE01_00`:
 
 ```
-ac_port: diff tasks 338 equal 338 different 0 refused 0 triangles 3976 skipped 0 0
-ac_port: play tick 712 retrace 712 gx 1627029 dvd 227 6686462 hash a8b722393cbeb168 instances 48 compiles 923 holes 3/832 cpu 3 refused 0 views 0 invalid 0 problems 0 overflows 0 unowned 5 gx-errors 0 unmapped 0 outside 0 nested 0 refused-frames 0
+ac_port: diff tasks 357 equal 357 different 0 refused 0 triangles 3976 skipped 0 0
+ac_port: play tick 557 retrace 557 gx 1696436 dvd 486 15148254 hash a8b722393cbeb168 instances 48 compiles 1094 holes 3/1003 cpu 3 refused 0 views 0 invalid 0 problems 0 overflows 0 unowned 6 gx-errors 0 unmapped 0 outside 0 nested 0 refused-frames 0 audio 296800 loud 187636 dsp 355 sound 4c7e56f94e94c11e
 ```
+
+### Goldens
+
+`--goldens <scenes> <dir>` writes the frames a scenes file names, for comparison with Dolphin's (sonarlib's validation.md, Port goldens, and roadmap.md, M6 step 6n). The run is headless and deterministic, but on sonarlib's GPU sink with no window, and play's first frame does not end it. At each frame's begin the GX glue hands sonarlib's `sl_goldens_frame` the frame submitted before it, with its keys as they stand then, after that frame's tick, which is where Dolphin's MemoryWatcher reads them, and the part of the frame buffer the VI shows, which the VI glue passes to `kit_vi` from `VIConfigure` and `VIConfigurePan`. The process's main thread serves the captures and, once every scene is written, prints `ac_port: goldens scenes <n> frames <n>` and exits 0; at the tick limit it names the scenes left and exits 1.
+
+The keys (`port/tests/goldens.scenes`), each read natively at the variable Dolphin reads at the decomp's symbol:
+
+- `menu_frame`: initial_menu's `frame_count` (`800E2698`), through an accessor in `initial_menu.c`;
+- `fader` and `fader_time`: `jc_fader`'s status and its ticks target `<< 16 |` its ticks run (`800E2608`, offsets 4 and 8), through an accessor in `jsyswrap.cpp`, 0 while there is no fader;
+- `game_frame`: `game_class_p->frame_counter`, which Dolphin reaches through the OS module list's first module, foresta.rel, and its `.bss`;
+- `play`: 1 while `game_class_p->exec` is `play_main`. Dolphin reads `exec` less foresta's text section's entry, `2bb0c7`, so the scenes give it as `ref:play=2bb0c7 port:play=1`.
+
+The scenes are the Nintendo logo fading in (`logo_in_03` to `_31`), held (`logo_held`) and fading out (`logo_out_02` to `_31`), and play's title demo at its 40th to 80th frames (`play_40` to `play_80`). Dolphin's dumps trail the keys by two frame-buffer changes in the fade-in; from the fade-out on, a dump shows the port's frame two frames less by its keys, so those scenes give the reference's `fader_time` and `game_frame` two less than the port's. Play's earlier frames are black or within the tolerance of it, and its first 2 dumps have no keys.
+
+`--qrand-seed <hex>` seeds `qrand` with that value at `init_rnd` instead of the clock (`sys_math.c`). Dolphin's clock at `init_rnd` includes its disc reads' time, so the title demo's player and falling petals match only with Dolphin's seed, which the test reads from Dolphin's trace (`__qrand_idum`'s first value after its start).
+
+The test `ac_port_goldens` runs sonarlib's `sl-capture dolphin` on the disc with `AC_DOLPHIN`, Dolphin 2609's `dolphin-emu-nogui`, into a cache in the build tree (`goldens/dolphin`, given relative to `goldens/` as Dolphin's MemoryWatcher socket path must be short), then `ac-import`, `ac_port --goldens` with Dolphin's seed through SDL's offscreen driver and lavapipe, and `sl-capture compare`, printing every line; a scene fails when more than 1% of its pixels differ by more than 16, and its difference is written as `goldens/port/<scene>_diff.png`. It is skipped without the disc, Dolphin, lavapipe or sl-capture, or for a disc other than `GAFE01_00`. On `GAFE01_00` the logo's scenes differ in at most 0.35% of their pixels, at its edges and in its gradient, and play's in at most 0.44%, at edges and in the petals' blending.
 
 ### The seam audit
 
@@ -125,7 +142,7 @@ ac_port: play tick 712 retrace 712 gx 1627029 dvd 227 6686462 hash a8b722393cbeb
 
 - **DVD** (`adapter/dolphin_dvd.c`): the package, listed once into a table sorted by path; an entry number is the index. Paths are relative to the disc's root, without regard to case. Reads complete at once. Directory listing and streaming fail.
 - **OS** (`adapter/dolphin_os.c`): `OSInit` binds boot's main thread, the game thread `main`, as the SDK's at priority 16. It is the runtime's tick thread throughout: its retrace waits begin ticks, and while it waits in os the runtime moves time.
-- **VI and PAD** (`adapter/dolphin_vi.c`, `dolphin_pad.c`) on sonarlib's `kit_vi` and `kit_pad`. Frames pace on `JUTVideo`'s retrace queue through the VI glue's post-retrace callback, as on the console; `setFrameRate` also sets the tick's length in retraces.
+- **VI and PAD** (`adapter/dolphin_vi.c`, `dolphin_pad.c`) on sonarlib's `kit_vi` and `kit_pad`. Frames pace on `JUTVideo`'s retrace queue through the VI glue's post-retrace callback, as on the console; `setFrameRate` also sets the tick's length in retraces. `VIConfigure` sets the kit's pan to the whole frame buffer and `VIConfigurePan` to its rectangle, as the SDK's do.
 - **GX** (`adapter/dolphin_gx.c`, `include/port/gx_sink.h`): the SDK's own GX units are compiled for the host, writing into a sink in the console's byte order. Outside a display list the bytes go to sonarlib's GX front end at each `GXFlush`, at the frame's end and before each emu64 task; display lists fill their buffers as on the console. `JW_BeginFrame` begins the frame and `JW_EndFrame` records the last bytes and submits it. Pointers written as 32-bit values become GX addresses: main memory at 0, then the executable's read-only and initialized data ranges, each 32-byte aligned after the one before, within the 512 MiB that the registers' 24-bit fields reach; NULL is 0, and a pointer in no region is 0 and counted as unmapped. `OSInit` lays the space out and logs its table. `GXFifo.c` is not compiled: the glue keeps the FIFO objects, and the GPU is always idle, its draw-done and draw-sync complete at once.
 - **emu64** (`adapter/emu64_glue.c`, `include/port/emu64_glue.h`) on sonarlib's `kits/emu64`. `emu64_taskstart` records the task's lists with `sl_emu64_task` into the frame `JW_BeginFrame` opened, after the GX written before it, and the run ends when the frame holding play's first task is submitted. The task passes no clear: the front end's first record clears the frame. `emu64_texture_cache_data_entry_set` and `emu64_refresh` go to the kit; at start the program adds the executable's read-only and initialized data as static ranges (`sl_mem_image_data`). Owners are actors: `Actor_draw` writes an owner marker at the head of each of `GRAPH`'s display lists, `(offset << 4) | (list + 1)` for the actor's offset in main memory, takes back each marker the actor drew nothing after and closes the other lists; `Actor_dt` forgets the actor's owners.
 - **Inlines** (`adapter/game_inlines.c`): out-of-line copies of `guScaleF` and `guTranslateF`.
@@ -152,6 +169,10 @@ Each is a Portability edit, under `SONAR_PORT` with the original kept, unless it
 - `m_actor.c`: `Actor_draw` opens and closes the actor's owner markers, and `Actor_dt` forgets its owners.
 - `m_address_ovl.c`: after rewriting `lat_atena_v`'s initialized vertices, it marks them written, so the programs that load them compile again.
 - The SDK's GX units and headers: the sink's writers, addresses through the sink, declarations the host compile needs, and C for `GXTransform.c`'s paired-single assembly. `GXTexture.c` and `GXFrameBuf.c` write and read the addresses in all 24 bits of the registers' fields, and a TLUT load's below its 32 MiB; `GXInit.c`'s `__GXInitGX` sets its placeholder array bases to NULL.
+- `TColor.h`: `toUInt32` and `set(u32)` build and read the color word in the console's order, `r` in its high byte, so the fader's quad, `JUTResFont`'s colors and `J2DGrafContext`'s opacity tests get the console's values. Without it the logo never fades.
+- `ac_npc_ctrl.c_inc`: the NPCs' nine actor buffers and the size test are `0xC00` bytes, as the NPC classes are `0xB68` to `0xBE8` at the host's sizes against the console's `0x9D0`; without it Porter at the station is never made.
+- `initial_menu.c` and `jsyswrap.cpp`: accessors for the goldens' keys, `frame_count` and `jc_fader` ([Goldens](#goldens)).
+- `sys_math.c`: `init_rnd` takes its seed through `ac_port_rnd_seed`, which is the clock unless `--qrand-seed` gives one.
 - `adapter/names.h` renames libc64's `malloc`, `free` and `sprintf` to `ac_malloc`, `ac_free` and `ac_sprintf`, so the host's C library keeps its own.
 
 ### What runs silent or does nothing

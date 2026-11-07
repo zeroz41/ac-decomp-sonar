@@ -639,12 +639,18 @@ static void aNPC_free_overlay_area_proc(ACTOR_DLFTBL* dlftbl) {
     }
 }
 
+#ifdef SONAR_PORT /* sonarlib port: an NPC's class is larger at the host's sizes (Porter's 0x9AC is 0xB88, the largest 0xBE8) */
+#define aNPC_ACTOR_CLASS_SIZE 0xC00
+#else
+#define aNPC_ACTOR_CLASS_SIZE 0x9D0
+#endif
+
 static ACTOR* aNPC_get_actor_area_proc(size_t size, const char* actor_name, int line) {
     NPC_ACTOR** actor = CLIP(npc_clip)->keep_actors;
     int* used = CLIP(npc_clip)->keep_actor_used;
     int i;
 
-    if (size > 0x9D0) {
+    if (size > aNPC_ACTOR_CLASS_SIZE) {
         return NULL;
     }
 
@@ -694,7 +700,7 @@ static void aNPC_dma_draw_data_proc(aNPC_draw_data_c* draw_data_p, mActor_name_t
 #ifndef aNPC_NPC2
 typedef struct {
     u64 align;
-    u8 buf[0x9D0];
+    u8 buf[aNPC_ACTOR_CLASS_SIZE];
 } aNPC_actor_class_overlay_c;
 
 typedef struct {

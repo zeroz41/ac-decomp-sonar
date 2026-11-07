@@ -1,5 +1,5 @@
-/* ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--window]: Animal Crossing on sonarlib (port/NOTES.md,
-   The program). The process's main thread starts the library and the render module, makes the emu64 the glue records
+/* ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--window | --goldens <scenes> <dir>]
+           [--qrand-seed <hex>]: Animal Crossing on sonarlib (port/NOTES.md, The program). The process's main thread starts the library and the render module, makes the emu64 the glue records
    each task with, mounts the package as game:, starts the CPU model, and creates the game thread "main", which starts
    the runtime and calls boot's main, which never returns.
 
@@ -10,14 +10,21 @@
 
    --window: in real time, on the GPU sink, in a window, with the game's pads on the keyboard and gamepads and its
    sound on the audio device. The main thread presents until the window is closed, or until --ticks's limit when it
-   is given. */
+   is given.
+
+   --goldens: headless and deterministic, but on the GPU sink with no window, writing the frames the scenes file names
+   into the directory (sonar/goldens.h, port/NOTES.md, Goldens). The GX glue's frame begin hands each frame's keys to
+   the goldens (emu64_glue.c), play's first frame ends no run, and the main thread serves the captures until every
+   scene is written, or until the tick limit stops them. --qrand-seed gives init_rnd's seed (sys_math.c). */
 #include "ac_port.h"
 
 #include <port/emu64_glue.h>
+#include <port/goldens.h>
 
 #include <sonar/audio.h>
 #include <sonar/emu64/emu64.h>
 #include <sonar/fs.h>
+#include <sonar/goldens.h>
 #include <sonar/input.h>
 #include <sonar/mem.h>
 #include <sonar/os.h>
@@ -26,6 +33,7 @@
 #include <sonar/sonar.h>
 #include <sonar/window.h>
 
+#include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <stdint.h>
@@ -35,11 +43,20 @@
 
 int ac_boot_main(int argc, const char** argv); /* src/static/boot.c's main */
 
-static const char usage[] = "usage: ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--window]\n";
+static const char usage[] = "usage: ac_port --package <file> [--ticks <n>] [--validate] [--diff]\n"
+                            "               [--window | --goldens <scenes> <dir>] [--qrand-seed <hex>]\n";
 
 static uint64_t tick_limit = 3600;
-static int ticks_given; /* --ticks */
-static int window;      /* --window */
+static int ticks_given;          /* --ticks */
+static int window;               /* --window */
+static const char* goldens;      /* --goldens's scenes file */
+static const char* goldens_dir;  /* and its output directory */
+static int seed_given;           /* --qrand-seed */
+static u32 seed;
+
+u32 ac_port_rnd_seed(u32 tick) {
+    return seed_given ? seed : tick;
+}
 
 static int usage_error(void) {
     fputs(usage, stderr);
@@ -51,11 +68,16 @@ static int failed(const char* call, sl_result result) {
     return 1;
 }
 
-/* Ends the run once the runtime has begun the limit's ticks without a frame of play. */
+/* Ends the run once the runtime has begun the limit's ticks without a frame of play; with --goldens, stops the
+   captures, and the main thread ends the run. */
 static void stop_at_limit(void* user, uint64_t retrace) {
     (void)user;
     (void)retrace;
     if (sl_tick_count() >= tick_limit) {
+        if (goldens != NULL) {
+            sl_goldens_stop();
+            return;
+        }
         ac_port_report("limit");
         _Exit(1);
     }
@@ -72,6 +94,50 @@ static int parse_ticks(const char* text, uint64_t* ticks) {
         return 0;
     *ticks = (uint64_t)value;
     return 1;
+}
+
+static int parse_seed(const char* text, u32* value) {
+    char* end = NULL;
+    unsigned long parsed;
+    if (!isxdigit((unsigned char)text[0]))
+        return 0;
+    errno = 0;
+    parsed = strtoul(text, &end, 16);
+    if (errno != 0 || *end != '\0' || parsed > 0xFFFFFFFFul)
+        return 0;
+    *value = (u32)parsed;
+    return 1;
+}
+
+/* The scenes the goldens wrote: scenes.tsv's lines. */
+static uint64_t scenes_written(void) {
+    char path[4096];
+    uint64_t lines = 0;
+    FILE* file;
+    int c;
+    snprintf(path, sizeof path, "%s/scenes.tsv", goldens_dir);
+    file = fopen(path, "rb");
+    if (file == NULL)
+        return 0;
+    while ((c = fgetc(file)) != EOF)
+        lines += c == '\n';
+    fclose(file);
+    return lines;
+}
+
+/* --goldens's main loop: serves the captures until every scene is written, then prints the goldens line, or until the
+   tick limit stops them. Never returns. */
+static void serve(void) {
+    const sl_result result = sl_goldens_serve();
+    if (result != SL_OK) {
+        fprintf(stderr, "ac_port: sl_goldens_serve: %s\n", sl_result_string(result));
+        ac_port_report("limit");
+        _Exit(1);
+    }
+    printf("ac_port: goldens scenes %" PRIu64 " frames %" PRIu64 "\n", scenes_written(),
+           ac_goldens_frames());
+    fflush(stdout);
+    _Exit(0);
 }
 
 /* The game thread "main": it owns the ticks from the runtime's start, and OSInit binds it as the SDK's default
@@ -145,15 +211,23 @@ int main(int argc, char** argv) {
             emu64_flags |= SL_EMU64_VALIDATE; /* every use of a program hashes its ranges again */
         } else if (strcmp(argv[i], "--diff") == 0) {
             ac_diff_enable(); /* the differential test, before boot: OSInit takes the reference's buffers */
-        } else if (strcmp(argv[i], "--window") == 0) {
+        } else if (strcmp(argv[i], "--window") == 0 && goldens == NULL) {
             window = 1;
             ac_window_enable(); /* play's first frame ends no run */
+        } else if (strcmp(argv[i], "--goldens") == 0 && i + 2 < argc && goldens == NULL && !window) {
+            goldens = argv[++i];
+            goldens_dir = argv[++i];
+            ac_goldens_enable(); /* play's first frame ends no run */
+        } else if (strcmp(argv[i], "--qrand-seed") == 0 && i + 1 < argc) {
+            if (!parse_seed(argv[++i], &seed))
+                return usage_error();
+            seed_given = 1;
         } else {
             return usage_error();
         }
     }
-    if (package == NULL)
-        return usage_error();
+    if (package == NULL || (goldens != NULL && ac_diff_enabled()))
+        return usage_error(); /* the goldens take the frames the kit draws, which --diff draws twice */
 
     {
         sl_init_desc desc;
@@ -173,16 +247,21 @@ int main(int argc, char** argv) {
             return failed("sl_window_init", result);
     }
     {
-        /* Headless, the null sink; --window, the GPU sink at 640 x 480. Each frame is checked and hashed at submit.
-           --diff captures each frame too. */
+        /* Headless, the null sink; --window and --goldens, the GPU sink at 640 x 480. Each frame is checked and hashed
+           at submit. --diff captures each frame too. */
         sl_render_desc desc;
         memset(&desc, 0, sizeof desc);
-        desc.sink = window ? SL_RENDER_SINK_GPU : SL_RENDER_SINK_NULL;
+        desc.sink = window || goldens != NULL ? SL_RENDER_SINK_GPU : SL_RENDER_SINK_NULL;
         desc.flags = SL_RENDER_HASH_FRAMES | (ac_diff_enabled() ? SL_RENDER_CAPTURE_FRAMES : 0u);
         desc.max_views = 256;
         result = sl_render_init(&desc);
         if (result != SL_OK)
             return failed("sl_render_init", result);
+    }
+    if (goldens != NULL) {
+        result = sl_goldens_open(goldens, goldens_dir);
+        if (result != SL_OK)
+            return failed("sl_goldens_open", result);
     }
     {
         /* emu64's texture cache takes the executable's read-only and initialized data as static (emu64.c's
@@ -284,6 +363,8 @@ int main(int argc, char** argv) {
             return failed("sl_os_thread_start", result);
         if (window)
             present(shown);
+        if (goldens != NULL)
+            serve();
         /* "main" never returns: the run ends with _Exit. */
         sl_os_thread_join(game, NULL);
     }

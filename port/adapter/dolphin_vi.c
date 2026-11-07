@@ -1,9 +1,12 @@
 /* The Dolphin SDK's video functions the game calls, on sonarlib's VI kit (sonar/vi/vi.h): the retrace count, waits
-   and callbacks on the runtime's retrace clock. The display's timing set-up has no counterpart: frames go through
-   render, so VIConfigure and VIConfigurePan do nothing. */
-/* vi.h names the render mode in VIConfigure's parameters only, so it is declared first, at file scope. */
+   and callbacks on the runtime's retrace clock. The display's timing set-up has no counterpart, since frames go
+   through render; VIConfigure and VIConfigurePan set only the kit's pan, the part of the frame buffer the VI shows,
+   for the port's goldens (sonar/goldens.h), as the SDK's do (dolphin/vi/vi.c). */
+/* vi.h names the render mode in VIConfigure's parameters only, and GXStruct.h includes it before defining the mode,
+   so the mode is declared first, at file scope. */
 struct _GXRenderModeObj;
 
+#include "dolphin/gx/GXStruct.h"
 #include "dolphin/vi.h"
 
 #include <sonar/base/log.h>
@@ -20,14 +23,11 @@ void VIInit(void) {
 }
 
 void VIConfigure(const struct _GXRenderModeObj* rm) {
-    (void)rm;
+    sl_vi_configure_pan(0, 0, rm->fbWidth, rm->xfbHeight);
 }
 
 void VIConfigurePan(u16 x_origin, u16 y_origin, u16 width, u16 height) {
-    (void)x_origin;
-    (void)y_origin;
-    (void)width;
-    (void)height;
+    sl_vi_configure_pan(x_origin, y_origin, width, height);
 }
 
 void VIFlush(void) {
