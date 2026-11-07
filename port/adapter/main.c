@@ -99,7 +99,8 @@ void ac_measure_frame(void) {
 static void measure_report(void) {
     sl_measure_stats stats;
     sl_render_stats render;
-    const sl_measure_time* times[3];
+    static const char* const names[4] = {"game", "prepare", "present", "gpu"};
+    const sl_measure_time* times[4];
     int i;
     memset(&stats, 0, sizeof stats);
     (void)sl_measure_get_stats(&stats);
@@ -107,11 +108,12 @@ static void measure_report(void) {
     times[0] = &stats.game;
     times[1] = &stats.prepare;
     times[2] = &stats.present;
+    times[3] = &stats.gpu;
     printf("ac_port: measure %s frames %" PRIu64 " ticks %" PRIu64, ac_reference_enabled() ? "reference" : "kit",
            stats.frames, measured_last - measured_first);
-    for (i = 0; i < 3; i++)
-        printf(" %s %" PRIu64 " %" PRIu64 " %" PRIu64, i == 0 ? "game" : i == 1 ? "prepare" : "present",
-               times[i]->median_ns, times[i]->max_ns, times[i]->total_ns);
+    for (i = 0; i < 4; i++)
+        printf(" %s %" PRIu64 " %" PRIu64 " %" PRIu64, names[i], times[i]->median_ns, times[i]->max_ns,
+               times[i]->total_ns);
     printf(" draws %" PRIu64 " calls %" PRIu64 " pipelines %" PRIu64 " buffers %" PRIu64 " textures %" PRIu64
            " storage %" PRIu64 " pushes %" PRIu64 "\n",
            render.draws, render.draw_calls, render.pipeline_binds, render.buffer_binds, render.texture_binds,

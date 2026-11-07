@@ -140,11 +140,12 @@ The test `ac_port_goldens` runs sonarlib's `sl-capture dolphin` on the disc with
 
 ```
 ac_port: measure <kit|reference> frames <n> ticks <n> game <median> <max> <total> prepare <median> <max> <total>
-    present <median> <max> <total> draws <n> calls <n> pipelines <n> buffers <n> textures <n> storage <n> pushes <n>
+    present <median> <max> <total> gpu <median> <max> <total> draws <n> calls <n> pipelines <n> buffers <n> textures <n>
+    storage <n> pushes <n>
 ac_port: measured tick <t> ...
 ```
 
-the first on one line: the frames presented and the ticks from the first measured frame to the last, which the game's total covers; the game's time a frame from one hand-over to the next, the render worker's preparation and the present's own work, in nanoseconds; and what the presents drew, from `sl_render_stats`. The second has the play line's fields at the limit. When the limit comes before play's first frame it prints the `limit` line and exits 1. `--measure` with `--window`, `--goldens` or `--diff` exits 2.
+the first on one line: the frames presented and the ticks from the first measured frame to the last, which the game's total covers; the game's time a frame from one hand-over to the next, the render worker's preparation, the present's own work and the GPU's work for the frame, waited for after its present while the game makes the next, in nanoseconds; and what the presents drew, from `sl_render_stats`. The second has the play line's fields at the limit. When the limit comes before play's first frame it prints the `limit` line and exits 1. `--measure` with `--window`, `--goldens` or `--diff` exits 2.
 
 `--reference` draws every frame with the console's emu64 in place of the kit, as `--diff`'s reference does, but into the game's own frame through the main GX front end, every task, keeping the GX state it leaves as on the console. The kit is not created and the glue's calls on it are skipped; the owner markers are not written, so `unowned` and the kit's fields read 0. `OSInit` carves the reference's buffers from the arena as under `--diff`, so the heaps start 0x14400 bytes later and the frame hash is the reference's own. Its lines end with ` palette-overflows <n>`, emu64's palettes refused past its buffer. With `--measure` its measure line reads `reference`, and with `--goldens` its frames are captured; with `--window`, `--diff` or `--validate` it exits 2. On `GAFE01_00` its run to play's first frame prints:
 
@@ -154,14 +155,14 @@ ac_port: reference tick 557 retrace 557 gx 1696436 dvd 486 15148254 hash 356699d
 
 the game's fields the play line's.
 
-The test `ac_port_measure` imports the disc and runs `ac_port` and `ac_port --reference` to play's first frame, whose game fields (tick, retrace, DVD, audio, loud, dsp and sound) must be the same, with no palette overflowed. Then `--measure --ticks 1200` twice and `--measure --reference --ticks 1200` twice, through SDL's offscreen driver and lavapipe: each must exit 0 with both lines, the same in its two runs once the nine times are taken out, with frames, ticks, draws and calls, and with nothing invalid, overflowed or refused and the GX glue's five counts 0. The kit's and the reference's measure the same frames and ticks with the same game fields. It prints every line, and is skipped without the disc or lavapipe. Each measured run takes about 7 seconds on lavapipe. On `GAFE01_00` they measure 643 frames over 642 ticks:
+The test `ac_port_measure` imports the disc and runs `ac_port` and `ac_port --reference` to play's first frame, whose game fields (tick, retrace, DVD, audio, loud, dsp and sound) must be the same, with no palette overflowed. Then `--measure --ticks 1200` twice and `--measure --reference --ticks 1200` twice, through SDL's offscreen driver and lavapipe: each must exit 0 with both lines, the same in its two runs once the twelve times are taken out, with frames, ticks, draws and calls, and with nothing invalid, overflowed or refused and the GX glue's five counts 0. The kit's and the reference's measure the same frames and ticks with the same game fields. It prints every line, and is skipped without the disc or lavapipe. Each measured run takes about 7 seconds on lavapipe. On `GAFE01_00` they measure 643 frames over 642 ticks:
 
 ```
 ac_port: measure kit frames 643 ticks 642 ... draws 118552 calls 118552 pipelines 13682 buffers 13663 textures 78510 storage 8106 pushes 0
 ac_port: measure reference frames 643 ticks 642 ... draws 114125 calls 114125 pipelines 13682 buffers 4248 textures 78510 storage 4248 pushes 0
 ```
 
-The baseline that sonarlib's merging steps (M6 steps 7c to 7e) are measured against: `--measure` and `--measure --reference` with `--ticks 4100`, the title demo's town to just before its end at tick 4193, three runs of each, each figure the median of the three runs'. They ran on an Intel Core Ultra 7 265K (20 threads, the `powersave` governor) with an NVIDIA GeForce RTX 3090 on NVIDIA's driver 615.78.08, Vulkan 1.4, Linux 7.2, the port's RelWithDebInfo build, through SDL's offscreen driver. Both measure 3539 frames over 3542 ticks.
+The baseline that sonarlib's merging steps (M6 steps 7c to 7g) are measured against: `--measure` and `--measure --reference` with `--ticks 4100`, the title demo's town to just before its end at tick 4193, three runs of each, each figure the median of the three runs'. They ran on an Intel Core Ultra 7 265K (20 threads, the `powersave` governor) with an NVIDIA GeForce RTX 3090 on NVIDIA's driver 615.78.08, Vulkan 1.4, Linux 7.2, the port's RelWithDebInfo build, through SDL's offscreen driver. Both measure 3539 frames over 3542 ticks.
 
 | | game | prepare | present | CPU a tick (game) |
 |---|---|---|---|---|
@@ -199,7 +200,22 @@ After sonarlib's step 7d, in which the GPU sink reads every draw's values from o
 | the reference, median | 1.78 ms | 0.049 ms | 0.15 ms | 1.88 ms |
 | the reference, maximum | 13.0 ms | 1.7 ms | 2.9 ms | |
 
-Only the storage bindings and pushes changed: the kit binds 13.7 storage buffers a present, was 5.9, and the reference 7.7, was 0, the records to both stages of each view, and neither pushes, against 487.5 and 239.0 before. Every other count is the same. On lavapipe the measured test's kit run pushes nothing, against 357,806 before. The kit's present stayed 0.14 ms and the reference's was 0.15 ms, against 0.18 after step 7c. The kit's prepare median rose from 0.068 to 0.090 ms and the reference's fell from 0.062 to 0.049 ms, as in an earlier run of the step; it is not yet explained.
+Only the storage bindings and pushes changed: the kit binds 13.7 storage buffers a present, was 5.9, and the reference 7.7, was 0, the records to both stages of each view, and neither pushes, against 487.5 and 239.0 before. Every other count is the same. On lavapipe the measured test's kit run pushes nothing, against 357,806 before. The kit's present stayed 0.14 ms and the reference's was 0.15 ms, against 0.18 after step 7c. The kit's prepare median rose from 0.068 to 0.090 ms and the reference's fell from 0.062 to 0.049 ms, as in an earlier run of the step; step 7e found the kit's cause, below.
+
+After sonarlib's step 7e, in which the GPU sink lets at most three presents be unfinished and a measured run waits for the GPU after each present, the same runs on the same host, with a load average of 6 to 7 from other work:
+
+| | game | prepare | present | gpu | CPU a tick (game) |
+|---|---|---|---|---|---|
+| the kit, median | 0.46 ms | 0.072 ms | 0.14 ms | 0.88 ms | 0.53 ms |
+| the kit, maximum | 24.2 ms | 3.2 ms | 4.8 ms | 4.1 ms | |
+| the reference, median | 1.83 ms | 0.048 ms | 0.14 ms | 0.67 ms | 1.94 ms |
+| the reference, maximum | 11.8 ms | 0.44 ms | 3.7 ms | 3.2 ms | |
+
+Every count is the same as after step 7d, and no present waited in `sl_render_present`. The GPU time is the frame's from its present's submit to the end of the wait, with nothing else on the GPU: the kit's, 0.88 ms, is about a third more than the reference's, 0.67 ms, for 8% more draws. Step 7f, the combiner's cost on the GPU, is measured by it.
+
+The kit's preparation rose after step 7d because nothing bounded the presents the GPU had not finished in a run without a window, and the runs present faster than the GPU draws: the command buffers SDL_GPU had submitted and not yet cleaned up grew to about 300 after step 7d, against 100 to 150 after step 7c, the GPU drawing each present about a tenth slower after 7d. Each submit on SDL_GPU's Vulkan backend checks the fence of every one of them, and the worker submitted twice a frame. With step 7e's bound and the worker's one submit a frame, the kit's preparation median is 0.062 to 0.066 ms in runs without the wait for the GPU, against 0.088 to 0.092 ms after step 7d.
+
+Waiting for the GPU after each present raises the CPU's times. In four runs of the kit with the wait, each followed by one without, the game's median was 0.45 to 0.47 ms against 0.39 to 0.41 ms, the preparation's 0.071 to 0.079 ms against 0.062 to 0.066 ms, and the present's 0.134 to 0.145 ms against 0.119 to 0.124 ms. The main thread sleeps in the wait, using less of the CPU than without it, so the rise is most likely the host's power management, its cores under the `powersave` governor running slower after idling. The runs from step 7e on compare with each other, and with those before only through such runs in turn. The reference's preparation, 0.048 ms with the wait, is as after step 7d; its fall after 7d, from 0.062 ms, stays unexplained.
 
 ### The seam audit
 

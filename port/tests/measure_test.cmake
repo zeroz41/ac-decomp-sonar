@@ -5,10 +5,10 @@
 # --reference, the console's emu64 drawing instead of the kit, to play's first frame: the reference's game is the
 # play line's, with no palette overflowed. Then --measure --ticks 1200 runs twice with the kit and twice with
 # --reference, on the GPU sink with no window through SDL's offscreen video driver and lavapipe's Vulkan. Each exits 0
-# with a measure line and a measured line, the same in both runs once the nine times are taken out, with frames, ticks,
-# draws and calls, and nothing invalid, overflowed or refused. The kit's and the reference's run the same game for the
-# same frames. It prints every line. When AC_DISC names no disc or there is no lavapipe it prints the line the test's
-# SKIP_REGULAR_EXPRESSION matches and returns.
+# with a measure line and a measured line, the same in both runs once the twelve times are taken out, with frames,
+# ticks, draws and calls, and nothing invalid, overflowed or refused. The kit's and the reference's run the same game
+# for the same frames. It prints every line. When AC_DISC names no disc or there is no lavapipe it prints the line the
+# test's SKIP_REGULAR_EXPRESSION matches and returns.
 cmake_minimum_required(VERSION 3.25)
 
 if("${AC_DISC}" STREQUAL "")
@@ -43,8 +43,8 @@ string(APPEND report_pattern " refused-frames ${count} audio ${count} loud ${cou
 string(APPEND report_pattern " sound [0-9a-f]+( palette-overflows ${count})?")
 set(time "${count} ${count} ${count}")
 set(measure_pattern "ac_port: measure (kit|reference) frames ${count} ticks ${count} game ${time}")
-string(APPEND measure_pattern " prepare ${time} present ${time} draws ${count} calls ${count} pipelines ${count}")
-string(APPEND measure_pattern " buffers ${count} textures ${count} storage ${count} pushes ${count}")
+string(APPEND measure_pattern " prepare ${time} present ${time} gpu ${time} draws ${count} calls ${count}")
+string(APPEND measure_pattern " pipelines ${count} buffers ${count} textures ${count} storage ${count} pushes ${count}")
 
 # Runs ac_port with the options, and fails unless it exits 0 with one line matching each pattern, in order, into the
 # list out.
@@ -149,7 +149,7 @@ foreach(drawer IN ITEMS kit reference)
             message(FATAL_ERROR "ac_port_measure: the ${drawer}'s run measured no frame or no draw:\n${measure_line}")
         endif()
         check_report("the ${drawer}'s measured run" "${measured_line}")
-        string(REGEX REPLACE " (game|prepare|present) [0-9]+ [0-9]+ [0-9]+" " \\1" measure_line "${measure_line}")
+        string(REGEX REPLACE " (game|prepare|present|gpu) [0-9]+ [0-9]+ [0-9]+" " \\1" measure_line "${measure_line}")
         list(APPEND untimed "${measure_line}\n${measured_line}")
     endforeach()
     list(GET untimed 0 first)
