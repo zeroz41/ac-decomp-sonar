@@ -5,6 +5,9 @@
 #include "jaudio_NES/oneshot.h"
 #include "jaudio_NES/connect.h"
 #include "jaudio_NES/driverinterface.h"
+#ifdef SONAR_PORT
+#include <sonar/base/endian.h>
+#endif
 
 /*
  * --INFO--
@@ -73,7 +76,11 @@ s32 NoteON(seqp_* track, s32 channel, s32 flag1, s32 flag2, s32 playFlag)
     u32 flag;
     u32 i;
 
+#ifdef SONAR_PORT /* sonarlib port: a sound id's bytes are its bank, program, key and velocity in the console's order (port/NOTES.md, Boot sound) */
+	sl_store_be32(id.bytes, a);
+#else
 	id.value = a;
+#endif
 	if (r >= 0xf0) {
 		sound = Play_1shot_Osc(jcs, id, playFlag);
 	} else if (r >= 0xe4) {

@@ -40,6 +40,10 @@ void ac_audio_shutdown(void);
    them. */
 void ac_audio_rom_tables(void);
 
+/* The frames command 2 gave whose rendered channels hold a sample at 1/256 of full scale or above (dolphin_dsp.c).
+   Any thread. */
+u64 ac_dsp_sounding_frames(void);
+
 /* The DVD glue's reads since start-up and the bytes they read (dolphin_dvd.c). Game thread. */
 u64 ac_dvd_reads(void);
 u64 ac_dvd_read_bytes(void);
@@ -51,9 +55,10 @@ BOOL ac_play_reached(void);
 
 /* Prints the proof's line, "ac_port: <what> tick <t> retrace <r> gx <bytes> dvd <reads> <bytes> hash <h> instances
    <n> compiles <n> holes <vertex>/<list> cpu <n> refused <n> views <overflows> invalid <frames> problems <n>
-   overflows <n> unowned <n> gx-errors <n> unmapped <n> outside <n> nested <n> refused-frames <n>", to stdout and
-   flushes it (emu64_glue.c): the run's counts, the hash of the frame submitted last, the kit's counts with its last
-   task's instances, the render module's, and the GX glue's (ac_gx_get_counts). */
+   overflows <n> unowned <n> gx-errors <n> unmapped <n> outside <n> nested <n> refused-frames <n> audio <n> loud <n>
+   dsp <n> sound <h>", to stdout and flushes it (emu64_glue.c): the run's counts, the hash of the frame submitted last,
+   the kit's counts with its last task's instances, the render module's, the GX glue's (ac_gx_get_counts), the audio
+   mix's (sl_audio_get_mix_stats) and the DSP's sounding frames (ac_dsp_sounding_frames). */
 void ac_port_report(const char* what);
 
 #ifdef __cplusplus

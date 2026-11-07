@@ -122,8 +122,8 @@ static void present(sl_window shown) {
     }
     sl_audio_mix_stats audio;
     sl_audio_get_mix_stats(&audio);
-    printf("ac_port: window ticks %" PRIu64 " frames %" PRIu64 " audio %" PRIu64 " loud %" PRIu64 "\n", sl_tick_count(),
-           frames, audio.frames, audio.loud_frames);
+    printf("ac_port: window ticks %" PRIu64 " frames %" PRIu64 " audio %" PRIu64 " loud %" PRIu64 " dsp %" PRIu64 "\n",
+           sl_tick_count(), frames, audio.frames, audio.loud_frames, (uint64_t)ac_dsp_sounding_frames());
     fflush(stdout);
     _Exit(closed || ac_play_reached() ? 0 : 1);
 }

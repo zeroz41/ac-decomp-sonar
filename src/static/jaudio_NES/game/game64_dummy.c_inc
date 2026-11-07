@@ -12,6 +12,9 @@ u8 NIN_SEQ[] ATTRIBUTE_ALIGN(32) = { 0xfe, 0x00, 0x78, 0xfd, 0x00, 0x5c, 0xc1, 0
                                      0x64, 0x00, 0xe7, 0x17, 0x28, 0x16, 0x64, 0x1c, 0x3c, 0x08, 0x0d, 0x64, 0x1c, 0x17,
                                      0x30, 0x16, 0x64, 0x00, 0xe7, 0x3c, 0x10, 0x0d, 0x64, 0x00, 0xe7, 0xff };
 
+#ifdef SONAR_PORT /* sonarlib port: the bank and the wave set laid out for the host by ac-boot-sound (port/NOTES.md, Boot sound) */
+#include "boot_sound.inc"
+#else
 // has some ascii inside it, maybe embedded file, starts "IBNK"
 u8 NIN_BANK[] ATTRIBUTE_ALIGN(32) = {
     0x49, 0x42, 0x4e, 0x4b, 0x00, 0x00, 0x08, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -165,6 +168,8 @@ u8 NIN_WAVE[] ATTRIBUTE_ALIGN(32) = {
     0xff, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
+#endif
+
 void __OK(uaddr a) {
     (void)a;
     int r31 = Jaq_SetSeqData(0, NIN_SEQ, 0x60, 0);
@@ -200,14 +205,10 @@ void BootSound(uaddr a, u32 b) {
     bootsound_size = b;
     Bank_Init();
     Wavegroup_Init();
-#ifdef SONAR_PORT /* sonarlib port: NIN_WAVE and NIN_BANK are in the console's layout and jaudio reads them in place,
-                     so the boot sound is not registered until audio's import converts it */
-#else
     int unused1 = Wavegroup_Regist(NIN_WAVE, 0);
     int unused2 = Bank_Regist(NIN_BANK, 0);
     Jac_RegisterARAMCallback(dummy_callback);
     int unused3 = WaveScene_Set(0, 0);
     int unused4 = DVDT_CheckPass(0, 0, __OK);
     Jac_RegisterARAMCallback(0);
-#endif
 }

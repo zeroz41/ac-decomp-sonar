@@ -6,7 +6,7 @@ A native PC build of Animal Crossing (GameCube, USA, `GAFE01_00`). It compiles t
 
 You need your own copy of the game. This repository holds no game data. The importer reads what the port needs from your disc.
 
-**Status: early.** The game runs in a window with its music and sounds, and reads your keyboard and gamepads. The boot jingle is still silent.
+**Status: early.** The game runs in a window with its music and sounds, the boot jingle among them, and reads your keyboard and gamepads.
 
 ## How to build
 
@@ -23,6 +23,8 @@ First, build the decompilation once. The port reads files it generates:
 python configure.py
 ninja
 ```
+
+If you built it before the port played the boot jingle, build it again: the port needs the jingle's files it now extracts, and its build stops and says so without them.
 
 Then build the port:
 

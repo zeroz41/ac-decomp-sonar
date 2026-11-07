@@ -19,6 +19,12 @@ set(AC_BUILD "${AC_ROOT}/build/${AC_VERSION}")
 if(NOT EXISTS "${AC_BUILD}/include/assets")
     message(FATAL_ERROR "No assets in ${AC_BUILD}/include; build the decompilation for ${AC_VERSION} first")
 endif()
+# The boot sound's bank and wave set, which the decompilation's build extracts since sonarlib's M6 step 6m.
+set(boot_bank "${AC_BUILD}/bin/assets/jaudio/NIN_BANK.bin")
+set(boot_wave "${AC_BUILD}/bin/assets/jaudio/NIN_WAVE.bin")
+if(NOT EXISTS "${boot_bank}" OR NOT EXISTS "${boot_wave}")
+    message(FATAL_ERROR "No boot sound in ${AC_BUILD}/bin/assets/jaudio; build the decompilation for ${AC_VERSION} again")
+endif()
 
 # The importer is built with sonarlib's tools: sl-schema and sonar::import.
 set(SONAR_BUILD_TOOLS ON)
@@ -172,6 +178,22 @@ add_custom_command(OUTPUT "${system_font_include}"
 target_sources(ac_game PRIVATE adapter/jsystem_font.c "${system_font_include}")
 set_source_files_properties(adapter/jsystem_font.c PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_BINARY_DIR}/assets"
                             OBJECT_DEPENDS "${system_font_include}")
+# The boot sound's bank and wave set (NIN_BANK and NIN_WAVE, game64_dummy.c_inc), which JAudio1 reads in place as
+# structures of pointers: ac-boot-sound lays both out for the host on sonarlib's jaudio kit (NOTES.md, Boot sound).
+add_executable(ac-boot-sound importer/boot_sound.cpp importer/boot_sound_main.cpp)
+set_target_properties(ac-boot-sound PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS ON)
+target_link_libraries(ac-boot-sound PRIVATE ac_headers sonar::base sonar::core sonar::kit_jaudio)
+set(boot_sound_include "${CMAKE_CURRENT_BINARY_DIR}/assets/boot_sound.inc")
+add_custom_command(OUTPUT "${boot_sound_include}"
+                   COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/assets"
+                   COMMAND ac-boot-sound "${boot_bank}" "${boot_wave}" "${boot_sound_include}"
+                   DEPENDS ac-boot-sound "${boot_bank}" "${boot_wave}"
+                   COMMENT "Laying out the boot sound"
+                   VERBATIM)
+target_sources(ac_game PRIVATE "${boot_sound_include}")
+set_property(SOURCE "${AC_ROOT}/src/static/jaudio_NES/game/game64.c" APPEND
+             PROPERTY INCLUDE_DIRECTORIES "${CMAKE_CURRENT_BINARY_DIR}/assets")
+set_property(SOURCE "${AC_ROOT}/src/static/jaudio_NES/game/game64.c" APPEND PROPERTY OBJECT_DEPENDS "${boot_sound_include}")
 # The decompilation's libc headers stand in for MSL's; the port takes the host's (porting-model.md, Floating-point
 # determinism, for the math library).
 set_target_properties(ac_game PROPERTIES C_STANDARD 11 C_EXTENSIONS ON CXX_STANDARD 20 CXX_EXTENSIONS ON)
@@ -329,6 +351,14 @@ add_executable(ac_font_test tests/font_test.cpp importer/font.cpp)
 set_target_properties(ac_font_test PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS ON)
 target_link_libraries(ac_font_test PRIVATE sonar::base)
 add_test(NAME ac_font COMMAND ac_font_test)
+
+# ac-boot-sound's images of the decompilation's extracts, walked through the game's own structures against the
+# console's bytes, and the build's boot_sound.inc written again.
+add_executable(ac_boot_sound_test tests/boot_sound_test.cpp importer/boot_sound.cpp)
+set_target_properties(ac_boot_sound_test PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS ON)
+target_link_libraries(ac_boot_sound_test PRIVATE ac_headers sonar::base sonar::kit_jaudio)
+add_dependencies(ac_boot_sound_test ac-boot-sound)
+add_test(NAME ac_boot_sound COMMAND ac_boot_sound_test "${boot_bank}" "${boot_wave}" "${boot_sound_include}")
 
 # ac_port from boot to play's first frame, twice and once with --validate, on a package ac-import writes from the
 # player's disc; skipped without one, when the script says so.

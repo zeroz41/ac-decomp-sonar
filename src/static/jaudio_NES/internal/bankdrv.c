@@ -5,7 +5,11 @@
 #include "jaudio_NES/bx.h"
 #include "jaudio_NES/ja_calc.h"
 
+#ifdef SONAR_PORT /* sonarlib port: the six s16 Osc_Next reads from the console's three u32 */
+static s16 FORCE_RELEASE_TABLE[6] = { 0, 5, 0, 15, 0, 0 };
+#else
 static u32 FORCE_RELEASE_TABLE[3] = { 5, 15, 0 };
+#endif
 
 /*
  * --INFO--

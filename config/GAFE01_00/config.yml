@@ -104,6 +104,12 @@ extract:
 - symbol: JUTResFONT_Ascfont_fix12
   binary: assets/JSystem/JUtility/FontData/Ascfont_fix12.bfn
 
+- symbol: NIN_BANK
+  binary: assets/jaudio/NIN_BANK.bin
+
+- symbol: NIN_WAVE
+  binary: assets/jaudio/NIN_WAVE.bin
+
 - symbol: __Creator__
   binary: assets/__Creator__.bin
   header: assets/__Creator__.inc

@@ -24,6 +24,7 @@
 #include <sonar/jaudio/dsp.h>
 #include <sonar/os.h>
 
+#include <stdatomic.h>
 #include <stdint.h>
 
 /* The control register the game sets and clears interrupt bits in, and the rest of the block it never reads. */
@@ -119,6 +120,11 @@ static s16* right;
 
 static sl_os_irq interrupt;
 
+/* The frames with a rendered sample at 1/256 of full scale or above, for the proof's lines; the presenter reads it. */
+#define DSP_SOUNDING 128
+static _Atomic uint64_t sounding_frames;
+static BOOL frame_sounding;
+
 static void dsp_interrupt(void* user) {
     static OSContext context;
     const __OSInterruptHandler handler = __OSGetInterruptHandler(OS_INTR_DSP_DSP);
@@ -180,16 +186,32 @@ static void set_up(u32 channel_count, void* channels, const u32* resample_filter
         OSReport("DSP: the microcode refuses its setup (%d)\n", (int)result);
 }
 
+static BOOL sounding(const s16* samples) {
+    size_t i;
+    for (i = 0; i < DSP_SUBFRAME_SAMPLES; ++i)
+        if (samples[i] >= DSP_SOUNDING || samples[i] <= -DSP_SOUNDING)
+            return TRUE;
+    return FALSE;
+}
+
 static void render_subframe(void) {
     const size_t offset = (size_t)subframe * DSP_SUBFRAME_SAMPLES;
-    if (left != NULL && right != NULL)
+    if (left != NULL && right != NULL) {
         sl_jaudio_dsp_render(left + offset, right + offset, output_volume);
-    else
+        if (sounding(left + offset) || sounding(right + offset))
+            frame_sounding = TRUE;
+    } else {
         OSReport("DSP: a frame without its buffers\n");
-    if (++subframe == subframes)
+    }
+    if (++subframe == subframes) {
         state = DSP_STATE_WAITING;
+        if (frame_sounding)
+            atomic_fetch_add(&sounding_frames, 1);
+    }
     raise_interrupt();
 }
+
+u64 ac_dsp_sounding_frames(void) { return atomic_load(&sounding_frames); }
 
 /* The microcode acknowledges a command with its handler's address in its program. */
 static void acknowledge(void) { post(0x80000000u | (0x62u + 2u * command)); }
@@ -207,6 +229,7 @@ static void run_command(void) {
             left = (s16*)mail_address(args[1]);
             right = (s16*)mail_address(args[2]);
             subframe = 0;
+            frame_sounding = FALSE;
             if (subframes != 0)
                 state = DSP_STATE_RENDERING;
             break;

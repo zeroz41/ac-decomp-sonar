@@ -214,12 +214,13 @@ void ac_port_report(const char* what) {
            " hash %016" PRIx64 " instances %" PRIu32 " compiles %" PRIu64 " holes %" PRIu64 "/%" PRIu64 " cpu %" PRIu64
            " refused %" PRIu64 " views %" PRIu64 " invalid %" PRIu64 " problems %" PRIu64 " overflows %" PRIu64
            " unowned %" PRIu64 " gx-errors %" PRIu64 " unmapped %" PRIu64 " outside %" PRIu64 " nested %" PRIu64
-           " refused-frames %" PRIu64 " audio %" PRIu64 " loud %" PRIu64 " sound %016" PRIx64 "\n",
+           " refused-frames %" PRIu64 " audio %" PRIu64 " loud %" PRIu64 " dsp %" PRIu64 " sound %016" PRIx64 "\n",
            what, sl_tick_count(), sl_retrace_count(), (uint64_t)ac_gx_bytes(), (uint64_t)ac_dvd_reads(),
            (uint64_t)ac_dvd_read_bytes(), sl_render_frame_hash(), kit.instances, kit.compiles, kit.vertex_holes,
            kit.list_holes, kit.cpu_draws, kit.refused, kit.view_overflows, render.frames_invalid, render.problems,
            render.overflows, (uint64_t)unowned, (uint64_t)gx.errors, (uint64_t)gx.unmapped, (uint64_t)gx.outside,
-           (uint64_t)gx.nested, (uint64_t)gx.refused_frames, audio.frames, audio.loud_frames, audio.hash);
+           (uint64_t)gx.nested, (uint64_t)gx.refused_frames, audio.frames, audio.loud_frames,
+           (uint64_t)ac_dsp_sounding_frames(), audio.hash);
     fflush(stdout);
     fflush(stderr);
 }

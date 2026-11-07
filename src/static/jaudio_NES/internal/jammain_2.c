@@ -14,6 +14,9 @@
 #include "dolphin/os/OSError.h"
 #include <dolphin/os/OSFastCast.h>
 #include <dolphin/os.h>
+#ifdef SONAR_PORT
+#include <sonar/base/endian.h>
+#endif
 
 // TODO IN THIS FILE: What do the return values for the `Cmd_` functions signify?
 // 0 is probably success / "no error".  Return values 1 and 2 have been observed.
@@ -2541,7 +2544,11 @@ static u32 Cmd_CheckWave()
 	SOUNDID_ soundID;
 	u32 uVar2;
 
+#ifdef SONAR_PORT /* sonarlib port: a sound id's bytes are its bank, program, key and velocity in the console's order (port/NOTES.md, Boot sound) */
+	sl_store_be32(soundID.bytes, SEQ_ARG[0] | (Jam_ReadRegDirect(SEQ_P, 6) << 16));
+#else
 	soundID.value = SEQ_ARG[0] | (Jam_ReadRegDirect(SEQ_P, 6) << 16);
+#endif
 	uVar2         = One_CheckInstWave(soundID);
 	Jam_WriteRegDirect(SEQ_P, 3, (u8)uVar2);
 	return 0;
@@ -2982,7 +2989,11 @@ try_interrupt:
             noteMode >>= 5;
             if (noteMode & 2) {
                 keyTarget = (u8)pitch;
+#ifdef SONAR_PORT /* sonarlib port: the track's last key by name, not at the console's offset */
+                pitch = *(s8*)&track->_D5 & 0xff;
+#else
                 pitch = *(s8*)((u8*)track + 0xD5) & 0xff;
+#endif
             }
 
             velocity = __ByteRead(track);
@@ -3195,6 +3206,20 @@ timed:
 LAB_800136e0:
     track->updateFlags |= seqRes;
 
+#ifdef SONAR_PORT /* sonarlib port: the track's children by name, not at the console's offsets */
+    for (int i = 0; i < 16; i++) {
+        if (track->children[i] && track->children[i]->trackState != 0) {
+            if (track != track->children[i]->parent) {
+                OSReport("##########Error:: Track %d の共有違反です\n", i);
+            }
+            BOOL childIsMuted = track->isMuted | ((track->childMuteMask & (1 << i)) >> i);
+            if (Jam_SeqmainNote(track->children[i], childIsMuted) == -1) {
+                Jaq_CloseTrack(track->children[i]);
+                track->children[i] = NULL;
+            }
+        }
+    }
+#else
     int childOffset;
     int i;
     i = 0;
@@ -3212,6 +3237,7 @@ LAB_800136e0:
             }
         }
     }
+#endif
 
     return 0;
 }

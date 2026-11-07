@@ -9,6 +9,9 @@
 #include "jaudio_NES/dspdriver.h"
 #include "jaudio_NES/rate.h"
 #include "jaudio_NES/bx.h"
+#ifdef SONAR_PORT
+#include <sonar/base/endian.h>
+#endif
 
 static int Jesus1Shot_Update(jc_*, JCSTATUS);
 
@@ -142,7 +145,11 @@ static void EffecterInit_Perc(jc_* jc, Pmap_* pmap, u16 id)
 	// PERC instruments only have rand and not osc
     Pmap_* map;
 	for (u32 i = 0; i < 2; i++) {
+#ifdef SONAR_PORT /* sonarlib port: the keymap's two Rand_ pointers by name, not 4 bytes apart */
+		map = (Pmap_*)(i == 0 ? &((PercKeymap_*)pmap)->_08 : &((PercKeymap_*)pmap)->_0C);
+#else
 		 map = (Pmap_*)((int*)pmap + i + 2);
+#endif
 		if (map->_00) {
 			f32 r      = Bank_RandToOfs(map->_00);
 			f32* REF_r = &r;
@@ -907,7 +914,11 @@ jc_* Play_1shot(jcs_* jcs, SOUNDID_ sound, u32 id)
 	chan->panMatrices[3].values[0] = 0.0f;
 	EffecterInit(chan, inst);
 
+#ifdef SONAR_PORT /* sonarlib port: a sound id's bytes are its bank, program, key and velocity in the console's order (port/NOTES.md, Boot sound) */
+	int flag = inst->mFlag << 0x18 | sl_load_be32(sound.bytes) >> 0x10;
+#else
 	int flag = inst->mFlag << 0x18 | sound.value >> 0x10;
+#endif
 	switch (inst->mFlag & 0xc0) {
 	case 0xc0:
 		flag |= 0xffffff;
