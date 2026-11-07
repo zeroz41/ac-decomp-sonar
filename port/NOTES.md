@@ -157,7 +157,7 @@ the game's fields the play line's.
 The test `ac_port_measure` imports the disc and runs `ac_port` and `ac_port --reference` to play's first frame, whose game fields (tick, retrace, DVD, audio, loud, dsp and sound) must be the same, with no palette overflowed. Then `--measure --ticks 1200` twice and `--measure --reference --ticks 1200` twice, through SDL's offscreen driver and lavapipe: each must exit 0 with both lines, the same in its two runs once the nine times are taken out, with frames, ticks, draws and calls, and with nothing invalid, overflowed or refused and the GX glue's five counts 0. The kit's and the reference's measure the same frames and ticks with the same game fields. It prints every line, and is skipped without the disc or lavapipe. Each measured run takes about 7 seconds on lavapipe. On `GAFE01_00` they measure 643 frames over 642 ticks:
 
 ```
-ac_port: measure kit frames 643 ticks 642 ... draws 118552 calls 118552 pipelines 13682 buffers 127981 textures 78510 storage 3606 pushes 357806
+ac_port: measure kit frames 643 ticks 642 ... draws 118552 calls 118552 pipelines 13682 buffers 13663 textures 78510 storage 3606 pushes 357806
 ac_port: measure reference frames 643 ticks 642 ... draws 114125 calls 114125 pipelines 13682 buffers 4248 textures 78510 storage 0 pushes 177862
 ```
 
@@ -178,6 +178,17 @@ The CPU a tick is the game's total over the ticks. Each count is the same in eve
 | the reference | 150.2 | 150.2 | 16.9 | 7.7 | 108.5 | 0 | 239.0 |
 
 The kit binds a vertex buffer for nearly every draw, the reference about 8 a present, and the kit's game time a frame is a fifth of the reference's, which runs the console's emu64 on the CPU every frame. By tick 4100 the reference has written 883 MB of GX outside display lists, the kit 5.7 MB.
+
+After sonarlib's step 7c, in which retained meshes share device buffers by vertex stride and index size, the same runs on the same host, with a load average of 7 to 11 from other work:
+
+| | game | prepare | present | CPU a tick (game) |
+|---|---|---|---|---|
+| the kit, median | 0.41 ms | 0.068 ms | 0.14 ms | 0.51 ms |
+| the kit, maximum | 23.9 ms | 7.4 ms | 4.6 ms | |
+| the reference, median | 2.00 ms | 0.062 ms | 0.18 ms | 2.13 ms |
+| the reference, maximum | 13.0 ms | 0.33 ms | 3.2 ms | |
+
+Only the kit's buffer bindings changed, from 163.8 a present to 27.2; the reference's stay 7.7, and every other count is the same. On lavapipe the measured test's kit run binds 13,663 buffers, against 127,981 before. The kit's present fell from 0.17 to 0.14 ms, while the reference's, which binds as before, rose to 0.18 ms. Both games' times rose with the host's load, the kit's by 0.03 ms and the reference's by 0.06 ms; step 7c changed nothing the game thread runs a frame.
 
 ### The seam audit
 
