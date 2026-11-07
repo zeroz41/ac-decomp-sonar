@@ -217,6 +217,17 @@ The kit's preparation rose after step 7d because nothing bounded the presents th
 
 Waiting for the GPU after each present raises the CPU's times. In four runs of the kit with the wait, each followed by one without, the game's median was 0.45 to 0.47 ms against 0.39 to 0.41 ms, the preparation's 0.071 to 0.079 ms against 0.062 to 0.066 ms, and the present's 0.134 to 0.145 ms against 0.119 to 0.124 ms. The main thread sleeps in the wait, using less of the CPU than without it, so the rise is most likely the host's power management, its cores under the `powersave` governor running slower after idling. The runs from step 7e on compare with each other, and with those before only through such runs in turn. The reference's preparation, 0.048 ms with the wait, is as after step 7d; its fall after 7d, from 0.062 ms, stays unexplained.
 
+After sonarlib's step 7f, in which the combiner's fragment shader indexes its arrays only with constants, the same runs on the same host, with a load average of 5 to 7 from other work:
+
+| | game | prepare | present | gpu | CPU a tick (game) |
+|---|---|---|---|---|---|
+| the kit, median | 0.39 ms | 0.063 ms | 0.11 ms | 0.29 ms | 0.48 ms |
+| the kit, maximum | 20.3 ms | 2.9 ms | 3.1 ms | 2.8 ms | |
+| the reference, median | 1.81 ms | 0.052 ms | 0.15 ms | 0.29 ms | 1.91 ms |
+| the reference, maximum | 12.8 ms | 0.98 ms | 3.4 ms | 3.2 ms | |
+
+Every count is the same as after step 7e. A frame took the GPU a median of 0.29 ms in both runs, against 0.88 ms in the kit's and 0.67 ms in the reference's after step 7e. The kit's CPU times fell with it: the game's median from 0.46 to 0.39 ms, the preparation's from 0.072 to 0.063 ms and the present's from 0.14 to 0.11 ms. The kit's game now takes longer than the GPU's frame, so its threads spend less time waiting for the GPU, which most likely raised those times after step 7e, as above. The reference's game took longer than the GPU's frame before as well, and its times are about as they were.
+
 ### The seam audit
 
 `seam-policy.toml` lists where the game may call GX: the SDK's own units (`sdk`), the glue (`glue`), and each other file that calls it today, as a transitional entry with a note. The test `ac_seam_audit` runs sonarlib's `sl-seam-audit` on the build's `compile_commands.json` with the policy and the repository as root; it reads only source files, not the disc, and passes with no unlisted call and no stale entry, printing its summary line, `seam GX transitional <n> calls <n> sdk <n> glue <n> unlisted <n> stale <n> skipped <n>`. Quoted includes of sources, such as the game's `.c_inc` files and the asset includes under `build/<version>`, are scanned as files of their own; files outside the repository, such as sonarlib's, are skipped.
