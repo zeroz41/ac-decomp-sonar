@@ -157,8 +157,8 @@ the game's fields the play line's.
 The test `ac_port_measure` imports the disc and runs `ac_port` and `ac_port --reference` to play's first frame, whose game fields (tick, retrace, DVD, audio, loud, dsp and sound) must be the same, with no palette overflowed. Then `--measure --ticks 1200` twice and `--measure --reference --ticks 1200` twice, through SDL's offscreen driver and lavapipe: each must exit 0 with both lines, the same in its two runs once the nine times are taken out, with frames, ticks, draws and calls, and with nothing invalid, overflowed or refused and the GX glue's five counts 0. The kit's and the reference's measure the same frames and ticks with the same game fields. It prints every line, and is skipped without the disc or lavapipe. Each measured run takes about 7 seconds on lavapipe. On `GAFE01_00` they measure 643 frames over 642 ticks:
 
 ```
-ac_port: measure kit frames 643 ticks 642 ... draws 118552 calls 118552 pipelines 13682 buffers 13663 textures 78510 storage 3606 pushes 357806
-ac_port: measure reference frames 643 ticks 642 ... draws 114125 calls 114125 pipelines 13682 buffers 4248 textures 78510 storage 0 pushes 177862
+ac_port: measure kit frames 643 ticks 642 ... draws 118552 calls 118552 pipelines 13682 buffers 13663 textures 78510 storage 8106 pushes 0
+ac_port: measure reference frames 643 ticks 642 ... draws 114125 calls 114125 pipelines 13682 buffers 4248 textures 78510 storage 4248 pushes 0
 ```
 
 The baseline that sonarlib's merging steps (M6 steps 7c to 7e) are measured against: `--measure` and `--measure --reference` with `--ticks 4100`, the title demo's town to just before its end at tick 4193, three runs of each, each figure the median of the three runs'. They ran on an Intel Core Ultra 7 265K (20 threads, the `powersave` governor) with an NVIDIA GeForce RTX 3090 on NVIDIA's driver 615.78.08, Vulkan 1.4, Linux 7.2, the port's RelWithDebInfo build, through SDL's offscreen driver. Both measure 3539 frames over 3542 ticks.
@@ -189,6 +189,17 @@ After sonarlib's step 7c, in which retained meshes share device buffers by verte
 | the reference, maximum | 13.0 ms | 0.33 ms | 3.2 ms | |
 
 Only the kit's buffer bindings changed, from 163.8 a present to 27.2; the reference's stay 7.7, and every other count is the same. On lavapipe the measured test's kit run binds 13,663 buffers, against 127,981 before. The kit's present fell from 0.17 to 0.14 ms, while the reference's, which binds as before, rose to 0.18 ms. Both games' times rose with the host's load, the kit's by 0.03 ms and the reference's by 0.06 ms; step 7c changed nothing the game thread runs a frame.
+
+After sonarlib's step 7d, in which the GPU sink reads every draw's values from one storage buffer a present instead of uniform pushes, the same runs on the same host, with a load average of 10 to 15 from other work:
+
+| | game | prepare | present | CPU a tick (game) |
+|---|---|---|---|---|
+| the kit, median | 0.37 ms | 0.090 ms | 0.14 ms | 0.44 ms |
+| the kit, maximum | 24.1 ms | 9.2 ms | 10.8 ms | |
+| the reference, median | 1.78 ms | 0.049 ms | 0.15 ms | 1.88 ms |
+| the reference, maximum | 13.0 ms | 1.7 ms | 2.9 ms | |
+
+Only the storage bindings and pushes changed: the kit binds 13.7 storage buffers a present, was 5.9, and the reference 7.7, was 0, the records to both stages of each view, and neither pushes, against 487.5 and 239.0 before. Every other count is the same. On lavapipe the measured test's kit run pushes nothing, against 357,806 before. The kit's present stayed 0.14 ms and the reference's was 0.15 ms, against 0.18 after step 7c. The kit's prepare median rose from 0.068 to 0.090 ms and the reference's fell from 0.062 to 0.049 ms, as in an earlier run of the step; it is not yet explained.
 
 ### The seam audit
 
