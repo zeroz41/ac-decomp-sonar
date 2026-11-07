@@ -20,10 +20,18 @@ na_spec_config NA_SPEC_CONFIG[1] = {
         0x07fff,
         0,
         0x680,
+#ifdef SONAR_PORT /* sonarlib port: the host's banks are larger (port/NOTES.md, Sound) */
+        0x6000,
+#else
         0x4500,
+#endif
         0,
         0x7800,
+#ifdef SONAR_PORT /* sonarlib port: the host's banks are larger (port/NOTES.md, Sound) */
+        0x3400,
+#else
         0x2300,
+#endif
         0,
     },
 };

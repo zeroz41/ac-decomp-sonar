@@ -584,9 +584,9 @@ f32 SOU_ONGEN_AREA1 = 540.f;
 f32 SOU_ONGEN_AREA2 = 533.f;
 f32 sou_md_bgm_boost_pasent = 1.f;
 
-#ifdef SONAR_PORT /* sonarlib port: neosproc takes 0x20000 more for jaudio's heap, whose structures are larger on the
-                     host */
-u8 audiomemory[0x90000 + 0x20000] ATTRIBUTE_ALIGN(32);
+#ifdef SONAR_PORT /* sonarlib port: neosproc takes 0x22C00 more for jaudio's heap, whose structures and bank caches are
+                     larger on the host */
+u8 audiomemory[0x90000 + 0x22C00] ATTRIBUTE_ALIGN(32);
 #else
 u8 audiomemory[0x90000] ATTRIBUTE_ALIGN(32);
 #endif
@@ -1845,7 +1845,11 @@ void Sou_DVD_Error(char*, u8*) {
 
 void Na_InitAudio(void (*fatal_callback)(), u8* load_addr, size_t load_size, u8* bootsound, size_t bootsound_size,
                   BOOL cut_flag) {
+#ifdef SONAR_PORT /* sonarlib port: the host's audiorom.img is larger (port/NOTES.md, Sound) */
+    u32 v = 0x850000;
+#else
     u32 v = 0x810000;
+#endif
     fatalErrorCallback = fatal_callback;
     u32 unused = SetPreCopy_NeosRom(load_addr, load_size, cut_flag);
     Jac_RegisterDVDErrorCallback(Sou_DVD_Error);

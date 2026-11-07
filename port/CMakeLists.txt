@@ -142,7 +142,8 @@ target_sources(ac_game PRIVATE adapter/famicom_core.cpp)
 set_source_files_properties(adapter/famicom_core.cpp PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
 # The SDK's DVD functions on the package mounted as game:, for the disc revision this build is for.
 target_sources(ac_game PRIVATE adapter/dolphin_dvd.c)
-set_source_files_properties(adapter/dolphin_dvd.c PROPERTIES COMPILE_DEFINITIONS "AC_PORT_DISC_VERSION=\"${AC_VERSION}\"")
+set_source_files_properties(adapter/dolphin_dvd.c PROPERTIES COMPILE_DEFINITIONS
+                            "AC_PORT_DISC_VERSION=\"${AC_VERSION}\";F3DEX_GBI_2;_LANGUAGE_C")
 # The SDK's video and controller functions on sonarlib's VI and PAD kits.
 target_sources(ac_game PRIVATE adapter/dolphin_vi.c adapter/dolphin_pad.c)
 # The sink the SDK's GX units write into, handing its bytes to sonarlib's GX front end, GX's address space, the frame
@@ -198,13 +199,15 @@ target_link_libraries(ac_port PRIVATE ac_headers sonar::base sonar::core sonar::
 
 # The importer (NOTES.md, The package): ac-import writes the package the game reads from boot to Town's first frame
 # from the player's disc, converting the structures the game reads in place (sonarlib docs/roadmap.md, M6 step 6c).
-add_library(ac_import_lib STATIC importer/archive.cpp importer/import.cpp)
+# sonarlib's jaudio kit lays out audiorom.img from the game's own tables (audioheaders.c).
+add_library(ac_import_lib STATIC importer/archive.cpp importer/audio.cpp importer/import.cpp
+            ${AC_ROOT}/src/static/jaudio_NES/game/audioheaders.c)
 sonar_add_schema(ac_import_lib importer/ac.schema PREFIX ac LANGUAGE CXX
                  INCLUDES JSystem/JKernel/JKRArchive.h m_field_make.h)
 # m_field_make.h needs the display-list switches the game's units take from configure.py's flags (cflags_common).
 target_compile_definitions(ac_import_lib PUBLIC F3DEX_GBI_2 _LANGUAGE_C)
 set_target_properties(ac_import_lib PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS ON)
-target_link_libraries(ac_import_lib PUBLIC ac_headers sonar::import sonar::base)
+target_link_libraries(ac_import_lib PUBLIC ac_headers sonar::import sonar::base sonar::kit_jaudio)
 add_executable(ac-import importer/main.cpp)
 set_target_properties(ac-import PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS ON)
 target_link_libraries(ac-import PRIVATE ac_import_lib sonar::core)

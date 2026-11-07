@@ -3,17 +3,19 @@
    each task with, mounts the package as game:, starts the CPU model, and creates the game thread "main", which starts
    the runtime and calls boot's main, which never returns.
 
-   Headless, the default: deterministic, silent, on the null sink. The main thread joins "main", and the run ends at
-   the submit of the frame that holds play's first task (emu64_glue.c, from the GX glue's ac_frame_end) or at the tick
-   limit. With --diff, each task is drawn also by the console's emu64 and the two are compared (emu64_glue.c).
+   Headless, the default: deterministic, on the null sinks, the game's sound mixed and counted but not heard. The main
+   thread joins "main", and the run ends at the submit of the frame that holds play's first task (emu64_glue.c, from
+   the GX glue's ac_frame_end) or at the tick limit. With --diff, each task is drawn also by the console's emu64 and
+   the two are compared (emu64_glue.c).
 
-   --window: in real time, on the GPU sink, in a window, with the game's pads on the keyboard and gamepads and no
-   sound yet (sonarlib docs/roadmap.md, M6 step 6l). The main thread presents until the window is closed, or until
-   --ticks's limit when it is given. */
+   --window: in real time, on the GPU sink, in a window, with the game's pads on the keyboard and gamepads and its
+   sound on the audio device. The main thread presents until the window is closed, or until --ticks's limit when it
+   is given. */
 #include "ac_port.h"
 
 #include <port/emu64_glue.h>
 
+#include <sonar/audio.h>
 #include <sonar/emu64/emu64.h>
 #include <sonar/fs.h>
 #include <sonar/input.h>
@@ -118,7 +120,10 @@ static void present(sl_window shown) {
         if (sl_window_present(shown, 1.0f) == SL_OK)
             frames++;
     }
-    printf("ac_port: window ticks %" PRIu64 " frames %" PRIu64 "\n", sl_tick_count(), frames);
+    sl_audio_mix_stats audio;
+    sl_audio_get_mix_stats(&audio);
+    printf("ac_port: window ticks %" PRIu64 " frames %" PRIu64 " audio %" PRIu64 " loud %" PRIu64 "\n", sl_tick_count(),
+           frames, audio.frames, audio.loud_frames);
     fflush(stdout);
     _Exit(closed || ac_play_reached() ? 0 : 1);
 }
@@ -210,8 +215,13 @@ int main(int argc, char** argv) {
         desc.host_path = package;
         desc.flags = SL_MOUNT_PACKAGE | SL_MOUNT_CASE_INSENSITIVE;
         desc.importer = "ac";      /* ac::importer_id */
-        desc.importer_version = 1; /* ac::importer_version */
+        desc.importer_version = 2; /* ac::importer_version */
         result = sl_fs_mount(&desc, &mount);
+        if (result == SL_ERROR_VERSION_MISMATCH) {
+            fprintf(stderr, "ac_port: %s is from another version of the port; import the disc again with ac-import\n",
+                    package);
+            return 1;
+        }
         if (result != SL_OK)
             return failed("sl_fs_mount", result);
     }
@@ -232,6 +242,16 @@ int main(int argc, char** argv) {
         result = sl_os_start(&desc);
         if (result != SL_OK)
             return failed("sl_os_start", result);
+    }
+    {
+        /* The audio interface's frames on os alarms. Headless, the null sink; --window, the audio device at its own
+           rate, through the environment's driver, else the platform's. */
+        sl_audio_desc desc;
+        memset(&desc, 0, sizeof desc);
+        desc.sink = window ? SL_AUDIO_SINK_DEVICE : SL_AUDIO_SINK_NULL;
+        result = ac_audio_init(&desc);
+        if (result != SL_OK)
+            return failed("ac_audio_init", result);
     }
     if (window) {
         /* Input's GameCube profile with its default bindings: the keyboard on port 0, each gamepad on the first free

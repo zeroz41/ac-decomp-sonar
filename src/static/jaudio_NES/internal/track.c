@@ -7,6 +7,9 @@
 #include "jaudio_NES/sub_sys.h"
 #include "jaudio_NES/system.h"
 #include "dolphin/os.h"
+#ifdef SONAR_PORT
+#include <sonar/base/endian.h>
+#endif
 
 #define COMMON_SCRIPT_END -1
 
@@ -1288,7 +1291,11 @@ static void Nas_SubSeq(sub* subtrack) {
                             case SUBTRACK_CMD_INIT_INSTRUMENTS: // Load subtrack bank and set instruments
                                 cmdArgU8 = cmdArgs[0];
                                 if (grp->bank_id != 0xFF) {
+#ifdef SONAR_PORT /* sonarlib port: the sequence map is the console's bytes (port/NOTES.md, Sound) */
+                                    cmdArgU16 = sl_load_be16(&((u16*)AG.map_header)[grp->seq_id]);
+#else
                                     cmdArgU16 = ((u16*)AG.map_header)[grp->seq_id];
+#endif
                                     lo_bits = ((u8*)AG.map_header)[cmdArgU16]; // load number of banks
                                     // inverse lookup, 1 = last bank, 2 = second to last, ...
                                     cmdArgU8 = ((u8*)AG.map_header)[cmdArgU16 + lo_bits - cmdArgU8];
@@ -1396,7 +1403,11 @@ static void Nas_SubSeq(sub* subtrack) {
                             case SUBTRACK_CMD_SET_INSTRUMENT_BANK: // set bank
                                 cmdArgU8 = cmdArgs[0];
                                 if (grp->bank_id != 0xFF) {
+#ifdef SONAR_PORT /* sonarlib port: the sequence map is the console's bytes (port/NOTES.md, Sound) */
+                                    cmdArgU16 = sl_load_be16(&((u16*)AG.map_header)[grp->seq_id]);
+#else
                                     cmdArgU16 = ((u16*)AG.map_header)[grp->seq_id]; // get offset for bank info for seq
+#endif
                                     lo_bits = ((u8*)AG.map_header)[cmdArgU16]; // read number of banks
                                     // inverse lookup, 1 = last bank, 2 = second to last, ...
                                     cmdArgU8 = ((u8*)AG.map_header)[cmdArgU16 + lo_bits - cmdArgU8];
@@ -1554,13 +1565,21 @@ static void Nas_SubSeq(sub* subtrack) {
                                 break;
                             case SUBTRACK_CMD_LOAD_DYNVAL_FROM_GROUP_SEQ: // load dynamic idx
                                 cmdArgU16 = (u16)cmdArgs[0];
+#ifdef SONAR_PORT /* sonarlib port: a sequence is the console's bytes (port/NOTES.md, Sound) */
+                                subtrack->dynamic_value = sl_load_be16(&grp->seq_data[cmdArgU16 + m->value * 2]);
+#else
                                 subtrack->dynamic_value = *(u16*)&grp->seq_data[cmdArgU16 + m->value * 2];
+#endif
                                 break;
                             case SUBTRACK_CMD_SET_DYNTBL_FROM_GROUP_SEQ: // set dynamic table
                                 subtrack->dyn_tbl = (unsigned char(*)[][2]) & grp->seq_data[subtrack->dynamic_value];
                                 break;
                             case SUBTRACK_CMD_LOAD_DYNVAL_FROM_DYNTBL: // read from dynamic table
+#ifdef SONAR_PORT /* sonarlib port: a sequence is the console's bytes (port/NOTES.md, Sound) */
+                                subtrack->dynamic_value = sl_load_be16(&((u16*)subtrack->dyn_tbl)[m->value]);
+#else
                                 subtrack->dynamic_value = ((u16*)subtrack->dyn_tbl)[m->value];
+#endif
                                 break;
                             case SUBTRACK_CMD_MACRO_LOAD_FROM_DYNTBL: // read to macro register from dynamic table
                                 m->value = (*subtrack->dyn_tbl)[0][m->value];
@@ -2026,7 +2045,11 @@ static void Nas_GroupSeq(group* grp) {
                                 temp = Nas_ReadWordData(m);
                                 if (m->value != -1) {
                                     new_var = (u16*)(grp->seq_data + (u32)(temp + m->value * 2));
+#ifdef SONAR_PORT /* sonarlib port: a sequence is the console's bytes (port/NOTES.md, Sound) */
+                                    temp = sl_load_be16(new_var);
+#else
                                     temp = *new_var;
+#endif
                                     for (i = 0; i < ARRAY_COUNT(grp->subtracks); i++) {
                                         grp->subtracks[i]->muted = temp & 1;
                                         temp = temp >> 1;

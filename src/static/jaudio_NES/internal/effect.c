@@ -11,6 +11,9 @@
 #include "jaudio_NES/sub_sys.h"
 #include "jaudio_NES/audioheaders.h"
 #include <dolphin/os.h>
+#ifdef SONAR_PORT
+#include <sonar/base/endian.h>
+#endif
 
 static void __Nas_CallWaveProcess_Sub(sub* subtrack, s32 recalc_vol, s32 apply_bend) {
     f32 vol;
@@ -278,7 +281,11 @@ extern f32 Nas_EnvProcess(envp* process) {
         // fallthrough
         retry:
         case ADSR_STATUS_LOOP:
+#ifdef SONAR_PORT /* sonarlib port: an envelope is the console's bytes (port/NOTES.md, Sound) */
+            process->delay = (s16)sl_load_be16(&process->pEnvData[process->envelope_idx].delay);
+#else
             process->delay = process->pEnvData[process->envelope_idx].delay;
+#endif
             switch (process->delay) {
                 case ADSR_DISABLE:
                     process->state.flags.status = ADSR_STATUS_DISABLED;
@@ -287,13 +294,21 @@ extern f32 Nas_EnvProcess(envp* process) {
                     process->state.flags.status = ADSR_STATUS_HANG;
                     break;
                 case ADSR_GOTO:
+#ifdef SONAR_PORT /* sonarlib port: an envelope is the console's bytes (port/NOTES.md, Sound) */
+                    process->envelope_idx = (s16)sl_load_be16(&process->pEnvData[process->envelope_idx].value);
+#else
                     process->envelope_idx = process->pEnvData[process->envelope_idx].value;
+#endif
                     goto retry;
                 case ADSR_RESTART:
                     process->state.flags.status = ADSR_STATUS_INITIAL;
                     break;
                 case ADSR_SPECIAL4:
+#ifdef SONAR_PORT /* sonarlib port: an envelope is the console's bytes (port/NOTES.md, Sound) */
+                    process->_18 = (int)(s16)sl_load_be16(&process->pEnvData[process->envelope_idx].value) / 32767.0f;
+#else
                     process->_18 = (int)process->pEnvData[process->envelope_idx].value / 32767.0f;
+#endif
                     process->state.flags.unused = TRUE;
                     process->envelope_idx++;
                     goto retry;
@@ -303,7 +318,11 @@ extern f32 Nas_EnvProcess(envp* process) {
                         process->delay = 1;
                     }
 
+#ifdef SONAR_PORT /* sonarlib port: an envelope is the console's bytes (port/NOTES.md, Sound) */
+                    process->target = (s16)sl_load_be16(&process->pEnvData[process->envelope_idx].value) / 32767.0f;
+#else
                     process->target = process->pEnvData[process->envelope_idx].value / 32767.0f;
+#endif
                     process->target *= process->target;
                     process->velocity = (process->target - process->current) / process->delay;
                     process->state.flags.status = ADSR_STATUS_FADE;

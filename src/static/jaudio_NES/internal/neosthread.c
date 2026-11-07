@@ -64,8 +64,8 @@ extern void* neosproc(void* param) {
 
     /* Initialize neos */
 #ifdef SONAR_PORT /* sonarlib port: jaudio divides this heap in console bytes and its structures are larger on the host,
-                     so the misc heap gets 0x20000 more, as audiomemory does */
-    s32 tmp = AGC.acmdBufSize + 0x20000;
+                     so the misc heap gets 0x20000 more, and 0x2C00 for the larger bank caches, as audiomemory does */
+    s32 tmp = AGC.acmdBufSize + 0x22C00;
 #else
     s32 tmp = AGC.acmdBufSize;
 #endif

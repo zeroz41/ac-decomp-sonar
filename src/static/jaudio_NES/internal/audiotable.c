@@ -405,12 +405,23 @@ u8 DEFAULT_GTABLE[] = {
  *   - Provides a simple sustain envelope that holds at max volume
  */
  // clang-format off
+#ifdef SONAR_PORT /* sonarlib port: Nas_EnvInit reads envelopes in the console's byte order (port/NOTES.md, Sound) */
+#define ENV_BE16(v) ((s16)(u16)((((u16)(s16)(v) & 0xFF) << 8) | ((u16)(s16)(v) >> 8)))
+envdat DEFAULT_ENV[] = {
+    { ENV_BE16(1), ENV_BE16(32000) },
+    { ENV_BE16(1000), ENV_BE16(32000) },
+    { ENV_BE16(ADSR_HANG), ENV_BE16(0) },
+    { ENV_BE16(ADSR_DISABLE), ENV_BE16(0) },
+};
+#undef ENV_BE16
+#else
 envdat DEFAULT_ENV[] = {
     { 1, 32000 },
     { 1000, 32000 },
     { ADSR_HANG, 0 },
     { ADSR_DISABLE, 0 },
 };
+#endif
 // clang-format on
 
 /*

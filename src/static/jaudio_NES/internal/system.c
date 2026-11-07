@@ -10,6 +10,9 @@
 #include "jaudio_NES/sub_sys.h"
 #include "jaudio_NES/audioheaders.h"
 #include <dolphin/os.h>
+#ifdef SONAR_PORT
+#include <sonar/base/endian.h>
+#endif
 
 #define MK_BGLOAD_MSG(retData, tableType, id, loadStatus) \
     (((retData) << 24) | ((tableType) << 16) | ((id) << 8) | (loadStatus))
@@ -18,6 +21,9 @@
 #define BGLOAD_LOAD_STATUS(v) ((v >> 0) & 0xFF)
 
 static uaddr Nas_GetSyncDummy(u8* param0, s32 param1);
+#ifdef SONAR_PORT
+extern "C" void ac_audio_rom_tables(void); /* sonarlib port: port/adapter/ac_port.h */
+#endif
 
 BOOL AUDIO_SYSTEM_READY = FALSE;
 static void* FASTDMA_BUFFER = NULL;
@@ -346,7 +352,11 @@ void* Nas_PreLoadBank(s32 seq_id, s32* bank_id) {
     void* ctrl;
 
     l_bank_id = 0xFF;
+#ifdef SONAR_PORT /* sonarlib port: the sequence map is the console's bytes (port/NOTES.md, Sound) */
+    idx = sl_load_be16(&((u16*)AG.map_header)[seq_id]);
+#else
     idx = ((u16*)AG.map_header)[seq_id];
+#endif
     for (i = ((u8*)AG.map_header)[idx++]; i > 0; i--) {
         l_bank_id = ((u8*)AG.map_header)[idx++];
         ctrl = __Load_Ctrl(l_bank_id);
@@ -452,7 +462,11 @@ s32 Nas_PreLoadBank_BG(s32 id, s32 param_2, s32 ret_data, OSMesgQueue* ret_queue
 
 // @unused
 u8* Nas_SeqToBank(s32 seq_id, s32* num_banks) {
+#ifdef SONAR_PORT /* sonarlib port: the sequence map is the console's bytes (port/NOTES.md, Sound) */
+    s32 index = sl_load_be16(&((u16*)AG.map_header)[seq_id]);
+#else
     s32 index =  ((u16*)AG.map_header)[seq_id];
+#endif
 
     *num_banks = ((u8*)AG.map_header)[index++];
     if (*num_banks == 0) {
@@ -464,7 +478,11 @@ u8* Nas_SeqToBank(s32 seq_id, s32* num_banks) {
 void Nas_FlushBank(s32 seq_id) {
     s32 bank_id;
     s32 bank_count;
+#ifdef SONAR_PORT /* sonarlib port: the sequence map is the console's bytes (port/NOTES.md, Sound) */
+    s32 index = sl_load_be16(&((u16*)AG.map_header)[seq_id]);
+#else
     s32 index = ((u16*)AG.map_header)[seq_id];
+#endif
 
     bank_count = ((u8*)AG.map_header)[index++];
     while (bank_count > 0) {
@@ -544,7 +562,11 @@ static s32 __Nas_StartSeq(s32 group_idx, s32 seq_id, s32 param) {
 
     Nas_ReleaseGroup(group);
     bank_id = 0xFF;
+#ifdef SONAR_PORT /* sonarlib port: the sequence map is the console's bytes (port/NOTES.md, Sound) */
+    idx = sl_load_be16(&((u16*)AG.map_header)[seq_id]);
+#else
     idx =  ((u16*)AG.map_header)[seq_id];
+#endif
     for (i = ((u8*)AG.map_header)[idx++]; i > 0; i--) {
         bank_id = ((u8*)AG.map_header)[idx++];
         __Load_Ctrl(bank_id);
@@ -1237,6 +1259,10 @@ void Nas_InitAudio(u64* heap_p, s32 heap_size) {
         AG.ai_buffers[i] = (s16*)Nas_HeapAlloc_CL(&AG.init_heap, 0xF80);
     }
 
+#ifdef SONAR_PORT /* sonarlib port: the package's audiorom.img is laid out for the host, and audiorom.tbl gives its bank and
+                     data tables (port/NOTES.md, Sound) */
+    ac_audio_rom_tables();
+#endif
     AG.seq_header = &AudioseqHeaderStart;
     AG.bank_header = &AudiobankHeaderStart;
     AG.wave_header = &AudiowaveHeaderStart;

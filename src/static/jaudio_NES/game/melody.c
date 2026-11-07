@@ -4,6 +4,9 @@
 #include "jaudio_NES/sub_sys.h"
 #include "jaudio_NES/system.h"
 #include "jaudio_NES/audiowork.h"
+#ifdef SONAR_PORT
+#include <sonar/base/endian.h>
+#endif
 
 static s32 current_sub_track = 0;
 uaddr na_melody_id_hist[2];
@@ -640,7 +643,11 @@ static void Na_MelodyStart(u16 voice, s16 subTrack, const u8* pData) {
 
     u8* dst;
     s16 seq_idx = 248;
+#ifdef SONAR_PORT /* sonarlib port: a sequence is the console's bytes (port/NOTES.md, Sound) */
+    u16 size = sl_load_be16(&((u16*)AG.groups[0].seq_data)[2]);
+#else
     u16 size = ((u16*)AG.groups[0].seq_data)[2];
+#endif
 
     switch (subTrack) {
         case 6:
@@ -671,7 +678,11 @@ static void Na_MelodyStart(u16 voice, s16 subTrack, const u8* pData) {
 
     u16* dst16 = (u16*)(dst + 4);
     for (int i = 0; i < 19; i++) {
+#ifdef SONAR_PORT /* sonarlib port: a sequence is the console's bytes (port/NOTES.md, Sound) */
+        sl_store_be16(&dst16[i], (u16)(sl_load_be16(&dst16[i]) + size));
+#else
         dst16[i] += size;
+#endif
     }
 
 #ifdef SONAR_PORT

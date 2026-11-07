@@ -6,7 +6,7 @@ A native PC build of Animal Crossing (GameCube, USA, `GAFE01_00`). It compiles t
 
 You need your own copy of the game. This repository holds no game data. The importer reads what the port needs from your disc.
 
-**Status: early.** The game runs in a window and reads your keyboard and gamepads. There is no sound yet; the game's sound engine is the next step.
+**Status: early.** The game runs in a window with its music and sounds, and reads your keyboard and gamepads. The boot jingle is still silent.
 
 ## How to build
 
@@ -35,13 +35,13 @@ cmake --build port/build
 
 ## How to run
 
-Import your disc once. This writes the game's data into a package file:
+Import your disc once. This writes the game's data into a package file. Run it again when `ac_port` says the package is from another version of the port, as it does after an update that changes the package:
 
 ```sh
 port/build/ac-import orig/GAFE01_00 ac.pkg import-cache
 ```
 
-Then play the game in a window:
+Then play the game in a window, with sound:
 
 ```sh
 port/build/ac_port --package ac.pkg --window
@@ -64,13 +64,13 @@ Close the window to quit.
 
 The keyboard is controller 1. Gamepads work too: each one you plug in takes the next free controller.
 
-Without `--window` it runs headless, as the tests do: it runs to the first frame of play as fast as it can, prints one `ac_port: play …` line and exits with 0. It exits with 1 if it fails or hits the tick limit, and with 2 for bad arguments.
+Without `--window` it runs headless, as the tests do: it runs to the first frame of play as fast as it can, prints one `ac_port: play …` line and exits with 0. Its sound is mixed but not played. It exits with 1 if it fails or hits the tick limit, and with 2 for bad arguments.
 
 Options:
 
 | Option | What it does |
 |---|---|
-| `--window` | shows the game in a window and reads the keyboard and gamepads |
+| `--window` | shows the game in a window, plays its sound, and reads the keyboard and gamepads |
 | `--ticks <n>` | headless: gives up after `n` game frames if play hasn't started (3600 by default); with `--window`: quits after `n` game frames (no limit by default) |
 | `--validate` | rechecks the game's display lists on every use |
 | `--diff` | draws each frame's 3D twice, once through sonarlib and once through the game's own renderer (emu64), and compares the two |

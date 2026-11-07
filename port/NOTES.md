@@ -2,7 +2,7 @@
 
 ## The package
 
-`ac-import <source> <package> <cache>` (`importer/`) writes the package the game reads from boot to Town's first frame, importer `ac`, version 1. Each entry is a whole disc file, at the game's own name for it:
+`ac-import <source> <package> <cache>` (`importer/`) writes the package the game reads from boot to Town's first frame and its sound, importer `ac`, version 2. Each entry is a whole disc file, at the game's own name for it, or made from one:
 
 | Entry | Recipe | Conversion |
 |---|---|---|
@@ -11,6 +11,8 @@
 | `forest_1st.arc` | `archive` 1 | the directory, and the files below |
 | `forest_2nd.arc` | `archive` 1 | the directory, and the file below |
 | `famicom.arc` | `archive` 1 | the directory only |
+| `audiorom.img` | `audiorom` 1 | the banks laid out for the host ([Sound](#sound)) |
+| `audiorom.tbl` | `audiorom-table` 1 | made from `audiorom.img`: the host image's bank and data tables |
 
 Each archive stays whole. Its directory is laid out again at the host's sizes and in the host's byte order, and its file data keeps the console's offsets, names and order (sonarlib's `docs/porting-model.md`, Import).
 
@@ -34,7 +36,7 @@ The other files on the first frame's path stay as the console's bytes, as the ga
 
 ## The program
 
-`ac_port` (`adapter/main.c`) runs the game on sonarlib. By default it runs headless, in deterministic mode, from boot to play's first frame (sonarlib's `docs/roadmap.md`, M6 steps 6f, 6g and 6h); with `--window` it shows the game in a window in real time (step 6k). Each frame runs from `JW_BeginFrame` to `JW_EndFrame`: the GX the game writes is recorded into it by sonarlib's GX front end and emu64's tasks by sonarlib's `kits/emu64`, and it is submitted to the render module. Headless that is the null sink, and the run opens no window, reads no device and makes no sound.
+`ac_port` (`adapter/main.c`) runs the game on sonarlib. By default it runs headless, in deterministic mode, from boot to play's first frame (sonarlib's `docs/roadmap.md`, M6 steps 6f, 6g and 6h); with `--window` it shows the game in a window in real time (step 6k) and plays its sound (step 6l). Each frame runs from `JW_BeginFrame` to `JW_EndFrame`: the GX the game writes is recorded into it by sonarlib's GX front end and emu64's tasks by sonarlib's `kits/emu64`, and it is submitted to the render module. Headless that is the null sink, and the run opens no window and reads no device; the game's sound is mixed on sonarlib's null audio sink, counted and not heard.
 
 ### The threads
 
@@ -47,30 +49,44 @@ The process's main thread starts sonarlib, the render module, emu64's kit, fs an
 ```
 ac_port: play tick <t> retrace <r> gx <bytes> dvd <reads> <bytes> hash <h> instances <n> compiles <n>
     holes <vertex>/<list> cpu <n> refused <n> views <n> invalid <n> problems <n> overflows <n> unowned <n>
-    gx-errors <n> unmapped <n> outside <n> nested <n> refused-frames <n>
+    gx-errors <n> unmapped <n> outside <n> nested <n> refused-frames <n> audio <n> loud <n> sound <h>
 ```
 
-on one line: the ticks and retraces run, the GX bytes written outside display lists, the DVD reads and their bytes; the hash of the frame submitted last; from emu64's kit, the instances its last task recorded, its compiles, the vertex and list holes it replayed, its draws worked out on the CPU, its refusals and its views past the render module's 256; from the render module, its invalid frames, problems and overflows; the actors the glue drew without an owner, being outside main memory; and from the GX glue, the hand-overs the front end failed, the pointers it could not map to a GX address, emu64's tasks with no frame open, the frame begins and ends out of order, and the frames the render module refused. If `n` ticks pass first (3600 by default) it prints the same fields as `ac_port: limit …` and exits 1. Wrong arguments exit 2, and a failure before the game starts exits 1. `--validate` creates the kit with `SL_EMU64_VALIDATE`, so every use of a program hashes the ranges it read again, and a static list the game rewrote is compiled again rather than drawn stale; its line must match a plain run's. The test `ac_port_play` imports the disc and runs `ac_port` twice and once with `--validate`, and all three must print the same line, with instances, a hash, and no invalid frame, view past 256 or overflow, and the GX glue's five counts all 0.
+on one line: the ticks and retraces run, the GX bytes written outside display lists, the DVD reads and their bytes; the hash of the frame submitted last; from emu64's kit, the instances its last task recorded, its compiles, the vertex and list holes it replayed, its draws worked out on the CPU, its refusals and its views past the render module's 256; from the render module, its invalid frames, problems and overflows; the actors the glue drew without an owner, being outside main memory; and from the GX glue, the hand-overs the front end failed, the pointers it could not map to a GX address, emu64's tasks with no frame open, the frame begins and ends out of order, and the frames the render module refused; then, from sonarlib's audio mix statistics (`sl_audio_get_mix_stats`), the output frames mixed, those with a sample at 1/256 of full scale or above, and the hash of every output sample. If `n` ticks pass first (3600 by default) it prints the same fields as `ac_port: limit …` and exits 1. Wrong arguments exit 2, and a failure before the game starts exits 1, a package from another importer version saying to import the disc again. `--validate` creates the kit with `SL_EMU64_VALIDATE`, so every use of a program hashes the ranges it read again, and a static list the game rewrote is compiled again rather than drawn stale; its line must match a plain run's. The test `ac_port_play` imports the disc and runs `ac_port` twice and once with `--validate`, and all three must print the same line, with instances, a hash, and no invalid frame, view past 256 or overflow, the GX glue's five counts all 0, and audio frames above 0. Headless runs pace the mix by alarms in deterministic mode, so the audio fields match too. The title's music starts after play's first frame, so `loud` is 0 here.
 
 On `GAFE01_00` the three runs print, as the reference line:
 
 ```
-ac_port: play tick 712 retrace 712 gx 514337 dvd 227 6686462 hash 4b6269a823855fb9 instances 48 compiles 920 holes 3/832 cpu 3 refused 0 views 0 invalid 0 problems 0 overflows 0 unowned 5 gx-errors 0 unmapped 0 outside 0 nested 0 refused-frames 0
+ac_port: play tick 557 retrace 557 gx 546409 dvd 486 15148254 hash ad41ee3261159765 instances 48 compiles 1091 holes 3/1003 cpu 3 refused 0 views 0 invalid 0 problems 0 overflows 0 unowned 5 gx-errors 0 unmapped 0 outside 0 nested 0 refused-frames 0 audio 296800 loud 0 sound 380fbdb0d00f9c12
 ```
+
+With the game's sound running (step 6l), play's first frame comes at tick 557, not step 6k's 712, so the ticks, GX bytes, DVD reads (`audiorom.img`'s among them), frame hash, compiles and list holes changed; the instances and the other counts did not.
 
 ### The window
 
 `--window` starts os and the runtime in normal mode on the host's own clock and date, the window system before the render module, and the render module on the GPU sink at 640x480. It opens one window, `Animal Crossing`, 1280x960 and paced by VSync, and starts input with the GameCube profile's default bindings: the keyboard on port 0, and each gamepad on the first free port as it arrives. The main thread then pumps the window and input, and shows the latest submitted frame each pass, until the window is closed. The play line prints at play's first frame and the run goes on. `--ticks` applies only when given, and then ends the run once the runtime has begun that many ticks. At the end it prints
 
 ```
-ac_port: window ticks <t> frames <n>
+ac_port: window ticks <t> frames <n> audio <n> loud <n>
 ```
 
-with the ticks begun and the frames presented, and exits 0 if play's first frame was reached or the window was closed, else 1. There is no sound yet: the game's own sound engine faults when it runs (step 6l). `--validate` and `--diff` work with it as without.
+with the ticks begun, the frames presented and the mix statistics, and exits 0 if play's first frame was reached or the window was closed, else 1. The game's sound plays on the host's audio device, on the driver the environment names, else the platform's. `--validate` and `--diff` work with it as without.
 
-The test `ac_port_window` runs `ac_port --window --ticks 1800` on SDL's `offscreen` video driver through lavapipe's Vulkan, with SDL's `dummy` audio driver, so nothing opens on the desktop. It must exit 0 with one play line and a window line with at least 1800 ticks and frames above 0. It is skipped without a disc or lavapipe. In real time the play line differs between runs.
+The test `ac_port_window` runs `ac_port --window --ticks 1800` on SDL's `offscreen` video driver through lavapipe's Vulkan, with SDL's `dummy` audio driver, so nothing opens on the desktop. It must exit 0 with one play line and a window line with at least 1800 ticks, frames above 0 and `loud` above 0: by then the title's music plays. It is skipped without a disc or lavapipe. In real time the play line differs between runs.
 
 The GPU sink compiles pipelines on the game thread, and the GPU driver's shader compiler can be C++ (lavapipe's LLVM is): its allocations then reach the game's `operator new`. sonarlib runs every render call inside a host scope (`sl_mem_host_scope`), and `JKRHeap.cpp`'s rule sends those allocations to the host's allocator, never JKR's heaps.
+
+### Sound
+
+Every run starts the game's sound: `main.c` calls `ac_audio_init` after os starts, on sonarlib's device sink under `--window` and its null sink headless. Animal Crossing's music and sounds come from jaudio_NES's sequenced engine, the N64-style `Nas_*` engine, which mixes on the CPU (`rspsim.c`) into the blocks the AI glue (`adapter/dolphin_ai.c`) plays. The boot jingle is JAudio1's and stays off (step 6m), and the NES emulator's sound plays only in the NES games.
+
+The engine reads `audiorom.img`: sequences, then banks, then waves, as the game's compiled tables (`game/audioheaders.c`) give them. It copies a bank into its cache and turns the bank's offsets into pointers in place (`Nas_BankOfsToAddr_Inner`, `__WaveTouch`), so the banks must be the host's structures. The importer (`importer/audio.cpp`) turns the game's tables into entries for sonarlib's `kits/jaudio` (`sonar/jaudio/nas_rom.h`), which lays every bank out again at the host's sizes, 32-byte aligned, with each structure at a multiple of 16 and its pointers as offsets in the bank; the sequence and wave regions stay the disc's bytes, the waves moved by what the banks grew. On `GAFE01_00` the banks grow from 0x67C80 to 0x8F300 bytes. `importer/audio.cpp` checks each kit structure against the game's own (`static_assert`), and gives the kit this build's limits: `NA_RELOCATED_BASE`, the caches' room below and at most 0x40000 of growth. `audiorom.tbl` holds the host image's table entries, host-order `u32`s after a version word and the two counts; `Nas_InitAudio` calls `ac_audio_rom_tables` (`dolphin_dvd.c`) to write them into `AudiobankHeaderStart` and `AudiodataHeaderStart` before it reads them, and a package without it stops the run with a message.
+
+Sequences and envelopes stay the console's bytes: a sequence is a byte stream whose tables are found only by running it, and sequences hold envelopes too. So the engine reads their 16-bit values with `sl_load_be16` where it reads them: the sequence map (`system.c`, `track.c`), a sequence's `u16` operands (`track.c`), `melody.c`'s patch of a sequence's offsets (with `sl_store_be16`), and `Nas_EnvInit` (`effect.c`); `DEFAULT_ENV` (`audiotable.c`) is written in the console's byte order. Sample data is read a byte at a time. Loops and books come only from banks, and the kit converts them.
+
+The pools at host sizes: `Jac_Start`'s ARAM is 0x850000 (`game64.c_inc`), a persistent bank's cache 0x6000 and the temporary cache 0x3400, two slots of 0x1A00 (`audioconst.c`), and jaudio's heap 0x22C00 larger in both places that size it (`neosthread.c`, `game64.c_inc`'s `audiomemory`), so the misc heap keeps its room. Measured at tick 3600 of a window run on `GAFE01_00`: misc 0x42E20 of 0x49400, emem 0x19B60 of 0x28000, the temporary bank cache 0x13E0 (one bank) of 0x3400, the persistent cache empty. The largest host banks: a permanent one 0x6AA0, a temporary one 0x19C0, a persistent one 0x5D20.
+
+The test `ac_import_disc` checks both entries against the disc through the game's own tables and structures: the table's counts, each data entry where the growth puts it and the regions around the banks byte for byte, and in every bank each structure the engine relocates, followed from the host head by its pointers and compared field by field with the disc's, read big-endian.
 
 ### The emu64 differential test
 
@@ -117,7 +133,8 @@ Each is a Portability edit, under `SONAR_PORT` with the original kept, unless it
 - `JFWDisplay.h`: `setFrameRate` sets the runtime tick's length in retraces.
 - `ac_animal_logo.c`, `m_player_tools.c_inc`: display lists the game writes into lose `const`.
 - jaudio's spin loops (`dvdthread.c`, `os.c`) call `sl_os_thread_sleep(1)` in each pass, which waits for the next fixed point.
-- jaudio's heap (`neosthread.c`, `game64.c_inc`'s `audiomemory`) is `0x20000` larger, since its structures are larger on the host and it divides the heap in console bytes.
+- jaudio's heap (`neosthread.c`, `game64.c_inc`'s `audiomemory`) is `0x22C00` larger, since its structures and bank caches are larger on the host and it divides the heap in console bytes.
+- jaudio's sound engine (`system.c`, `track.c`, `effect.c`, `audiotable.c`, `audioconst.c`, `melody.c`, `game64.c_inc`): the host's bank tables, the console's byte order where sequences and envelopes are read, and the pools at host sizes ([Sound](#sound)).
 - `game64_dummy.c_inc`: `BootSound` returns after `Wavegroup_Init`, since the boot sound is in the console's layout.
 - `game64.c_inc`: `Na_CheckRestartReady` is TRUE while jaudio has run no audio frame.
 - `c_keyframe.c`: its four C99 inline table getters are emitted out of line.
@@ -130,7 +147,7 @@ Each is a Portability edit, under `SONAR_PORT` with the original kept, unless it
 
 ### What runs silent or does nothing
 
-- **Sound:** no audio runs. `AIInit` reports that the game will not be heard. jaudio's threads run with no audio frames, `audiorom.img` is not in the package, and the boot sound is skipped.
+- **Sound:** the boot jingle is skipped (step 6m), and headless the mix goes to the null sink, unheard.
 - **Drawing** (headless): emu64's frames go to the render module's null sink, which hashes them and draws nothing, so there is no picture.
 - **Input** (headless): no input module runs, so every pad channel reads no controller.
 - **Saves:** the memory cards stay in memory.

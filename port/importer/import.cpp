@@ -2,8 +2,11 @@
 #include "import.hpp"
 
 #include "archive.hpp"
+#include "audio.hpp"
 
+#include <cstdio>
 #include <iterator>
+#include <string>
 #include <vector>
 
 namespace ac {
@@ -47,8 +50,26 @@ sl_result archive(void* user, const void* const* inputs, const size_t* sizes, sl
     return sl_import_write(out, host.data(), host.size());
 }
 
+// audiorom.img laid out for the host, and its tables (audio.hpp); the user says which.
+enum class AudioPart { image, table };
+AudioPart audio_image = AudioPart::image;
+AudioPart audio_table = AudioPart::table;
+
+sl_result audiorom(void* user, const void* const* inputs, const size_t* sizes, sl_import_output* out) {
+    AudioRom rom;
+    std::string error;
+    const sl_result result = convert_audiorom(static_cast<const uint8_t*>(inputs[0]), sizes[0], rom, error);
+    if (result != SL_OK) {
+        std::fprintf(stderr, "ac-import: audiorom.img: %s\n", error.c_str());
+        return result;
+    }
+    const std::vector<uint8_t>& part = *static_cast<AudioPart*>(user) == AudioPart::image ? rom.image : rom.table;
+    return sl_import_write(out, part.data(), part.size());
+}
+
 struct Entry {
-    const char* path; // the entry's path and its disc file's
+    const char* path;  // the entry's path
+    const char* input; // its disc file's; null for the entry's path
     const char* recipe;
     uint32_t recipe_version;
     sl_import_convert_fn convert;
@@ -56,18 +77,20 @@ struct Entry {
 };
 
 const Entry entries[] = {
-    { "COPYDATE", "copy", 1, copy, nullptr },
-    { "static.str", "copy", 1, copy, nullptr },
-    { "forest_1st.arc", "archive", 1, archive, &forest_1st },
-    { "forest_2nd.arc", "archive", 1, archive, &forest_2nd },
-    { "famicom.arc", "archive", 1, archive, &famicom },
+    { "COPYDATE", nullptr, "copy", 1, copy, nullptr },
+    { "static.str", nullptr, "copy", 1, copy, nullptr },
+    { "forest_1st.arc", nullptr, "archive", 1, archive, &forest_1st },
+    { "forest_2nd.arc", nullptr, "archive", 1, archive, &forest_2nd },
+    { "famicom.arc", nullptr, "archive", 1, archive, &famicom },
+    { "audiorom.img", nullptr, "audiorom", 1, audiorom, &audio_image },
+    { "audiorom.tbl", "audiorom.img", "audiorom-table", 1, audiorom, &audio_table },
 };
 
 } // namespace
 
 sl_result add_entries(sl_import* imp, const char** failed) {
     for (const Entry& entry : entries) {
-        const sl_import_input input = { entry.path, 0, 0 };
+        const sl_import_input input = { entry.input != nullptr ? entry.input : entry.path, 0, 0 };
         sl_import_entry add = {};
         add.path = entry.path;
         add.inputs = &input;

@@ -34,6 +34,12 @@ sl_result ac_audio_init(const sl_audio_desc* desc);
 /* Stops it, as sl_audio_shutdown. Main thread. */
 void ac_audio_shutdown(void);
 
+/* Writes the host's audiorom.img layout, from the package's audiorom.tbl, into the game's bank and data tables
+   (AudiobankHeaderStart, AudiodataHeaderStart): each entry's addr and size (dolphin_dvd.c, port/NOTES.md, Sound).
+   Stops the run with a message for a table that is missing or not this build's. Nas_InitAudio's, before it reads
+   them. */
+void ac_audio_rom_tables(void);
+
 /* The DVD glue's reads since start-up and the bytes they read (dolphin_dvd.c). Game thread. */
 u64 ac_dvd_reads(void);
 u64 ac_dvd_read_bytes(void);

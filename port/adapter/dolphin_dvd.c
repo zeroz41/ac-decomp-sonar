@@ -5,6 +5,9 @@
    audio stream and no drive to fail. */
 #include "dolphin/os.h"
 #include "dolphin/dvd.h"
+/* The game's math64.h (through audiostruct.h) defines its own M_PI over the host's; the glue uses neither. */
+#undef M_PI
+#include "jaudio_NES/audioheaders.h"
 
 #include "ac_port.h"
 
@@ -294,6 +297,52 @@ BOOL DVDPrepareStreamAsync(DVDFileInfo* fileInfo, u32 length, u32 offset, DVDCal
 s32 DVDCancelStream(DVDCommandBlock* block) {
     (void)block;
     return -1;
+}
+
+/* audiorom.tbl's version word, as the importer writes it (port/importer/audio.hpp). */
+#define AUDIOROM_TABLE_VERSION 1u
+#define AUDIOROM_TABLE_WORDS 512
+
+static void fail_tables(const char* what) {
+    SL_ERROR("dvd", "audiorom.tbl: %s; import the disc again with this build's ac-import", what);
+    abort();
+}
+
+void ac_audio_rom_tables(void) {
+    ArcHeader* const tables[2] = { &AudiobankHeaderStart, &AudiodataHeaderStart };
+    static u32 words[AUDIOROM_TABLE_WORDS];
+    sl_file_info info;
+    sl_file file;
+    size_t bytes = 0;
+    size_t expected;
+    size_t next = 3;
+    s32 t;
+    s32 i;
+    expected = 3 + 2 * ((size_t)AudiobankHeaderStart.numEntries + (size_t)AudiodataHeaderStart.numEntries);
+    if (expected > AUDIOROM_TABLE_WORDS)
+        fail_tables("the game's tables are larger than the glue reads");
+    if (sl_fs_stat("game:audiorom.tbl", &info) != SL_OK)
+        fail_tables("not in the package");
+    if (info.size != expected * sizeof *words)
+        fail_tables("not the size the game's tables give");
+    if (sl_fs_open("game:audiorom.tbl", 0, &file) != SL_OK)
+        fail_tables("cannot be opened");
+    if (sl_fs_read(file, 0, words, expected * sizeof *words, &bytes) != SL_OK || bytes != expected * sizeof *words) {
+        sl_fs_close(file);
+        fail_tables("cannot be read");
+    }
+    sl_fs_close(file);
+    if (words[0] != AUDIOROM_TABLE_VERSION)
+        fail_tables("an importer version this build does not read");
+    if (words[1] != (u32)AudiobankHeaderStart.numEntries || words[2] != (u32)AudiodataHeaderStart.numEntries)
+        fail_tables("its entry counts are not the game's");
+    for (t = 0; t < 2; t++) {
+        for (i = 0; i < tables[t]->numEntries; i++) {
+            tables[t]->entries[i].addr = words[next];
+            tables[t]->entries[i].size = (s32)words[next + 1];
+            next += 2;
+        }
+    }
 }
 
 u64 ac_dvd_reads(void) {
