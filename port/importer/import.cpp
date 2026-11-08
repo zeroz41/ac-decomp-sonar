@@ -21,12 +21,24 @@ struct ArchiveRules {
 constexpr ContentRule forest_1st_rules[] = {
     { "fgdata.bin", Content::fg_data },
     { "string_data_table.bin", Content::u32_table },
+    { "mail_data_table.bin", Content::u32_table },
+    { "maila_data_table.bin", Content::u32_table },
+    { "mailb_data_table.bin", Content::u32_table },
+    { "mailc_data_table.bin", Content::u32_table },
+    { "ps_data_table.bin", Content::u32_table },
+    { "psz_data_table.bin", Content::u32_table },
+    { "select_data_table.bin", Content::u32_table },
+    { "super_data_table.bin", Content::u32_table },
+    { "superz_data_table.bin", Content::u32_table },
     { "pallet_boy.bin", Content::palettes },
     { "face_boy.bin", Content::face },
 };
 // The banners and icons the card files take, as jsyswrap.cpp:412-452 names them.
 constexpr ContentRule forest_2nd_rules[] = {
+    { "fgnpcdata.bin", Content::fg_data },
     { "message_data_table.bin", Content::u32_table },
+    { "player_room_wall.bin", Content::room_wall },
+    { "player_room_floor.bin", Content::room_floor },
     { "title.bti", Content::timg },
     { "mura_spring.bti", Content::timg },
     { "mura_summer.bti", Content::timg },
@@ -121,8 +133,8 @@ struct Entry {
 const Entry entries[] = {
     { "COPYDATE", nullptr, "copy", 1, copy, nullptr },
     { "static.str", nullptr, "copy", 1, copy, nullptr },
-    { "forest_1st.arc", nullptr, "archive", 1, archive, &forest_1st },
-    { "forest_2nd.arc", nullptr, "archive", 2, archive, &forest_2nd },
+    { "forest_1st.arc", nullptr, "archive", 2, archive, &forest_1st },
+    { "forest_2nd.arc", nullptr, "archive", 3, archive, &forest_2nd },
     { "famicom.arc", nullptr, "archive", 1, archive, &famicom },
     { "audiorom.img", nullptr, "audiorom", 1, audiorom, &audio_image },
     { "audiorom.tbl", "audiorom.img", "audiorom-table", 1, audiorom, &audio_table },

@@ -26,6 +26,11 @@ constexpr uint32_t type_data = 0x44415441;      // 'DATA'
 constexpr uint32_t header_size = AC_ARCHEADER_CONSOLE_SIZE;
 constexpr uint32_t face_texels = 0xE00; // a face record's texels
 constexpr uint32_t face_record = 0xE20; // its texels and its palette (m_player_lib.c:981-1010)
+// A wall's and a floor's record: a palette, then two and four 64x64 4-bit images (ac_my_indoor.h, aMI_WALL_BANK_SIZE
+// and aMI_FLOOR_BANK_SIZE; mRmTp_CopyWallData and mRmTp_CopyFloorData, m_room_type.c:2099-2152).
+constexpr uint32_t room_palette = 0x20;
+constexpr uint32_t wall_record = 0x1020;
+constexpr uint32_t floor_record = 0x2020;
 
 uint64_t round32(uint64_t value) {
     return (value + 31) & ~uint64_t{ 31 };
@@ -66,6 +71,17 @@ sl_result swap_palette_run(uint8_t* data, size_t size) {
     return SL_OK;
 }
 
+// Whole records of `record` bytes, each one's palette at its start.
+sl_result swap_record_palettes(uint8_t* data, size_t size, size_t record) {
+    if (size % record != 0) {
+        return SL_ERROR_IO;
+    }
+    for (size_t at = 0; at < size; at += record) {
+        sl_bswap16_array(data + at, room_palette / 2);
+    }
+    return SL_OK;
+}
+
 sl_result convert_file(uint8_t* data, size_t size, Content content) {
     switch (content) {
         case Content::fg_data:
@@ -103,6 +119,10 @@ sl_result convert_file(uint8_t* data, size_t size, Content content) {
             }
             return swap_palette_run(data + palette, size - palette);
         }
+        case Content::room_wall:
+            return swap_record_palettes(data, size, wall_record);
+        case Content::room_floor:
+            return swap_record_palettes(data, size, floor_record);
     }
     return SL_ERROR_IO;
 }

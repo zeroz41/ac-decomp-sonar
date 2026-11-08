@@ -1,4 +1,4 @@
-/* Checks ac-import on the player's disc (sonarlib docs/roadmap.md, M6 steps 6c and 11c):
+/* Checks ac-import on the player's disc (sonarlib docs/roadmap.md, M6 steps 6c, 11c and 9f0):
      ac_import_disc_test <ac-import> <disc> <version> <ac_port>
    The disc is an image or a directory in sl-disc's extracted layout; with none the test is skipped (77). The disc's ID
    and revision must be the version's. ac-import runs three times, into new packages: the second with the first's
@@ -6,8 +6,9 @@
    mounts through fs, and each entry is checked against the disc's file, read here rather than through the importer:
    the archives with import_checks.hpp, the copies byte for byte, and audiorom.img's host layout, with audiorom.tbl,
    field by field against the disc's through the game's own structures and tables (check_audiorom). forest_2nd.arc's
-   41 banners and icons have their CResTIMG headers converted. A package made at version 2, before them, is refused:
-   by fs, and by ac_port with the message to import again. The packages and caches go to a temporary directory that is
+   41 banners and icons have their CResTIMG headers converted, and its 71 house walls and 71 floors their palettes. A
+   package made at version 3, before the walls, the floors and forest_1st.arc's other message tables, is refused: by
+   fs, and by ac_port with the message to import again. The packages and caches go to a temporary directory that is
    removed at the end. */
 // The game's headers before the host's: libultra's pad structures name a member errno, which <cerrno> defines.
 #include "jaudio_NES/audioheaders.h"
@@ -44,11 +45,23 @@ struct Expected {
 const ac::ContentRule forest_1st_rules[] = {
     { "fgdata.bin", ac::Content::fg_data },
     { "string_data_table.bin", ac::Content::u32_table },
+    { "mail_data_table.bin", ac::Content::u32_table },
+    { "maila_data_table.bin", ac::Content::u32_table },
+    { "mailb_data_table.bin", ac::Content::u32_table },
+    { "mailc_data_table.bin", ac::Content::u32_table },
+    { "ps_data_table.bin", ac::Content::u32_table },
+    { "psz_data_table.bin", ac::Content::u32_table },
+    { "select_data_table.bin", ac::Content::u32_table },
+    { "super_data_table.bin", ac::Content::u32_table },
+    { "superz_data_table.bin", ac::Content::u32_table },
     { "pallet_boy.bin", ac::Content::palettes },
     { "face_boy.bin", ac::Content::face },
 };
 const ac::ContentRule forest_2nd_rules[] = {
+    { "fgnpcdata.bin", ac::Content::fg_data },
     { "message_data_table.bin", ac::Content::u32_table },
+    { "player_room_wall.bin", ac::Content::room_wall },
+    { "player_room_floor.bin", ac::Content::room_floor },
     { "title.bti", ac::Content::timg },
     { "mura_spring.bti", ac::Content::timg },
     { "mura_summer.bti", ac::Content::timg },
@@ -398,7 +411,8 @@ bool run_import(const std::string& tool, const std::string& disc, const fs::path
                        &stats.reused, &stats.size) == 4;
 }
 
-// A package made before this version of the port: the importer's id at version 2, holding the disc's COPYDATE.
+// A package made before this version of the port: the importer's id at the version before, holding the disc's
+// COPYDATE.
 sl_result copy_input(void* user, const void* const* inputs, const size_t* sizes, sl_import_output* out) {
     (void)user;
     return sl_import_write(out, inputs[0], sizes[0]);
@@ -406,7 +420,8 @@ sl_result copy_input(void* user, const void* const* inputs, const size_t* sizes,
 
 bool write_old_package(const std::string& disc, const fs::path& package, const fs::path& cache) {
     const std::string output = package.string(), cache_dir = cache.string();
-    const sl_import_desc desc = { disc.c_str(), output.c_str(), cache_dir.c_str(), ac::importer_id, 2 };
+    const sl_import_desc desc = { disc.c_str(), output.c_str(), cache_dir.c_str(), ac::importer_id,
+                                  ac::importer_version - 1 };
     sl_import* imp = nullptr;
     if (sl_import_begin(&desc, &imp) != SL_OK) {
         return false;
@@ -440,7 +455,7 @@ bool port_refuses(const std::string& port, const fs::path& package, const fs::pa
     for (std::string line; std::getline(file, line);) {
         found = found || line == message;
     }
-    std::printf("ac_port on a version-2 package: exit status %d, %s\n", status,
+    std::printf("ac_port on a version-%u package: exit status %d, %s\n", ac::importer_version - 1, status,
                 found ? "the message to import again" : "no message");
     return status != 0 && found;
 }
@@ -498,7 +513,8 @@ int run(const std::string& tool, const std::string& disc_path, const std::string
         return 1;
     }
     const std::string package = (tmp / "first.slpack").string();
-    const sl_mount_desc mount_desc = { "game", package.c_str(), SL_MOUNT_PACKAGE, "ac", 3 };
+    const sl_mount_desc mount_desc = { "game", package.c_str(), SL_MOUNT_PACKAGE, ac::importer_id,
+                                       ac::importer_version };
     sl_mount mount;
     AC_CHECK(sl_fs_mount(&mount_desc, &mount) == SL_OK, "mount the package", 0);
     for (const Expected& entry : expected) {
@@ -517,6 +533,10 @@ int run(const std::string& tool, const std::string& disc_path, const std::string
     AC_CHECK(ac_test::timg_headers == 41, "forest_2nd.arc's headers", 0);
     AC_CHECK(ac_test::title_image_offset >= 0x20 && ac_test::title_image_offset < ac_test::title_size, "title.bti",
              0x1C);
+    // The house walls and floors, each record's palette converted and its texels the disc's.
+    std::printf("forest_2nd.arc: %d wall and %d floor records converted\n", ac_test::wall_records,
+                ac_test::floor_records);
+    AC_CHECK(ac_test::wall_records == 71 && ac_test::floor_records == 71, "forest_2nd.arc's walls and floors", 0);
     std::vector<uint8_t> image, table, console;
     AC_CHECK(read_entry("audiorom.img", image) && read_entry("audiorom.tbl", table), "audiorom", 0);
     AC_CHECK(disc.read("audiorom.img", console), "audiorom.img", 0);
@@ -525,12 +545,12 @@ int run(const std::string& tool, const std::string& disc_path, const std::string
     AC_CHECK(structures != 0, "audiorom.img", 0);
 
     const fs::path old_package = tmp / "old.slpack";
-    AC_CHECK(write_old_package(disc_path, old_package, tmp / "cache-old"), "write a version-2 package", 0);
+    AC_CHECK(write_old_package(disc_path, old_package, tmp / "cache-old"), "write an old package", 0);
     const std::string old_path = old_package.string();
-    const sl_mount_desc old_desc = { "old", old_path.c_str(), SL_MOUNT_PACKAGE, "ac", 3 };
+    const sl_mount_desc old_desc = { "old", old_path.c_str(), SL_MOUNT_PACKAGE, ac::importer_id, ac::importer_version };
     sl_mount old_mount;
-    AC_CHECK(sl_fs_mount(&old_desc, &old_mount) == SL_ERROR_VERSION_MISMATCH, "fs refuses a version-2 package", 0);
-    AC_CHECK(port_refuses(port, old_package, tmp), "ac_port refuses a version-2 package", 0);
+    AC_CHECK(sl_fs_mount(&old_desc, &old_mount) == SL_ERROR_VERSION_MISMATCH, "fs refuses an old package", 0);
+    AC_CHECK(port_refuses(port, old_package, tmp), "ac_port refuses an old package", 0);
     sl_fs_shutdown();
     return ac_test::failures != 0 ? 1 : 0;
 }

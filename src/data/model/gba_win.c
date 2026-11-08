@@ -109,10 +109,17 @@ gsSPNTriangles_5b(31, 28, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0),
 gsSPEndDisplayList(),
 };
 
+#ifdef SONAR_PORT
+extern Gfx gba_win_mb1_model[];
+#endif
 Gfx gba_win_mb_before_model[] = {
 gsSPTexture(0, 0, 0, G_TX_RENDERTILE, G_ON),
 gsDPSetCombineLERP(0, 0, 0, TEXEL0, 0, 0, 0, TEXEL0, 0, 0, 0, COMBINED, 0, 0, 0, COMBINED),
 gsDPSetRenderMode(G_RM_PASS, G_RM_XLU_SURF2),
+#ifdef SONAR_PORT
+/* sonarlib port: on the console this list has no end and runs on into gba_win_mb1_model, next in memory */
+gsSPBranchList(gba_win_mb1_model),
+#endif
 };
 
 Gfx gba_win_mb1_model[] = {

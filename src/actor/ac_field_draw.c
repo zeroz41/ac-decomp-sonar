@@ -445,7 +445,7 @@ static void aFD_DrawBlock(aFD_block_c* block, ACTOR* actorx, GAME* game) {
 #ifdef SONAR_PORT /* sonarlib port: each block's draws are its part of the field's draw (adapter/emu64_glue.c) */
         ac_emu64_marks marks;
 
-        ac_emu64_part_open(game->graph, (u32)(block->bz << 8 | block->bx), &marks);
+        ac_emu64_part_open(game->graph, (u32)((block->bz & 0xff) << 8 | (block->bx & 0xff)), &marks);
 #endif
         opa_gfx = mFI_GetBGDisplayListRom(block->bx, block->bz);
         xlu_gfx = mFI_GetBGDisplayListRom_XLU(block->bx, block->bz);

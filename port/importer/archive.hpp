@@ -13,7 +13,8 @@
 
 namespace ac {
 
-enum class Content : uint8_t { fg_data, u32_table, palettes, face, timg }; // a file's conversion, below
+// A file's conversion, below.
+enum class Content : uint8_t { fg_data, u32_table, palettes, face, timg, room_wall, room_floor };
 
 struct ContentRule {
     const char* name; // a file in the archive's first node of type 'DATA'
@@ -30,12 +31,15 @@ struct ContentRule {
    The conversions run on a file's mSize bytes: fg_data converts each whole 0x206-byte mFM_fg_data_c; u32_table swaps
    each whole word; palettes swaps each 2-byte entry; face keeps each record's 0xE00 bytes of texels and swaps the
    palettes around them as 2-byte entries; timg converts the CResTIMG header at the file's start and keeps the texels
-   and palette after it, which the card files hold in the console's order.
+   and palette after it, which the card files hold in the console's order; room_wall and room_floor, for files of whole
+   0x1020- and 0x2020-byte records, swap each record's 0x20-byte palette at its start as 2-byte entries and keep the
+   texels after it.
 
    SL_ERROR_UNSUPPORTED for a whole compressed archive (Yaz0 or Yay0). SL_ERROR_IO for a signature other than RARC, a
    header_length other than 0x20, an info block, table or file data past the file, a node's entries past the entry
    table, an entry's name past the string table, a rule's file missing, a directory, compressed or with data past the
-   file data, and a file a conversion finds malformed. */
+   file data, and a file a conversion finds malformed, a room_wall or room_floor file that is not whole records among
+   them. */
 sl_result convert_archive(const uint8_t* console, size_t size, const ContentRule* rules, size_t rule_count,
                           std::vector<uint8_t>& out);
 

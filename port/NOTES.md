@@ -2,21 +2,21 @@
 
 ## The package
 
-`ac-import <source> <package> <cache>` (`importer/`) writes the package the game reads from boot to Town's first frame and its sound, importer `ac`, version 3. Each entry is a whole disc file, at the game's own name for it, or made from one:
+`ac-import <source> <package> <cache>` (`importer/`) writes the package the game reads from boot to Town's first frame and its sound, importer `ac`, version 4. Each entry is a whole disc file, at the game's own name for it, or made from one:
 
 | Entry | Recipe | Conversion |
 |---|---|---|
 | `COPYDATE` | `copy` 1 | none: text |
 | `static.str` | `copy` 1 | none: strings |
-| `forest_1st.arc` | `archive` 1 | the directory, and the files below |
-| `forest_2nd.arc` | `archive` 2 | the directory, and the files below |
+| `forest_1st.arc` | `archive` 2 | the directory, and the files below |
+| `forest_2nd.arc` | `archive` 3 | the directory, and the files below |
 | `famicom.arc` | `archive` 1 | the directory only |
 | `audiorom.img` | `audiorom` 1 | the banks laid out for the host ([Sound](#sound)) |
 | `audiorom.tbl` | `audiorom-table` 1 | made from `audiorom.img`: the host image's bank and data tables |
 
 Each archive stays whole. Its directory is laid out again at the host's sizes and in the host's byte order, and its file data keeps the console's offsets, names and order (sonarlib's `docs/porting-model.md`, Import).
 
-Version 3 (sonarlib's `docs/roadmap.md`, M6 step 11c) converts the banners' and icons' headers in `forest_2nd.arc`. `ac_port` refuses a package from before it, saying to import the disc again: an old package would hand `mCD_set_bti_data` the headers' offsets in the console's order.
+Version 3 (sonarlib's `docs/roadmap.md`, M6 step 11c) converts the banners' and icons' headers in `forest_2nd.arc`. Version 4 (step 9f0) converts `forest_1st.arc`'s other message tables and `forest_2nd.arc`'s `fgnpcdata.bin`, house walls and floors. `ac_port` refuses a package from before the current version, saying to import the disc again: an old package would hand `mCD_set_bti_data` the headers' offsets, and the message code the tables' offsets, in the console's order. Only the importer's version makes the port refuse a package; an archive's recipe version keys the import cache alone.
 
 ## The archives
 
@@ -25,18 +25,21 @@ Converted files are converted in place, at their offsets and sizes.
 - **`forest_1st.arc`:**
   - converted:
     - `fgdata.bin`, Town's item layers, through `ac.schema`'s `FgData`;
-    - `string_data_table.bin`, its `u32` words swapped;
+    - the ten message tables, `string_data_table.bin` and the `mail`, `maila`, `mailb`, `mailc`, `ps`, `psz`, `select`, `super` and `superz` `_data_table.bin`, their `u32` words swapped. `mMsg_Get_BodyParam` reads each the same way, its offsets and sizes as native words (`m_msg_main.c_inc:283-298`). Unconverted, the choice menus show "iiii", and letters read from the wrong place or are not loaded;
     - `pallet_boy.bin`, its palettes swapped;
     - `face_boy.bin`, its palettes swapped and its texels kept;
-  - not yet converted: the mail, `ps`, `psz`, `select`, `super` and `superz` tables.
+  - kept as the console's: the `*_data.bin` texts, read byte by byte, and `tex_boy.bin`'s texels.
 - **`forest_2nd.arc`:**
   - converted:
+    - `fgnpcdata.bin`, the villagers' house rooms, 510 records, through `ac.schema`'s `FgData` as `fgdata.bin`. `mFM_SortFGData` indexes a list of 536 by each record's `fg_id` with no upper bound (`m_field_make.c:84-104`), so unconverted ids wrote past it into the heap;
     - `message_data_table.bin`, its `u32` words swapped;
+    - `player_room_wall.bin` and `player_room_floor.bin`, the house walls and floors, 71 records of 0x1020 bytes and 71 of 0x2020 (kinds `room_wall` and `room_floor`): each record's 0x20-byte palette at its start swapped as 16 `u16` entries, and its two or four 64 × 64 4-bit images kept. The palette's buffer also takes a player's own design from a table in the host's order (`mNW_CopyOriginalPalette`), so the file's palettes must be the host's too;
     - the 41 `.bti` images, the banners and icons the card files take, as `jsyswrap.cpp:412-452` names them: each one's `CResTIMG` header through `ac.schema`'s `CResTIMG`, and its texels and palette kept, as the card holds them in the console's order. `mCD_set_bti_data` reads the header's offsets natively and copies what follows as it is (`m_card_bti.c_inc`);
-  - not yet converted: `fgnpcdata.bin`, `my_original.bin`, `needlework.bin`, the room floor and wall, and the stock and island schedules.
-- **`famicom.arc`:** none of its contents is converted yet.
-
-The other files on the first frame's path stay as the console's bytes, as the game reads them: text and byte strings (`string_data.bin`, `npc_name_str_table.bin`, `message_data.bin`) and texels (`tex_boy.bin`).
+  - kept as the console's:
+    - `my_original.bin` and `needlework.bin`, texels; the e-Reader program after them is copied as bytes and written with `putLEWord` (`m_eappli.c:93-110`);
+    - `npc_name_str_table.bin` and `message_data.bin`, text;
+    - the island's GBA files, `d_obj_npc_stock_sch.bin`, `d_obj_npc_stock_scl.bin` and `d_bg_island_sch.bin`. They go only to a GBA, and `mISL_int` and `mISL_short` reverse each word as they load and store it (`m_island.c:173-191`), which gives the same bytes on either host; converting them would break what the GBA receives.
+- **`famicom.arc`:** none of its contents is converted. Its members are Yaz0, under a root that is not a `DATA` node, and the Famicom emulator declines to start on the port, so nothing reads them. Its three `.bti.szs` card images will need their headers converted after expanding, which converting in place cannot do: that is for when the emulator runs.
 
 ## The program
 
@@ -264,6 +267,14 @@ ac_port: presents 144 count 1545 held 0 late 0 dropped 0 backward 0 pairs 643 un
 ac_port: presents 360 count 3862 held 0 late 0 dropped 0 backward 0 pairs 643 unexplained 0 none 226440 unmatched 348 explicit 1078 forget 14 cut 0 all 156 duplicate 0 rotation 0 distance 0 gap 0 auto-cut 0
 ```
 
+Last, the kit's `--measure --ticks 7200` once: the title left idle past where step 11d's port died, between ticks 5737 and 5751, when jaudio's DVD queue ran past its buffer ([The edits on the path](#the-edits-on-the-path)). It must exit 0 with its three lines, the measured line at tick 7200, and nothing invalid, overflowed, refused, unowned or stray; its snaps are not checked, as the runs to 1200 check them. It takes about 70 seconds on lavapipe, and measures 6594 frames over 6642 ticks, with one unexplained snap, a rotation:
+
+```
+ac_port: measure kit frames 6594 ticks 6642 ... draws 1057735 calls 764593 pipelines 96839 buffers 161505 textures 707307 storage 88976 pushes 0
+ac_port: presents 0 count 6594 held 0 late 0 dropped 0 backward 0 pairs 6594 unexplained 1 none 1917823 unmatched 2887 explicit 7409 forget 22974 cut 0 all 259 duplicate 0 rotation 1 distance 0 gap 2 auto-cut 0
+ac_port: measured tick 7200 retrace 7200 gx 10180440 dvd 486 15148254 hash eb4b6bebc15feaff instances 111 compiles 1433263 holes 55491/1432864 cpu 64819 refused 0 views 0 invalid 0 problems 0 overflows 0 unowned 0 strays 0 gx-errors 0 unmapped 0 outside 0 nested 0 refused-frames 0 audio 3846640 loud 1355148 dsp 361 sound 029693a2df212f4b
+```
+
 The baseline that sonarlib's merging steps (M6 steps 7c to 7g) are measured against: `--measure` and `--measure --reference` with `--ticks 4100`, the title demo's town to just before its end at tick 4193, three runs of each, each figure the median of the three runs'. They ran on an Intel Core Ultra 7 265K (20 threads, the `powersave` governor) with an NVIDIA GeForce RTX 3090 on NVIDIA's driver 615.78.08, Vulkan 1.4, Linux 7.2, the port's RelWithDebInfo build, through SDL's offscreen driver. Both measure 3539 frames over 3542 ticks.
 
 | | game | prepare | present | CPU a tick (game) |
@@ -475,6 +486,7 @@ Each is a Portability edit, under `SONAR_PORT` with the original kept, unless it
 - `JFWDisplay.h`: `setFrameRate` sets the runtime tick's length in retraces.
 - `ac_animal_logo.c`, `m_player_tools.c_inc`: display lists the game writes into lose `const`.
 - jaudio's spin loops (`dvdthread.c`, `os.c`) call `sl_os_thread_sleep(1)` in each pass, which waits for the next fixed point.
+- `dvdthread.c`: the DVD queue's buffer is 0x80 `OSMessage`s, the host's pointers, the count the queue is given; the console's is 0x80 `s32`, passed cast as `OSMessage*`. sonarlib's queue keeps the messages in the array it is given, so messages 64 to 127 overwrote what follows the buffer, jaudio's callbacks `NA_DACOUT_CALLBACK` to `NA_VFRAME_CALLBACK` among them, and `CreateAudioTask` then called a slot of `CALLSTACK`. Without it the port died between ticks 5737 and 5751 with the title left idle, and at tick 557 in a new game.
 - jaudio's heap (`neosthread.c`, `game64.c_inc`'s `audiomemory`) is `0x22C00` larger, since its structures and bank caches are larger on the host and it divides the heap in console bytes.
 - jaudio's sound engine (`system.c`, `track.c`, `effect.c`, `audiotable.c`, `audioconst.c`, `melody.c`, `game64.c_inc`): the host's bank tables, the console's byte order where sequences and envelopes are read, and the pools at host sizes ([Sound](#sound)).
 - `game64_dummy.c_inc`: `NIN_BANK` and `NIN_WAVE` are the host's layout from `boot_sound.inc` ([Boot sound](#boot-sound)).
@@ -489,7 +501,8 @@ Each is a Portability edit, under `SONAR_PORT` with the original kept, unless it
 - The weather (`ac_weather.c`): `aWeather_DrawWeatherPrv` draws each particle in part i of the weather's owners, i its slot (0 to 99), and `aWeather_GetWeatherPrv` forgets the part of the slot it claims. `ac_weather_sakura.c`, `ac_weather_leaf.c` and `ac_weather_snow.c`: their scroll checks snap the part of a particle they wrap from one edge of the view to the other.
 - `ef_effect_control.c`: `eEC_actor_draw` draws each effect in part i of the control's owners, i its index, and `eEC_MakeEffect` forgets the part of the index it claims, the control actor being the one that holds `eEC_CLIP`.
 - `bg_item_common.c_inc`, `bg_xmas_item_draw.c_inc`: the bg items draw each position in a part of its own. Both type-1 loops and `bXI_draw_loop_type1_xtree` open part `(block × 256 + ut) × 16 + j` around each position they draw, block being the draw table's `bz × 7 + bx`, ut the position's unit and j the draw list's index in `bg_item_common_draw_item_body`, 0 for the shadow, whose parts go into the sub-list the shadow list calls; `bg_item_common_draw_item` and `bg_item_common_draw_item_body` hand the loops the table, its block and j in file statics, and a position whose ut or j is out of range opens no part. The pools draw each element in part 2^23 + kind × 256 + slot, the kinds drop 0, fruit drop 1, pit 2, ten coin 3, fade 4 and hole 5, and `fade_entry`, `ten_coin_entryR`, `drop_entry_main`, `hole_effect_entry` and `pit_entry` forget the part of the slot they fill, through the clip's `bg_item_actorx`.
-- `ac_field_draw.c`: `aFD_DrawBlock` draws each block's body in part `bz << 8 | bx` of the field's owners.
+- `ac_field_draw.c`: `aFD_DrawBlock` draws each block's body in part `(bz & 0xff) << 8 | (bx & 0xff)` of the field's owners. The field draws the player's block and the eight around it, so at the edge of a scene's blocks `bx` or `bz` is -1 and takes 0xFF; the part stays below the kit's 2^24, and no two blocks share one, as blocks run from -1 to 10.
+- `rst_win.c`, `gba_win.c`: `ledit_common_mode` and `gba_win_mb_before_model` have no end, and on the console ran on into the list after them in memory, `rst_win_mode` and `gba_win_mb1_model`. Each ends with `gsSPBranchList` to that list. Without it the kit read the vertices the host's linker placed after them as commands, refused the name keyboard's tasks and drew it black.
 - `ac_animal_logo.c`: `aAL_actor_draw` draws the back in part 1, the title in part 2, the copyright and trademark in part 3 and "press start" in part 4.
 - `ac_structure_clip.c_inc`: the structure clip's setup registers `aSTR_actor_cl` as table 1 of the glue's static actors ([The glue](#the-glue)).
 - `m_msg_main.c_inc`, `ac_npc_post_girl.c_inc`: five buffers `mFont_UnintToString` writes past are as wide as what it writes: the hour's 15 bytes into 2, the minutes' 4 and the seconds' 5 into 2 (`mMsg_CopyHour`, `Min`, `Sec`), and the post office's loan balance, 7 bytes and a comma into 2, and account, 11 into 8. The console's overruns hit dead stack; the host's stack protector aborts, which ended the port at Rover's time prompt on the train.
@@ -519,4 +532,5 @@ Each is a Portability edit, under `SONAR_PORT` with the original kept, unless it
 
 ### Open items
 
+- **The noise at boot.** In `--window` the sound garbles for a moment after the Nintendo jingle and the train's sound. The DVD queue's fix does not explain it: with the title left idle to tick 3600, the runs' lines with and without the fix are the same, the sound's hash too.
 - **A made actor's parts.** A part's ids sit under `sl_emu64_part(owner, part)`, so `ac_emu64_forget_actor` and the snap of a made actor (`ac_emu64_snap_made`) reach the owner's ids but not its parts', as sonarlib's step 9b has it. An actor that draws in parts and is made at the main-memory offset of one that just died would blend its part n with the old actor's part n for one frame. None does today: every actor that draws in parts (the weather, the effect control, the bg items, the field and the title logo) is made once a scene, and `game_ct` snaps all. The fix belongs in the kit, which would keep the parts each owner opened and forget or snap them with it, in a later step.

@@ -37,6 +37,9 @@ inline void check(bool ok, const char* what, const char* where, size_t at) {
 inline int timg_headers = 0;
 inline uint32_t title_image_offset = 0;
 inline size_t title_size = 0;
+// The wall and floor records check_file checked.
+inline int wall_records = 0;
+inline int floor_records = 0;
 
 inline uint64_t round32(uint64_t value) {
     return (value + 31) & ~uint64_t{ 31 };
@@ -125,6 +128,19 @@ inline void check_file(const uint8_t* console, const uint8_t* host, size_t size,
                 check_same(console, host, at, at + 0xE00, name);
                 const size_t palette_end = at + 0xE20 + 0xE00 <= size ? at + 0xE20 : size;
                 check_swapped16(console, host, at + 0xE00, palette_end, name);
+            }
+            break;
+        }
+        case ac::Content::room_wall:
+        case ac::Content::room_floor: {
+            // Whole records, each a 0x20-byte palette and the texels after it.
+            const bool wall = content == ac::Content::room_wall;
+            const size_t record = wall ? 0x1020 : 0x2020;
+            AC_CHECK(size % record == 0, name, 0);
+            for (size_t at = 0; at + record <= size; at += record) {
+                check_swapped16(console, host, at, at + 0x20, name);
+                check_same(console, host, at + 0x20, at + record, name);
+                (wall ? wall_records : floor_records)++;
             }
             break;
         }

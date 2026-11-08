@@ -23,7 +23,12 @@ typedef struct DVDCall_ {
 
 static char audio_root_path[32] = "";
 static OSMessageQueue mq;
+#ifdef SONAR_PORT
+/* sonarlib port: the queue's messages are OSMessages, the host's pointers */
+static OSMessage msgbuf[0x80];
+#else
 static s32 msgbuf[0x80];
+#endif
 #ifdef SONAR_PORT
 /* sonarlib port: each slot holds a task callback and its call, aligned for the host's pointers */
 static u8 CALLSTACK[0x8000] ATTRIBUTE_ALIGN(8);

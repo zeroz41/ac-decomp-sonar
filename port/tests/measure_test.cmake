@@ -1,4 +1,4 @@
-# The port's measured runs (sonarlib docs/roadmap.md, M6 steps 7b, 9a and 9b; port/NOTES.md, Measured runs):
+# The port's measured runs (sonarlib docs/roadmap.md, M6 steps 7b, 9a, 9b and 9f0; port/NOTES.md, Measured runs):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
 #         -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P measure_test.cmake
 # ac-import writes the package from the player's disc into OUT_DIR. Then ac_port runs once as it is and once with
@@ -12,7 +12,9 @@
 # exit 2 with the usage. Then the kit's measured run at 144 Hz and at 360 Hz, once each: the same measured line and
 # ticks as at no rate, its frames and its dropped ones the frames at no rate, more presents than frames, more at
 # 360 Hz than at 144 Hz, none held or backward, no unexplained snap, and the same frames dropped, pairs and snaps at
-# both rates. It prints every line. When AC_DISC names no disc or there is no lavapipe it prints the line the test's
+# both rates. Last, the kit's --measure --ticks 7200 once, the title left idle past where step 11d's port died: it exits
+# 0 with its three lines, the measured line at tick 7200 and nothing invalid, overflowed, refused, unowned or stray. It
+# prints every line. When AC_DISC names no disc or there is no lavapipe it prints the line the test's
 # SKIP_REGULAR_EXPRESSION matches and returns.
 cmake_minimum_required(VERSION 3.25)
 
@@ -284,3 +286,15 @@ if(NOT at_144 STREQUAL at_360)
     message(FATAL_ERROR "ac_port_measure: the runs at 144 Hz and 360 Hz dropped or snapped differently:\n"
                         "${at_144}\n${at_360}")
 endif()
+
+# The title left idle to tick 7200, past where step 11d's port died between ticks 5737 and 5751, when jaudio's DVD
+# queue had run past its buffer (port/NOTES.md, The edits on the path).
+run("kit to 7200" lines MEASURE OPTIONS --measure --ticks 7200
+    PATTERNS "${measure_pattern}" "${presents_pattern}" "ac_port: measured${report_pattern}")
+list(GET lines 0 measure_line)
+list(GET lines 2 measured_line)
+if(NOT measure_line MATCHES "^ac_port: measure kit " OR NOT measured_line MATCHES "^ac_port: measured tick 7200 ")
+    message(FATAL_ERROR "ac_port_measure: the kit's run to 7200 did not measure to tick 7200:\n"
+                        "${measure_line}\n${measured_line}")
+endif()
+check_report("the kit's run to 7200" "${measured_line}")

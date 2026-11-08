@@ -699,7 +699,7 @@ int main(int argc, char** argv) {
         desc.host_path = package;
         desc.flags = SL_MOUNT_PACKAGE | SL_MOUNT_CASE_INSENSITIVE;
         desc.importer = "ac";      /* ac::importer_id */
-        desc.importer_version = 3; /* ac::importer_version */
+        desc.importer_version = 4; /* ac::importer_version */
         result = sl_fs_mount(&desc, &mount);
         if (result == SL_ERROR_VERSION_MISMATCH) {
             fprintf(stderr, "ac_port: %s is from another version of the port; import the disc again with ac-import\n",
