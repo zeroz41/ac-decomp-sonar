@@ -6057,7 +6057,11 @@ static union {
 
 static union {
     mCD_keep_diary_c l_keepDiary ATTRIBUTE_ALIGN(32);
+#ifdef SONAR_PORT /* sonarlib port: the travel read below copies keep_original, 0xCCA0 bytes, in here; the copy stays inside the union */
+    u8 buf[mCD_ALIGN_SECTORSIZE(sizeof(mCD_keep_original_c))];
+#else
     u8 buf[mCD_ALIGN_SECTORSIZE(sizeof(mCD_keep_diary_c))];
+#endif
 } l_keepDiary ATTRIBUTE_ALIGN(32);
 
 static int mCD_SaveStation_NextLand_load_others(mCD_memMgr_c* mgr, mCD_memMgr_fileInfo_c* fileInfo) {

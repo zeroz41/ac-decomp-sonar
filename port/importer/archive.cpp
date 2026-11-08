@@ -80,6 +80,15 @@ sl_result convert_file(uint8_t* data, size_t size, Content content) {
             return SL_OK;
         case Content::palettes:
             return swap_palette_run(data, size);
+        case Content::timg: {
+            if (size < AC_CRESTIMG_CONSOLE_SIZE) {
+                return SL_ERROR_IO;
+            }
+            CResTIMG header;
+            ac_CResTIMG_from_console(&header, data);
+            std::memcpy(data, &header, sizeof(header));
+            return SL_OK;
+        }
         case Content::face: {
             if (size < face_texels) {
                 return SL_ERROR_IO;

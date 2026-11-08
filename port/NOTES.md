@@ -2,19 +2,21 @@
 
 ## The package
 
-`ac-import <source> <package> <cache>` (`importer/`) writes the package the game reads from boot to Town's first frame and its sound, importer `ac`, version 2. Each entry is a whole disc file, at the game's own name for it, or made from one:
+`ac-import <source> <package> <cache>` (`importer/`) writes the package the game reads from boot to Town's first frame and its sound, importer `ac`, version 3. Each entry is a whole disc file, at the game's own name for it, or made from one:
 
 | Entry | Recipe | Conversion |
 |---|---|---|
 | `COPYDATE` | `copy` 1 | none: text |
 | `static.str` | `copy` 1 | none: strings |
 | `forest_1st.arc` | `archive` 1 | the directory, and the files below |
-| `forest_2nd.arc` | `archive` 1 | the directory, and the file below |
+| `forest_2nd.arc` | `archive` 2 | the directory, and the files below |
 | `famicom.arc` | `archive` 1 | the directory only |
 | `audiorom.img` | `audiorom` 1 | the banks laid out for the host ([Sound](#sound)) |
 | `audiorom.tbl` | `audiorom-table` 1 | made from `audiorom.img`: the host image's bank and data tables |
 
 Each archive stays whole. Its directory is laid out again at the host's sizes and in the host's byte order, and its file data keeps the console's offsets, names and order (sonarlib's `docs/porting-model.md`, Import).
+
+Version 3 (sonarlib's `docs/roadmap.md`, M6 step 11c) converts the banners' and icons' headers in `forest_2nd.arc`. `ac_port` refuses a package from before it, saying to import the disc again: an old package would hand `mCD_set_bti_data` the headers' offsets in the console's order.
 
 ## The archives
 
@@ -28,8 +30,10 @@ Converted files are converted in place, at their offsets and sizes.
     - `face_boy.bin`, its palettes swapped and its texels kept;
   - not yet converted: the mail, `ps`, `psz`, `select`, `super` and `superz` tables.
 - **`forest_2nd.arc`:**
-  - converted: `message_data_table.bin`, its `u32` words swapped;
-  - not yet converted: `fgnpcdata.bin`, `my_original.bin`, `needlework.bin`, the room floor and wall, the stock and island schedules, and the `.bti` images.
+  - converted:
+    - `message_data_table.bin`, its `u32` words swapped;
+    - the 41 `.bti` images, the banners and icons the card files take, as `jsyswrap.cpp:412-452` names them: each one's `CResTIMG` header through `ac.schema`'s `CResTIMG`, and its texels and palette kept, as the card holds them in the console's order. `mCD_set_bti_data` reads the header's offsets natively and copies what follows as it is (`m_card_bti.c_inc`);
+  - not yet converted: `fgnpcdata.bin`, `my_original.bin`, `needlework.bin`, the room floor and wall, and the stock and island schedules.
 - **`famicom.arc`:** none of its contents is converted yet.
 
 The other files on the first frame's path stay as the console's bytes, as the game reads them: text and byte strings (`string_data.bin`, `npc_name_str_table.bin`, `message_data.bin`) and texels (`tex_boy.bin`).
@@ -68,29 +72,30 @@ With the game's sound running (step 6l), play's first frame comes at tick 557, n
 `--window` starts os and the runtime in normal mode on the host's own clock and date (sonarlib's `docs/roadmap.md`, M6 steps 6k and 11a). The main thread sets up in this order:
 
 1. sonarlib, then fs with the player's user directories: `user:` and `config:`, org `sonarlib` and app `animal-crossing`, on Linux `~/.local/share/sonarlib/animal-crossing` and `~/.config/sonarlib/animal-crossing`, or with `--user-dir <dir>` every one under `dir`, `config:` at `dir/config`. fs comes before the render module, so the GPU sink's pipeline list is `pipelines.slpc` in the cache directory, `~/.cache/sonarlib/animal-crossing` on Linux or `dir/cache` (sonarlib's `docs/rendering.md`, Pipeline list). The window run ends with `_Exit` and never reaches the render module's shutdown, so the list it keeps is the one the sink writes while it runs: once a list lacks a pipeline made and 120 frames in a row made none, about once a scene, on a thread of the sink's own. The next run's render module makes every pipeline the list names before the first frame;
-2. the settings: it prints `ac_port: settings <host path>`, loads `config:settings.toml`, where no file is a first run, takes each `--set` over it for the session (`sl_settings_override`), adds a watch that marks the settings changed from whichever thread applies a change, and binds os's system settings (`sl_os_settings_bind`), so the game boots with the stored system settings. A file that does not load prints `ac_port: <host path>:<line>:<column>: <message>; it is left as it is` to stderr, or without the place when the error has none, and the run goes on at the defaults and never saves it;
+2. the memory cards' save store (`sl_save_store_open`) on `user:saves`, `~/.local/share/sonarlib/animal-crossing/saves` on Linux or `dir/saves`, keeping two backups of each save, which it gives to the card glue (`ac_card_set_store`) for `CARDInit` to keep the cards in ([Saves](#saves)); then the settings: it prints `ac_port: settings <host path>`, loads `config:settings.toml`, where no file is a first run, takes each `--set` over it for the session (`sl_settings_override`), adds a watch that marks the settings changed from whichever thread applies a change, and binds os's system settings (`sl_os_settings_bind`), so the game boots with the stored system settings. A file that does not load prints `ac_port: <host path>:<line>:<column>: <message>; it is left as it is` to stderr, or without the place when the error has none, and the run goes on at the defaults and never saves it;
 3. the window system, then the render module on the GPU sink at 640x480, so its device shares the window system's video driver, then emu64's kit;
 4. `game:`, the package; os; the game's sound on the host's audio device;
 5. input, with the GameCube profile's default bindings: the keyboard on port 0, and each gamepad on the first free port as it arrives;
-6. the window, `Animal Crossing`, 1280x960 and paced by VSync, then the binds that apply the settings in effect to it at once: its mode, pacing and limiter (`sl_window_settings_bind`), the volume (`sl_audio_settings_bind`) and the rumble strength (`sl_input_settings_bind`). Every setting a `--set` can name is registered then, so each must name one that holds its override (`sl_settings_is_overridden`): one naming a key nothing registers, or with a value its setting refused at registration, prints `ac_port: --set <assignment>: <why>` and the usage to stderr and exits 2;
-7. the overlay (`sl_ui_init`), F1 its toggle, with an `Animal Crossing` page: a Controls section with the keys, the gamepads, F1, and F11 or Alt+Enter, and a Files section with the settings file's and the user directory's host paths;
+6. the window, `Animal Crossing`, 1280x960 and paced by VSync, then the binds that apply the settings in effect to it at once: its mode, pacing and limiter (`sl_window_settings_bind`), the volume (`sl_audio_settings_bind`) and the rumble strength (`sl_input_settings_bind`); then the card in each slot (`sl_memcard_settings_bind("card-a", NULL)`), `kit.card.slot_a` with `card-a` by default and `kit.card.slot_b` with none, which `CARDInit` puts in and a change swaps at the tick boundary. Every setting a `--set` can name is registered then, so each must name one that holds its override (`sl_settings_is_overridden`): one naming a key nothing registers, or with a value its setting refused at registration, prints `ac_port: --set <assignment>: <why>` and the usage to stderr and exits 2;
+7. the overlay (`sl_ui_init`), F1 its toggle, with an `Animal Crossing` page: a Controls section with the keys, the gamepads, F1, and F11 or Alt+Enter, a Files section with the settings file's, the user directory's and the saves directory's host paths, and a Memory cards section with the two slots' settings, which edit them. Their widgets mark them as changing the simulation, since a slot's change applies at the tick boundary. sonarlib's Settings page lists only `sonar.*` keys, so this page is where the player changes them. A page's text is copied when it is added, so the page cannot show that a slot was left empty for a name the kit refused; that waits for the overlay's Saves page;
 8. the game thread.
 
 Each pass the main thread then pumps the window, which hands each event to the fullscreen keys, then the overlay, then input, and updates input; begins the presented frame, which applies the video settings changed since the last; presents the latest submitted frame at the clock's alpha for the image's presentation time, the time `sl_window_frame_begin` gives (`sl_clock_alpha`), so the image blends the game's last two frames as the display's time falls between them, or at 1 when the window gives no time, as a stale one does; builds the overlay over it (`sl_ui_frame`) with the window's size and pixel density, the time since the last frame, the window and the frame resolved; and shows it, until the window is closed. Since sonarlib's step 9b each moving thing the title demo draws has an identity of its own and its jumps are marked, and the measured runs find no snap unexplained ([Measured runs](#measured-runs)); before it the window presented at 1. Each pass, when a setting changed since the last save and the overlay is hidden, it saves the file (`sl_settings_save_file`), which writes the stored values anew in tables, without the file's comments. The play line prints at play's first frame and the run goes on. `--ticks` applies only when given, and then ends the run once the runtime has begun that many ticks. At the end it saves them once more when a setting changed since the last save, unless the file did not load, a failure printing `ac_port: cannot save settings: <result>`. So a run that changes no setting leaves the file byte for byte as it was, comments too; `--set` changes none, as an override is for the session. Then it prints
 
 ```
-ac_port: window ticks <t> frames <n> audio <n> loud <n> dsp <n> pacing <vsync|mailbox|immediate|limiter> limit <Hz> gain <gain> pipelines <n> warmed <n> lists <n>
+ac_port: window ticks <t> frames <n> audio <n> loud <n> dsp <n> pacing <vsync|mailbox|immediate|limiter> limit <Hz> gain <gain> pipelines <n> warmed <n> lists <n> cards <A> <B>
 ```
 
-with the ticks begun, the frames presented, the mix statistics and the DSP's sounding frames; the window's pacing and its limiter's rate in effect, from `sl_window_info`, in whole Hz, 0 for none; the audio device's gain (`sl_audio_output_gain`), (volume / 100)², to three decimals; and from `sl_render_stats`, the pipelines the GPU sink made, those of them it made from the pipeline list at the start, and the lists it wrote. It exits 0 if play's first frame was reached or the window was closed, else 1. The game's sound plays on the host's audio device, on the driver the environment names, else the platform's. `--validate` and `--diff` work with it as without. Every other run mounts no user directory, reads no settings file and registers no setting, and `--user-dir` or `--set` without `--window` exits 2, as does a malformed `--set` at once, naming it, or a bad one after the binds.
+with the ticks begun, the frames presented, the mix statistics and the DSP's sounding frames; the window's pacing and its limiter's rate in effect, from `sl_window_info`, in whole Hz, 0 for none; the audio device's gain (`sl_audio_output_gain`), (volume / 100)², to three decimals; and from `sl_render_stats`, the pipelines the GPU sink made, those of them it made from the pipeline list at the start, and the lists it wrote; then the card in each slot (`sl_memcard_get_card`), `-` for none. It exits 0 if play's first frame was reached or the window was closed, else 1. The game's sound plays on the host's audio device, on the driver the environment names, else the platform's. `--validate` and `--diff` work with it as without. Every other run mounts no user directory, reads no settings file, registers no setting and puts no card in either slot, and `--user-dir` or `--set` without `--window` exits 2, as does a malformed `--set` at once, naming it, or a bad one after the binds.
 
-The test `ac_port_window` runs `ac_port --window` twice to play, then with bad assignments, on SDL's `offscreen` video driver through lavapipe's Vulkan, with SDL's `dummy` audio driver, so nothing opens on the desktop, with `--user-dir` under its own directory, which starts empty, so no player's file is read or written:
+The test `ac_port_window` runs `ac_port --window` twice to play, then with bad assignments and twice with the memory cards, on SDL's `offscreen` video driver through lavapipe's Vulkan, with SDL's `dummy` audio driver, so nothing opens on the desktop, with `--user-dir` under its own directory, which starts empty, so no player's file is read or written:
 
 - **The settings round trip.** It writes `config/settings.toml` with a comment line, `sonar.video.pacing = "limiter"`, `sonar.video.frame_limit = 120`, `sonar.audio.volume = 50` and `port.later.kept = 1`, a key no code registers, then runs `--ticks 1800 --set sonar.video.frame_limit=90`. The run must exit 0 with the settings line naming the file, one play line and a window line with at least 1800 ticks, frames above 0, `loud` above 0 (by then the title's music plays), `dsp` above 0 (the boot jingle) and `pacing limiter limit 90 gain 0.250`.
 - **Unchanged settings.** The round trip changes no setting, as an override is never a change, so afterwards the file must be byte for byte as written, its comment too.
 - **The pipeline list.** After the round trip `cache/pipelines.slpc` must exist and its window line must have `lists` above 0. The broken file's run starts from it, so its window line must have `warmed` above 0.
 - **A broken file.** It replaces the file with `sonar.audio.volume = fifty`, which does not parse, and runs `--ticks 120`. Its stderr must name the file at line 1, its window line must read `gain 1.000`, and the file must be byte for byte as written. Its exit status is not checked: 120 ticks reach no play.
 - **Bad assignments.** With no settings file, `--ticks 60 --set sonar.audio.volum=30`, a key nothing registers, and `--ticks 60 --set sonar.audio.volume=500`, a value its setting refuses, must each exit 2 with stderr naming the assignment; `--set` and `--user-dir` without `--window` must each exit 2 with the usage.
+- **The memory cards.** With the user directory emptied again, so no settings file, it runs `--ticks 900`, past play's first frame and so past `CARDInit`. The window line must read `cards card-a -` and the saves directory hold `card-a.slsave`, the card's header save. A second run with `--set kit.card.slot_b=card-b` must read `cards card-a card-b`, and the directory hold `card-b.slsave`. A settings file either run writes must hold no `kit.card` line, as the defaults never changed and an override is never saved. Their exit status is not checked.
 
 It is skipped without a disc or lavapipe. In real time the play line differs between runs.
 
@@ -115,6 +120,72 @@ The jingle at boot (`BootSound`, `game64_dummy.c_inc`) is JAudio1's, the engine 
 On the jingle's path the engine reads a sound id's bytes as bank, program, key and velocity, so `noteon.c` and `jammain_2.c` store its value with `sl_store_be32` and `oneshot.c` loads it with `sl_load_be32`; `Jam_SeqmainNote` (`jammain_2.c`) reads a track's children and `_D5` by name rather than by console offsets; `EffecterInit_Perc` (`oneshot.c`) reads a percussion key map's two `Rand_` pointers by name; and `FORCE_RELEASE_TABLE` (`bankdrv.c`) is the six `s16` the console reads.
 
 The test `ac_boot_sound` lays out the two extracts again, walks each image through the game's structures as `Bank_Test` and `Wave_Test` reach them, compares every field with the console's bytes, read big-endian, every relocated pointer with the place of the structure the console's offset names and every other pointer with the console's value, and checks that the build's `boot_sound.inc` is what the tool writes. It fails on an instrument or a voice, which the jingle has none of.
+
+### Saves
+
+With `--window` the memory cards are kept in the save store on `user:saves` ([The window](#the-window); `README.md`, Saves), through sonarlib's `kits/card` (sonarlib's `docs/roadmap.md`, M6 steps 11a to 11c). The store holds each file in the console's bytes, as a GameCube card does, and the game reads and writes the kit's host copy of it, in the host's layout. Three views in `adapter/ac_saves.c`, which `CARDInit` hands the kit, convert between the two for the game's three kinds of file: `DobutsunomoriP_MURA`, the town under both its names (`m_card.c:1526-1527`), so its rename keeps the host copy; `DobutsunomoriP_PL_`, the passports; and `DobutsunomoriP_Omake_`, the gift letters. `adapter/ac_saves.schema` lays out the structures they hold, written by hand from the game's headers with every structure `same`, and `sonar_add_schema` generates their converters. The test `ac_save_schema_check` checks every structure against the port's DWARF, with the event areas' `data` named as the port's. `mCD_foreigner_c` (`m_card.c:1844-1850`) and `aESC_event_save_c` (`ac_ev_soncho.c:5-8`) are defined in the game's `.c` files, so `ac_port.h` repeats them for the views and their test under `AC_SAVES_TYPES`.
+
+**The file maps.** Each file starts with the card header, `MemcardHeader_c`: the comment, the banner and the icons, `[0, 0x1440)`, copied as they are both ways. The banner and icons are the console's texels and palettes, as `ac-import` keeps them ([The archives](#the-archives)). After it, each structure converts by its offset, whatever it holds: a region with a bad checksum, an erased one or one of zeros converts the same way, so the game reads it as it did on the console.
+
+| File | Size | Offset | Structure | Checksum at, over |
+|---|---|---|---|---|
+| town | 0x72000 | 0x1440 | the protect code, four `u16` | none |
+| | | 0x1460 | `mCD_keep_mail_c`, 0xBAA4 bytes | +0, over 0xBAC0 |
+| | | 0xCF20 | `mCD_keep_original_c`, 0xCCA0 | +0, over 0xCCA0 |
+| | | 0x19BC0 | `mCD_keep_diary_c`, 0xBA02 | +0, over 0xBA20 |
+| | | 0x26000, 0x4C000 | `Save_t`, 0x242A0, the town and its copy | +0x12, `save_check.checksum`, over 0x26000 |
+| passport | 0x6000 | 0x3040 | `mCD_foreigner_c`, 0x2E20 | +0, over 0x2E20 |
+| gift letters | 0x2000 | 0x1440 | `PresentSave_c`, 0xA7E | +0, over the whole file from 0 |
+
+The bytes between the structures, the zeros after the keep diary to 0x26000 and those after each `Save_t`, are copied as they are. A structure past a file's end is left as its bytes. The kit's host copy is aligned at 16 bytes, and the game's structures at 32 (`ATTRIBUTE_ALIGN`), so each converts in a static buffer of `ac_saves.c` and is copied to or from the copy; the kit's lock keeps one view running at a time.
+
+**The protect code.** The town's header, `[0, 0x1460)`, is bytes except the four `u16` at 0x1440, which `mCD_CheckProtectCode` reads natively (`m_card.c:1907-1927`, `2286`): 0x3C1C, then three words that are not 0. No C type lays the header out, so `ac_saves.c` converts the four words itself.
+
+**The keep regions' padding.** A keep structure's `sizeof` is the same on both (`same` asserts it), and the game sums and copies it to its size aligned to 32 (`l_aram_real_size_32_table`, `m_card.c:1563-1567`). The bytes from the structure's end to there, 0xBAA4 to 0xBAC0 for keep_mail and 0xBA02 to 0xBA20 for keep_diary, are padding that the views copy as it is, and the checksum covers it.
+
+**What converts.** Every integer converts by its width: `u64` and `OSTime` are 8 bytes, `f32` 4. `char` text and `u8` arrays are bytes. Bit-fields are `bits` lines over their console containers, the two signed ones with `s`; `mQst_base_c`'s container is 16 bits, and `bridge_flags` is bytes. A hole inside a structure reads as zero on the host, as `from_console` leaves it, and keeps its console bytes on the card, as `update_console` does; the checksums' carry covers both.
+
+**The unions and their rules.**
+
+- The errand info is `union ... by errand_type`: `case 0,1` is the chain arm and `case 2` the first-job arm, with no `else`. Another value of the signed 3-bit field, one the game never sets, copies the union's bytes as they are. The chain arm covers the prefix both arms share, so an errand NONE (0) that the game later makes a chain or a first job keeps its ids, and zeros convert to zeros. A case and an `else` cannot both name the chain arm, since `sl-schema` refuses two lines naming one member.
+- The contest info is always the letter arm, and the weekly event always `kabu_peddler`.
+- The special event is `by kind`, cases 0 (SHOP) to 5 (GYPSY). None, 0xFFFFFFFF, has no case, so its zeros are copied.
+- The villager memories: the schema has two of `Animal_c` and of `Anmmem_c`, the land arm for `animals[15]` and the passport's `remove_animal`, and the island arm for `island.animal`.
+- `leaflet_recipient_flags` is its two `s16`.
+
+**The event save areas.** `mEv_save_common_data_c` holds five areas, each `info` and 44 bytes of `data`. The generated converter converts `info` and leaves `data` to `ac_saves.c`, which converts it after: for each area whose `area_use_bitfield` bit is set, by the structure `(info.type, info.id)` picks; for an area whose bit is clear, as its bytes. Both directions read the bit and the pair from the host's structure, so one value picks one layout both ways. A pair no layout names converts as `int[11]`, logged once a run. A new town file is 0xFF in every byte (sonarlib's `memcard.cpp`), so its first host copy, before the game writes the town, logs the pair (255, 255) once. Each structure is one of `ac_saves.schema` that no top structure reaches, and its members convert by their types, `PersonalID_c` and `lbRTC_ymd_c` by their fields; `ac_saves.c` asserts each fits in the 44 bytes. The bytes past a structure keep the console's.
+
+| Type | Id | Structure | Where the game reserves it | Its other casts |
+|---|---|---|---|---|
+| `APRILFOOLS_DAY` | 0 | `aAPC_event_save_data_c` | `ac_aprilfool_control.c:37-39` | none |
+| `NEW_YEARS_DAY` | 7 | `aEv_hatumode_save_c` | `ac_hatumode_npc0_talk.c_inc:2-5` | none |
+| `KK_SLIDER` | 10 | `aNTT_event_save_c` | `ac_npc_totakeke.c:51-81` | `m_kankyo.c:2269` reads `s16` 0, `_00`; `m_camera2.c:2528` reads the `u16` at +2, `bitfield` |
+| `DOZAEMON` | 13 | `mEv_dozaemon_c` | `ac_ev_dozaemon.c:58-89` | `ac_boat_demo_move.c_inc:72` reserves it as the same |
+| `FISHING_TOURNEY_1`, `_2` | 0 | `aEANG_event_data_c` | `ac_ev_angler_move.c_inc:17-63` | none |
+| `SPORTS_FAIR_FOOT_RACE` | 8 | `aEv_tokyoso_c` | `ac_tokyoso_control.c:61-64` | `ac_ev_soncho2_think.c_inc:64`, as the same |
+| `SPORTS_FAIR_TUG_OF_WAR` | 9 | `aEv_tunahiki_c` | `ac_tunahiki_control.c:39-43` | `ac_rope.c:75` reads type 0xE's as one `f32`, `rope` |
+| `GHOST` | 54 | `mEv_gst_c` | `ac_ev_ghost.c:118-132` | `ac_event_manager.c:3549`, as the same |
+| `SONCHO_BRIDGE_MAKE` | 34 | `aESC_event_save_c` | `ac_ev_soncho.c:47-55` | none |
+| `HARVEST_FESTIVAL_FRANKLIN` | 0 | `aEv_turkey_save_c` | `ac_ev_turkey.c:255-258` | none |
+| `TOY_DAY_JINGLE` | 0 | `mEv_santa_event_c` | `ac_ev_santa.c:114-117` | none |
+| `FIREWORKS_SHOW` | 0 | `aEv_yomise_save_c` | `ac_ev_yomise_move.c_inc:2-49` | none |
+| `SUMMER_CAMPER` | 0 | one `mActor_name_t`, as a `u16` | `ac_event_manager.c:4042-4044` | `m_npc.c:3592`, as the same |
+| any | 119 (`mEv_EVENT_NUM`) | `mEv_place_data_c`, an event's lot | `ac_event_manager.c:1160-1180`, `1772-1774` | none |
+| a type with an event map (`m_event_map_npc.c:12-30`) | 15 | `aSNMgr_event_save_c` | `ac_set_npc_manager.c:590-592` | `m_event_map_npc.c:540`, as the same; `m_npc.c:2897` reads `KAMAKURA`'s as one `u8`, `animal_idx[0]` |
+
+Every other cast reads a member of the structure the table names, at its offset and in its type, so one layout serves them all. The summer camper's area is read through a pointer to an `mActor_name_t`, and no structure of the game lays it out.
+
+**The checksums** carry the console's sum, never 0. `to_host` computes S, the big-endian sum of the console's region, converts, then sets the host's checksum so the host's native sum is S. `to_console` computes H, the native sum of the host's region, converts with `update_console`, then sets the console's checksum so the big-endian sum is H. So a valid region is valid both ways, a bad one stays bad by the same amount, an erased one keeps its non-zero sum, and a round trip gives the console's checksum again. The game's sums are `mFRm_ReturnCheckSum`'s, the `u16` words added natively (`m_flashrom.c:110-120`).
+
+**The dates.** The schemas convert `mEv_MonthDay_u` as its `u16` arm, never as its bytes. On the host that arm holds the console's number, month above day ([The edits on the path](#the-edits-on-the-path), `m_event.h`), so a byte swap of the number gives the console's bytes, month first: December 25 is `0C 19` on the card. A saved type that came to hold `mEv_schedule_date_u` or `mEv_ymdh_u` would convert its `u32` arm the same way. `lbRTC_time_c` converts its year as a `u16` and the rest as bytes.
+
+**The keep diary's overrun.** When the player travels, `mCD_SaveStation_NextLand_load_others` copies the other town's keep_original, 0xCCA0 bytes, into `l_keepDiary`, where it means `l_keepOriginal` (the decompilation's `@BUG`). On the console the union is 0xC000 bytes, and the copy runs 0xCA0 bytes past it. Under `SONAR_PORT` its buffer is `mCD_ALIGN_SECTORSIZE(sizeof(mCD_keep_original_c))`, 0xE000 bytes, so the copy stays inside it. What the console's bytes past the union were overwritten with is not reproduced.
+
+**The files no view covers** are their bytes both ways: the Famicom (NES) games' saves and the NES ROMs a card can hold. That is right for the ROMs, and for the saves' checksum, a sum of bytes (`calcSum`, `famicom.cpp:157`). It is not right for the rest of a save: its header, at the file's data offset (`famicom.cpp:1113`), holds a `u16` size (`famicom.h:73`), and the game sets the first-play bits in a native `u32` at the save data's +4 (`famicom_nesinfo.cpp:741-742`). The port writes those in the host's order, so a card's NES saves would not read on a console. The Famicom emulator does not start in the port yet ([What runs silent or does nothing](#what-runs-silent-or-does-nothing)). Gift letter files from outside the game and the Game Boy Advance link are not handled either.
+
+**The timing.** The game writes a town save a sector at a time (`mCD_write_comp_bg_read`, `m_card.c:602-630`): it reads each sector and writes those that differ, and each write converts the whole 0x72000-byte host copy to the console's layout. `ac_card_port` times a new town's save that way, its 57 sectors each read and then written through `CARDRead` and `CARDWrite` on a memory store, and one whole-town conversion each way. Over five runs of the RelWithDebInfo build: the reads 0.30 to 1.26 ms in all, the writes 14.0 to 17.2 ms in all, the store's writes among them; one town to the host 0.18 to 0.23 ms and to the console 0.04 ms. So a save's 57 conversions take about 2.3 ms.
+
+The test `ac_save_views` works each case by hand in the console's bytes: a field of each kind, each kind of bit-field container, each union rule, the event areas, the dates, the protect code, the keep regions' padding, the checksums of each region kind, and 64 random files of each kind to the host and back, which must be their bytes again.
 
 ### The emu64 differential test
 
@@ -436,6 +507,7 @@ Each is a Portability edit, under `SONAR_PORT` with the original kept, unless it
 - `ac_npc_ctrl.c_inc`: the NPCs' nine actor buffers and the size test are `0xC00` bytes, as the NPC classes are `0xB68` to `0xBE8` at the host's sizes against the console's `0x9D0`; without it Porter at the station is never made. `aNPC_keep_actor_class` registers the nine buffers as table 0 of the glue's static actors ([The glue](#the-glue)).
 - `initial_menu.c` and `jsyswrap.cpp`: accessors for the goldens' keys, `frame_count` and `jc_fader` ([Goldens](#goldens)).
 - `sys_math.c`: `init_rnd` takes its seed through `ac_port_rnd_seed`, which is the clock unless `--qrand-seed` gives one.
+- `m_card.c`: `l_keepDiary`'s buffer is `mCD_ALIGN_SECTORSIZE(sizeof(mCD_keep_original_c))`, as the travel load copies keep_original into it; on the console the copy overran the union by 0xCA0 bytes ([Saves](#saves)).
 - `adapter/names.h` renames libc64's `malloc`, `free` and `sprintf` to `ac_malloc`, `ac_free` and `ac_sprintf`, so the host's C library keeps its own.
 
 ### What runs silent or does nothing
@@ -443,7 +515,6 @@ Each is a Portability edit, under `SONAR_PORT` with the original kept, unless it
 - **Sound:** headless the mix goes to the null sink, unheard.
 - **Drawing** (headless): emu64's frames go to the render module's null sink, which hashes them and draws nothing, so there is no picture.
 - **Input** (headless): no input module runs, so every pad channel reads no controller.
-- **Saves:** the memory cards stay in memory.
 - **The Famicom emulator** declines to start.
 
 ### Open items

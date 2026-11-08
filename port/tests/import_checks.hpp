@@ -7,6 +7,7 @@
 #include "../importer/archive.hpp"
 
 #include "JSystem/JKernel/JKRArchive.h"
+#include "jsyswrap.h"
 #include "m_field_make.h"
 
 #include <sonar/base/endian.h>
@@ -31,6 +32,11 @@ inline void check(bool ok, const char* what, const char* where, size_t at) {
 }
 
 #define AC_CHECK(cond, where, at) ac_test::check((cond), #cond, (where), (at))
+
+// The CResTIMG headers check_file checked, and title.bti's image data offset as the host reads it with its file's size.
+inline int timg_headers = 0;
+inline uint32_t title_image_offset = 0;
+inline size_t title_size = 0;
 
 inline uint64_t round32(uint64_t value) {
     return (value + 31) & ~uint64_t{ 31 };
@@ -86,6 +92,32 @@ inline void check_file(const uint8_t* console, const uint8_t* host, size_t size,
             AC_CHECK(size % 2 == 0, name, 0);
             check_swapped16(console, host, 0, size, name);
             break;
+        case ac::Content::timg: {
+            // The header's values in the host's order, read through the game's structure; its bytes, and the texels
+            // and palette after it, the console's.
+            AC_CHECK(size >= 0x20, name, 0);
+            if (size < 0x20) {
+                break;
+            }
+            const CResTIMG header = load<CResTIMG>(host);
+            AC_CHECK(header.mSizeX == sl_load_be16(console + 0x02), name, 0x02);
+            AC_CHECK(header.mSizeY == sl_load_be16(console + 0x04), name, 0x04);
+            AC_CHECK(header.mPaletteEntryCount == sl_load_be16(console + 0x0A), name, 0x0A);
+            AC_CHECK(header.mPaletteOffset == sl_load_be32(console + 0x0C), name, 0x0C);
+            AC_CHECK(header.mLODBias == static_cast<int16_t>(sl_load_be16(console + 0x1A)), name, 0x1A);
+            AC_CHECK(header.mImageDataOffset == sl_load_be32(console + 0x1C), name, 0x1C);
+            for (size_t at :
+                 { 0x00, 0x01, 0x06, 0x07, 0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19 }) {
+                AC_CHECK(host[at] == console[at], name, at);
+            }
+            check_same(console, host, 0x20, size, name);
+            timg_headers++;
+            if (std::strcmp(name, "title.bti") == 0) {
+                title_image_offset = header.mImageDataOffset;
+                title_size = size;
+            }
+            break;
+        }
         case ac::Content::face: {
             // Records of 0xE00 bytes of texels and a 0x20-byte palette; the sunburn palettes follow the last.
             size_t at = 0;

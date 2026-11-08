@@ -60,7 +60,7 @@ Then play the game in a window, with sound:
 port/build/ac_port --package ac.pkg --window
 ```
 
-Close the window to quit. F11 or Alt+Enter switches between a window and fullscreen at once, even while the overlay is shown, and the next run opens the same way. F1 shows or hides sonarlib's overlay over the game, with its settings, its statistics, and an Animal Crossing page listing the controls and where your files are. While the overlay is shown, the game doesn't get the keyboard or gamepads.
+Close the window to quit. F11 or Alt+Enter switches between a window and fullscreen at once, even while the overlay is shown, and the next run opens the same way. F1 shows or hides sonarlib's overlay over the game, with its settings, its statistics, and an Animal Crossing page listing the controls, where your files are and the memory card in each slot. While the overlay is shown, the game doesn't get the keyboard or gamepads.
 
 | Keyboard | GameCube |
 |---|---|
@@ -84,7 +84,7 @@ Options:
 | Option | What it does |
 |---|---|
 | `--window` | shows the game in a window, plays its sound, and reads the keyboard and gamepads; each image it shows blends the game's last two frames at the clock's alpha for the time it is shown |
-| `--user-dir <dir>` | with `--window`: keeps every user directory under `dir` instead of your own, the settings file at `dir/config/settings.toml` and the pipeline list in `dir/cache`, for a portable install |
+| `--user-dir <dir>` | with `--window`: keeps every user directory under `dir` instead of your own, the settings file at `dir/config/settings.toml`, the memory cards in `dir/saves` and the pipeline list in `dir/cache`, for a portable install |
 | `--set <key>=<value>` | with `--window`, any number of times: sets a setting for this run only, over the settings file, and never saves it, as in `--set sonar.audio.volume=30`. One that isn't `key=value`, names no setting the port has, or gives a value its setting doesn't take prints `ac_port: --set <key>=<value>: …` and exits with 2 before the game starts |
 | `--ticks <n>` | headless: gives up after `n` game frames if play hasn't started (3600 by default); with `--window` or `--measure`: quits after `n` game frames (no limit by default with `--window`) |
 | `--validate` | rechecks the game's display lists on every use |
@@ -123,3 +123,25 @@ Change settings on the overlay's Settings page, or edit the file while the game 
 | `sonar.system.sound_mode` | `mono`, `stereo` or `surround`: the game's options set it, and it lasts, as the console kept it |
 
 If the file doesn't parse, the port prints where, as `ac_port: <path>:<line>:<column>: <message>; it is left as it is`, and the game runs at the default settings, with any `--set`. It doesn't save the file that run, so your text is never overwritten and nothing you change that run is kept. Fix the line or delete the file.
+
+## Saves
+
+With `--window` the game saves to memory cards that the port keeps as files. On Linux they are in `~/.local/share/sonarlib/animal-crossing/saves`, or `<dir>/saves` with `--user-dir <dir>`, and the overlay's Animal Crossing page shows where. A card is `<name>.slsave`, its header, and one `<name>-f<nnn>.slsave` for each file the game saved on it, `<nnn>` being the file's number on the card from `000`. Each write keeps the copy it replaces as `.slsave.1` and the one before that as `.slsave.2`, and a save that is damaged loads from its newest good copy. The files hold the bytes a GameCube writes to its card, except the ones listed below.
+
+The two slots are settings:
+
+| Setting | Values |
+|---|---|
+| `kit.card.slot_a` | the card in slot A, `card-a` by default |
+| `kit.card.slot_b` | the card in slot B, none by default |
+
+A card's name is 1 to 59 characters of `a` to `z`, `0` to `9`, `_` and `-`. An empty value leaves the slot empty. Change them on the overlay's Animal Crossing page, under Memory cards, in `settings.toml` while the game isn't running, or for one run with `--set`, as in `--set kit.card.slot_b=card-b`. sonarlib's Settings page doesn't list them.
+
+A change applies at the game's next frame, as pulling one card out of the console and putting the other in does, so don't change a slot while the game is saving. Changing both at once swaps the two cards. A name the port has no card for yet gets a new, formatted 16 Mbit card. A name that isn't a card's name, the card already in the other slot, or a card that can't be read leaves the slot empty, and the port logs why. The overlay page still shows the name you set.
+
+Runs without `--window` have no cards: the game finds both slots empty.
+
+Not saved as a GameCube saves them yet:
+
+- The NES games' saves. The NES games don't start in the port yet, and once they do, parts of their saves will be in your computer's byte order rather than the GameCube's.
+- Anything that needs the Game Boy Advance link: the port has no Game Boy Advance to connect.

@@ -1,0 +1,867 @@
+# The console layouts of Animal Crossing's card files (sonarlib docs/roadmap.md, M6 step 11c; port/NOTES.md, Saves),
+# written by hand from the game's headers. Every structure is `same`: the port's structures are the card's bytes on
+# the host. The top structures are the town's Save_t and its three keep structures, the passport's mCD_foreigner_c
+# and the gift letters' PresentSave_c; ac_saves.c converts the regions around them and the event save areas' data.
+# The event areas' structures, at the end, are reached by no top structure: ac_saves.c calls them on data.
+# ac_save_schema_check checks every structure against the port's DWARF.
+struct lbRTC_time_c size 0x8 type "lbRTC_time_c" same
+    u8  sec     0x0
+    u8  min     0x1
+    u8  hour    0x2
+    u8  day     0x3
+    u8  weekday 0x4
+    u8  month   0x5
+    u16 year    0x6
+end
+struct mFRm_chk_t size 0x14 type "mFRm_chk_t" same
+    s32          version  0x0
+    u32          code     0x4
+    u16          land_id  0x8
+    lbRTC_time_c time     0xA
+    u16          checksum 0x12
+end
+struct PersonalID_c size 0x14 type "PersonalID_c" same
+    u8  player_name[8] 0x0 bytes
+    u8  land_name[8]   0x8 bytes
+    u16 player_id      0x10
+    u16 land_id        0x12
+end
+struct mMsm_remail_info_c size 0x4C type "mMsm_remail_info_c" same
+    u8  types[15] 0x0 bytes
+    u16 items[30] 0x10
+end
+struct mMsm_record_c size 0x4E type "mMsm_record_c" same
+    bits u8 0x0 { contacted:1 remail_pending:1 send_info_mail:1 stored_fossil_num:5 }
+    mMsm_remail_info_c remail_info 0x2
+end
+# The bit-fields are declared u32 but fill 16 bits, and time_limit sits at +2 on both compilers.
+struct mQst_base_c size 0xC type "mQst_base_c" same
+    bits u16 0x0 { quest_type:2 quest_kind:6 time_limit_enabled:1 progress:4 give_reward:1 unused:2 }
+    lbRTC_time_c time_limit 0x2
+end
+struct AnmPersonalID_c size 0xE type "AnmPersonalID_c" same
+    u16 npc_id       0x0
+    u16 land_id      0x2
+    u8  land_name[8] 0x4 bytes
+    u8  name_id      0xC
+    u8  looks        0xD
+end
+struct mQst_delivery_c size 0x28 type "mQst_delivery_c" same
+    mQst_base_c     base      0x0
+    AnmPersonalID_c recipient 0xC
+    AnmPersonalID_c sender    0x1A
+end
+struct mQst_errand_chain_c size 0x2C type "mQst_errand_chain_c" same
+    AnmPersonalID_c used_ids[3] 0x0
+    u8              used_num    0x2A
+end
+struct mQst_firstjob_c size 0x1E type "mQst_firstjob_c" same
+    AnmPersonalID_c used_ids[2] 0x0
+    bits u8 0x1C { used_num:7 wrong_cloth:1 }
+end
+struct mQst_errand_c size 0x58 type "mQst_errand_c" same
+    mQst_base_c         base      0x0
+    AnmPersonalID_c     recipient 0xC
+    AnmPersonalID_c     sender    0x1A
+    u16                 item      0x28
+    bits u8 0x2A { pockets_idx:5s errand_type:3s }
+    # CHAIN (1) and FIRST_JOB (2) have an arm; NONE (0) converts as the chain arm, which covers the prefix both share.
+    # Another value, one the game never sets, copies the union's bytes.
+    union info 0x2C 0x2C by errand_type
+    case 0,1
+        mQst_errand_chain_c chain     0
+    case 2
+        mQst_firstjob_c     first_job 0
+    end
+end
+struct Mail_hs_c size 0x3A type "Mail_hs_c" same
+    s8 header_back_start 0x0
+    u8 unknown           0x1
+    u8 header[24]        0x2 bytes
+    u8 footer[32]        0x1A bytes
+end
+struct Mail_nm_c size 0x16 type "Mail_nm_c" same
+    PersonalID_c personalID 0x0
+    u8           type       0x14
+end
+struct Mail_hdr_c size 0x2C type "Mail_hdr_c" same
+    Mail_nm_c recipient 0x0
+    Mail_nm_c sender    0x16
+end
+struct Mail_ct_c size 0xFC type "Mail_ct_c" same
+    u8 font              0x0
+    u8 header_back_start 0x1
+    u8 mail_type         0x2
+    u8 paper_type        0x3
+    u8 header[24]        0x4 bytes
+    u8 body[192]         0x1C bytes
+    u8 footer[32]        0xDC bytes
+end
+struct Mail_c size 0x12A type "Mail_c" same
+    Mail_hdr_c header  0x0
+    u16        present 0x2C
+    Mail_ct_c  content 0x2E
+end
+struct mPr_cloth_c size 0x4 type "mPr_cloth_c" same
+    u16 idx  0x0
+    u16 item 0x2
+end
+struct mPr_destiny_c size 0xA type "mPr_destiny_c" same
+    lbRTC_time_c received_time 0x0
+    u8           type          0x8
+end
+struct mPr_birthday_c size 0x4 type "mPr_birthday_c" same
+    u16 year  0x0
+    u8  month 0x2
+    u8  day   0x3
+end
+struct mPr_catalog_order_c size 0x4 type "mPr_catalog_order_c" same
+    u16 item       0x0
+    u8  shop_level 0x2
+end
+struct lbRTC_ymd_c size 0x4 type "lbRTC_ymd_c" same
+    u16 year  0x0
+    u8  month 0x2
+    u8  day   0x3
+end
+struct Anmremail_c size 0x16 type "Anmremail_c" same
+    lbRTC_ymd_c date         0x0
+    u8          name[8]      0x4 bytes
+    u8          land_name[8] 0xC bytes
+    bits u8 0x14 { flags.cond:1 flags.looks:7 }
+end
+struct mPr_animal_memory_c size 0xA type "mPr_animal_memory_c" same
+    u16 npc_id       0x0
+    u8  land_name[8] 0x2 bytes
+end
+struct mPr_map_info_c size 0xA type "mPr_map_info_c" same
+    u8  land_name[8] 0x0 bytes
+    u16 land_id      0x8
+end
+struct mNW_original_tex_c size 0x200 type "mNW_original_tex_c" same
+    u8 data[512] 0x0 bytes
+end
+struct mNW_original_design_c size 0x220 type "mNW_original_design_c" same
+    u8                 name[16]        0x0 bytes
+    u8                 palette         0x10
+    u8                 flag_design_set 0x11
+    mNW_original_tex_c design          0x20
+end
+struct mCD_player_calendar_c size 0x68 type "mCD_player_calendar_c" same
+    u32 played_days[12] 0x0
+    u32 event_days[12]  0x30
+    u16 event_flags     0x60
+    u8  edit            0x62
+    u8  pad_63          0x63
+    u16 year            0x64
+    u8  month           0x66
+end
+struct mPr_day_day_c size 0x6 type "mPr_day_day_c" same
+    lbRTC_ymd_c last_date 0x0
+    u8          days      0x4
+end
+struct mPr_sunburn_c size 0x6 type "mPr_sunburn_c" same
+    lbRTC_ymd_c last_changed_date 0x0
+    s8          rank              0x4
+    s8          rankdown_days     0x5
+end
+struct mPr_carde_data_c size 0x32 type "mPr_carde_data_c" same
+    lbRTC_ymd_c letter_send_date      0x0
+    u8          card_letters_sent[46] 0x4 bytes
+end
+struct Private_c size 0x2440 type "Private_c" same
+    PersonalID_c          player_ID                           0x0
+    s8                    gender                              0x14
+    s8                    face                                0x15
+    u8                    reset_count                         0x16
+    mMsm_record_c         museum_record                       0x18
+    u16                   inventory.pockets[15]               0x68
+    u8                    inventory.lotto_ticket_expiry_month 0x86
+    u8                    inventory.lotto_ticket_mail_storage 0x87
+    u32                   inventory.item_conditions           0x88
+    u32                   inventory.wallet                    0x8C
+    u32                   inventory.loan                      0x90
+    mQst_delivery_c       deliveries[15]                      0x94
+    mQst_errand_c         errands[5]                          0x2EC
+    u16                   equipment                           0x4A4
+    Mail_hs_c             saved_mail_header                   0x4A6
+    Mail_c                mail[10]                            0x4E0
+    u16                   backgound_texture                   0x1084
+    u8                    exists                              0x1086
+    u8                    hint_count                          0x1087
+    mPr_cloth_c           cloth                               0x1088
+    AnmPersonalID_c       stored_anm_id                       0x108C
+    mPr_destiny_c         destiny                             0x109A
+    mPr_birthday_c        birthday                            0x10A4
+    mPr_catalog_order_c   catalog_orders[5]                   0x10A8
+    u8                    unk_10A8[24]                        0x10BC bytes
+    u32                   aircheck_collect_bitfield[2]        0x10D4
+    Anmremail_c           remail                              0x10DC
+    u32                   reset_code                          0x10F4
+    mPr_animal_memory_c   animal_memory                       0x10F8
+    u8                    complete_fish_insect_flags          0x1102
+    u16                   celebrated_birthday_year            0x1104
+    u32                   furniture_collected_bitfield[43]    0x1108
+    u32                   wall_collected_bitfield[3]          0x11B4
+    u32                   carpet_collected_bitfield[3]        0x11C0
+    u32                   paper_collected_bitfield[2]         0x11CC
+    u32                   music_collected_bitfield[2]         0x11D4
+    mPr_map_info_c        maps[8]                             0x11DC
+    u32                   bank_account                        0x122C
+    mNW_original_design_c my_org[8]                           0x1240
+    u8                    my_org_no_table[8]                  0x2340 bytes
+    u32                   state_flags                         0x2348
+    mCD_player_calendar_c calendar                            0x234C
+    u32                   soncho_trophy_field0                0x23B4
+    mPr_day_day_c         nw_visitor                          0x23B8
+    mPr_day_day_c         radiocard                           0x23BE
+    mPr_sunburn_c         sunburn                             0x23C4
+    u8                    unused_23CA[14]                     0x23CA bytes
+    u16                   birthday_present_npc                0x23D8
+    u8                    golden_items_collected              0x23DA
+    u32                   soncho_trophy_field1                0x23DC
+    mPr_carde_data_c      ecard_letter_data                   0x23E0
+    u8                    unused_2412[46]                     0x2412 bytes
+end
+struct mLd_land_info_c size 0xC type "mLd_land_info_c" same
+    u8  name[8] 0x0 bytes
+    s8  exists  0x8
+    u16 id      0xA
+end
+struct mNtc_board_post_c size 0xC8 type "mNtc_board_post_c" same
+    u8           message[192] 0x0 bytes
+    lbRTC_time_c post_time    0xC0
+end
+struct TempoBeat_c size 0x2 type "TempoBeat_c" same
+    u8 tempo 0x0
+    s8 beat  0x1
+end
+struct mHm_flg_c size 0x1 type "mHm_flg_c" same
+    bits u8 0x0 { house_updated:1 has_saved:1 hra_member:1 has_basement:1 hra_reward0:1 hra_reward1:1 bit_6:1 bit_7:1 }
+end
+struct mHm_rmsz_c size 0x6 type "mHm_rmsz_c" same
+    u8  upgrade_order_date.day   0x0
+    u8  upgrade_order_date.month 0x1
+    u16 upgrade_order_date.year  0x2
+    bits u8 0x4 { size:3 next_size:3 statue_rank:2 }
+    bits u8 0x5 { renew:1 statue_ordered:1 basement_ordered:1 pad_1:1 pad:4 }
+end
+struct mHm_lyr_c size 0x228 type "mHm_lyr_c" same
+    u16 items[16][16]  0x0
+    u64 ftr_switch     0x200
+    u32 haniwa_step[8] 0x208
+end
+struct mHm_wf_c size 0x2 type "mHm_wf_c" same
+    u8 flooring_idx  0x0
+    u8 wallpaper_idx 0x1
+end
+struct mHm_fllot_bit_c size 0x1 type "mHm_fllot_bit_c" same
+    bits u8 0x0 { wall_original:1 floor_original:1 bit_2_7:6 }
+end
+struct mHm_flr_c size 0x8A8 type "mHm_flr_c" same
+    mHm_lyr_c       layer_main      0x0
+    mHm_lyr_c       layer_secondary 0x228
+    mHm_lyr_c       layer_storage1  0x450
+    mHm_lyr_c       layer_storage2  0x678
+    mHm_wf_c        wall_floor      0x8A0
+    TempoBeat_c     tempo_beat      0x8A2
+    mHm_fllot_bit_c floor_bit_info  0x8A4
+end
+struct Haniwa_Item_c size 0x8 type "Haniwa_Item_c" same
+    u16 item          0x0
+    s16 exchange_type 0x2
+    u32 extra_data    0x4
+end
+struct Haniwa_c size 0xA4 type "Haniwa_c" same
+    Haniwa_Item_c items[4]     0x0
+    u8            message[128] 0x20 bytes
+    u32           bells        0xA0
+end
+struct mHm_goki_c size 0xA type "mHm_goki_c" same
+    lbRTC_time_c time 0x0
+    u8           num  0x8
+    u8           pad  0x9
+end
+struct mHm_hs_c size 0x26B0 type "mHm_hs_c" same
+    PersonalID_c ownerID             0x0
+    u8           unk_14[6]           0x14 bytes
+    TempoBeat_c  haniwa_tempo        0x1A
+    lbRTC_ymd_c  hra_mark_time       0x1C
+    u32          hra_mark_info       0x20
+    mHm_flg_c    flags               0x24
+    mHm_rmsz_c   size_info           0x26
+    u8           outlook_pal         0x2C
+    u8           ordered_outlook_pal 0x2D
+    u8           next_outlook_pal    0x2E
+    u8           door_original       0x2F
+    u8           unk_30[8]           0x30 bytes
+    mHm_flr_c    floors[3]           0x38
+    Mail_c       mailbox[10]         0x1A30
+    Haniwa_c     haniwa              0x25D4
+    mHm_goki_c   goki                0x2678
+    u32          music_box[2]        0x2684
+    u8           unk_286C[36]        0x268C bytes
+end
+struct mFM_fg_c size 0x200 type "mFM_fg_c" same
+    u16 items[16][16] 0x0
+end
+struct mFM_combination_c size 0x2 type "mFM_combination_c" same
+    bits u16 0x0 { combination_type:14 height:2 }
+end
+struct Anmlnd_c size 0xA type "Anmlnd_c" same
+    u8  name[8] 0x0 bytes
+    u16 id      0x8
+end
+struct Anmlet_c size 0x1 type "Anmlet_c" same
+    bits u8 0x0 { exists:1 cond:1 send_reply:1 has_present_cloth:1 wearing_present_cloth:1 bit5_7:3 }
+end
+struct Anmplmail_c size 0x102 type "Anmplmail_c" same
+    u8          font              0x0
+    u8          paper_type        0x1
+    u16         present           0x2
+    u8          header_back_start 0x4
+    u8          header[24]        0x5 bytes
+    u8          body[192]         0x1D bytes
+    u8          footer[32]        0xDD bytes
+    u8          pad0              0xFD
+    lbRTC_ymd_c date              0xFE
+end
+# A town's villagers and a passport's remove_animal take the land arms of memuni and anmuni; the islander, below,
+# takes the island arms (m_npc.h:171-192).
+struct Anmmem_c size 0x138 type "Anmmem_c" same
+    PersonalID_c memory_player_id 0x0
+    lbRTC_time_c last_speak_time  0x14
+    Anmlnd_c     memuni.land      0x1C
+    u64          saved_town_tune  0x28
+    s8           friendship       0x30
+    Anmlet_c     letter_info      0x31
+    Anmplmail_c  letter           0x32
+end
+struct Anmhome_c size 0x5 type "Anmhome_c" same
+    u8 type_unused 0x0
+    u8 block_x     0x1
+    u8 block_z     0x2
+    u8 ut_x        0x3
+    u8 ut_z        0x4
+end
+struct mQst_contest_c size 0x28 type "mQst_contest_c" same
+    mQst_base_c  base                     0x0
+    u16          requested_item           0xC
+    PersonalID_c player_id                0xE
+    s8           type                     0x22
+    # The letter arm covers the flower arm's one byte, so it converts both.
+    u8           info.letter_data.score   0x24
+    u16          info.letter_data.present 0x26
+end
+struct AnmHPMail_c size 0x1C type "AnmHPMail_c" same
+    lbRTC_time_c receive_time 0x0
+    u8           password[20] 0x8 bytes
+end
+struct Animal_c size 0x988 type "Animal_c" same
+    AnmPersonalID_c id                           0x0
+    Anmmem_c        memories[7]                  0x10
+    Anmhome_c       home_info                    0x898
+    u8              catchphrase[10]              0x89D bytes
+    mQst_contest_c  contest_quest                0x8A8
+    u8              parent_name[8]               0x8D0 bytes
+    u8              anmuni.previous_land_name[8] 0x8D8 bytes
+    u16             previous_land_id             0x8E0
+    u8              mood                         0x8E2
+    u8              mood_time                    0x8E3
+    u16             cloth                        0x8E4
+    u16             remove_info                  0x8E6
+    u8              is_home                      0x8E8
+    u8              moved_in                     0x8E9
+    u8              removing                     0x8EA
+    u8              cloth_original_id            0x8EB
+    u8              umbrella_id                  0x8EC
+    u8              unk_8ED                      0x8ED
+    u16             present_cloth                0x8EE
+    u8              animal_relations[15]         0x8F0 bytes
+    AnmHPMail_c     hp_mail[4]                   0x900
+    u8              unused[24]                   0x970 bytes
+end
+struct mSP_goods_priority_list_c size 0x1 type "mSP_goods_priority_list_c" same
+    bits u8 0x0 { a:2 b:2 c:2 pad:2 }
+end
+struct Shop_c size 0x140 type "Shop_c" same
+    mSP_goods_priority_list_c priority_lists[5]            0x0
+    PersonalID_c              unused_ids[10]               0x6
+    u16                       items[39]                    0xCE
+    u16                       rare_item                    0x11C
+    u16                       lottery_items[3]             0x11E
+    s8                        flowers_candy_grab_bag_count 0x124
+    bits u16 0x126 { shop_info.shop_level:2 shop_info.upgrading_today:1 shop_info.send_upgrade_notice:1 shop_info.not_loaded_before:1 shop_info.paint_color:4 shop_info.unused:7 }
+    u32                       sales_sum                    0x128
+    lbRTC_time_c              exchange_time                0x12C
+    lbRTC_time_c              renewal_time                 0x134
+    s32                       visitor_flag                 0x13C
+end
+struct Kabu_price_c size 0x18 type "Kabu_price_c" same
+    u16          daily_price[7] 0x0
+    u16          trade_market   0xE
+    lbRTC_time_c update_time    0x10
+end
+struct mEv_bargin_c size 0x20 type "mEv_bargin_c" same
+    lbRTC_time_c start_time 0x0
+    lbRTC_time_c end_time   0x8
+    u16          items[5]   0x10
+    s32          kind       0x1C
+end
+struct mEv_designer_c size 0x48 type "mEv_designer_c" same
+    PersonalID_c pids[3]          0x0
+    s32          used             0x3C
+    u16          gifted_cloths[3] 0x40
+end
+struct mEv_broker_c size 0x40 type "mEv_broker_c" same
+    PersonalID_c pid[2]        0x0
+    lbRTC_time_c end_time      0x28
+    s32          used          0x30
+    u16          sold_items[2] 0x34
+    u16          items[3]      0x38
+end
+struct mEv_artist_c size 0x30 type "mEv_artist_c" same
+    PersonalID_c pids[2]  0x0
+    s32          used     0x28
+    u16          walls[2] 0x2C
+end
+struct mEv_arabian_c size 0x8 type "mEv_arabian_c" same
+    s32 used   0x0
+    u16 carpet 0x4
+end
+struct mEv_gypsy_c size 0x14 type "mEv_gypsy_c" same
+    s32 _00     0x0
+    s32 block_z 0x4
+    s32 block_x 0x8
+    s32 ut_z    0xC
+    s32 ut_x    0x10
+end
+struct mEv_special_c size 0x54 type "mEv_special_c" same
+    lbRTC_time_c   scheduled 0x0
+    u32            kind      0x8
+    # SHOP 0 to GYPSY 5; none (0xFFFFFFFF) has no case, so its zeros are copied.
+    union event 0xC 0x48 by kind
+    case 0
+        mEv_bargin_c   bargin    0
+    case 1
+        mEv_designer_c designer  0
+    case 2
+        mEv_broker_c   broker    0
+    case 3
+        mEv_artist_c   artist    0
+    case 4
+        mEv_arabian_c  arabian   0
+    case 5
+        mEv_gypsy_c    gypsy     0
+    end
+end
+struct mEv_kabu_peddler_c size 0x64 type "mEv_kabu_peddler_c" same
+    PersonalID_c spoken_pids[5] 0x0
+end
+struct mEv_event_save_c size 0xBC type "mEv_event_save_c" same
+    mEv_special_c      special             0x0
+    mEv_kabu_peddler_c weekly.kabu_peddler 0x54  # the only arm the game reaches
+    u32                flags               0xB8
+end
+struct mEv_event_save_info_c size 0x2 type "mEv_event_save_info_c" same
+    u8 type  0x0
+    u8 flags 0x1
+end
+struct mEv_info_c size 0x8 type "mEv_info_c" same
+    u8  type           0x0
+    u8  id             0x1
+    u16 year           0x2
+    u16 start_date.raw 0x4    # the date's number, month << 8 | day, which is the console's on the host
+    u16 end_date.raw   0x6
+end
+# data converts in ac_saves.c by the structure its (info.type, info.id) picks (PORT_CONVERTS).
+struct mEv_area_c size 0x34 type "mEv_area_c" same
+    mEv_info_c info 0x0
+end
+struct mEv_save_common_data_c size 0x134 type "mEv_save_common_data_c" same
+    mEv_event_save_info_c special_event       0x0
+    mEv_event_save_info_c weekly_event        0x2
+    u16                   dates[8]            0x4
+    s32                   area_use_bitfield   0x14
+    mEv_area_c            area[5]             0x18
+    s32                   last_date           0x11C
+    s32                   delete_event_id     0x120
+    u32                   valentines_day_date 0x124
+    u32                   white_day_date      0x128
+    u16                   ghost_day           0x12C
+    u16                   bridge_day          0x12E
+    u8                    bridge_flags.raw    0x130    # its bit-fields are reordered under SONAR_PORT
+    u8                    ghost_event_type    0x131
+    u8                    soncho_event_type   0x132
+    u8                    dozaemon_completed  0x133
+end
+struct PostOffice_c size 0x83C type "PostOffice_c" same
+    s16          keep_mail_sum_players                 0x0
+    s16          keep_mail_sum_npcs                    0x2
+    s16          mail_recipient_flags                  0x4
+    u16          unused_6                              0x6
+    Mail_c       mail[5]                               0x8
+    Mail_c       leaflet                               0x5DA
+    Mail_c       event_leaflet                         0x704
+    s16          leaflet_recipient_flags.leaflet_flags 0x830
+    s16          leaflet_recipient_flags.event_flags   0x832
+    lbRTC_time_c delivery_time                         0x834
+end
+struct PoliceBox_c size 0x28 type "PoliceBox_c" same
+    u16 keep_items[20] 0x0
+end
+struct mSN_snowman_data_c size 0x4 type "mSN_snowman_data_c" same
+    u8 exists    0x0
+    u8 head_size 0x1
+    u8 body_size 0x2
+    u8 score     0x3
+end
+struct mSN_snowman_save_c size 0xC type "mSN_snowman_save_c" same
+    mSN_snowman_data_c snowmen_data[3] 0x0
+end
+struct Config_c size 0x4 type "Config_c" same
+    u8 sound_mode         0x0
+    u8 voice_mode         0x1
+    u8 vibration_disabled 0x2
+    u8 unused             0x3
+end
+struct mPr_mother_mail_data_c size 0xA type "mPr_mother_mail_data_c" same
+    u8 normal[7]  0x0 bytes
+    u8 monthly[2] 0x7 bytes
+    u8 august     0x9
+end
+struct mPr_mother_mail_info_c size 0xE type "mPr_mother_mail_info_c" same
+    lbRTC_ymd_c            date 0x0
+    mPr_mother_mail_data_c data 0x4
+end
+struct mMsr_time_c size 0x6 type "mMsr_time_c" same
+    bits u16 0x0 { year:12 month:4 }
+    bits u8 0x2 { day:5 pad0:3 }
+    bits u8 0x3 { hour:5 pad1:3 }
+    bits u8 0x4 { hour_quarter:4 active:1 pad2:3 }
+end
+struct mMmd_info_c size 0x3F type "mMmd_info_c" same
+    u8 fossil_bit[13] 0x0 bytes
+    u8 art_bit[8]     0xD bytes
+    u8 fish_bit[21]   0x15 bytes
+    u8 insect_bit[21] 0x2A bytes
+end
+struct PlusBridge_c size 0x8 type "PlusBridge_c" same
+    u8          block_x    0x0
+    u8          block_z    0x1
+    bits u8 0x2 { exists:1 pending:1 pad:6 }
+    lbRTC_ymd_c build_date 0x4
+end
+struct mNW_needlework_c size 0x1100 type "mNW_needlework_c" same
+    mNW_original_design_c original_design[8] 0x0
+end
+struct mHm_cottage_c size 0x8C8 type "mHm_cottage_c" same
+    mHm_wf_c   unused_wall_floor 0x0
+    u8         unk_2[2]          0x2 bytes
+    u8         unk_4             0x4
+    u8         unk_5             0x5
+    mHm_flr_c  room              0x8
+    mHm_goki_c goki              0x8B0
+    u32        music_box[2]      0x8BC
+end
+struct Anm_bestFtr_c size 0x8 type "Anm_bestFtr_c" same
+    u32 check         0x0
+    u16 have_bitfield 0x4
+end
+# The islander's villager, with the island arms.
+struct Anmmem_c_island size 0x138 type "Anmmem_c" same
+    PersonalID_c  memory_player_id 0x0
+    lbRTC_time_c  last_speak_time  0x14
+    Anm_bestFtr_c memuni.island    0x1C
+    u64           saved_town_tune  0x28
+    s8            friendship       0x30
+    Anmlet_c      letter_info      0x31
+    Anmplmail_c   letter           0x32
+end
+struct Animal_c_island size 0x988 type "Animal_c" same
+    AnmPersonalID_c id                   0x0
+    Anmmem_c_island memories[7]          0x10
+    Anmhome_c       home_info            0x898
+    u8              catchphrase[10]      0x89D bytes
+    mQst_contest_c  contest_quest        0x8A8
+    u8              parent_name[8]       0x8D0 bytes
+    u16             anmuni.island_ftr[4] 0x8D8
+    u16             previous_land_id     0x8E0
+    u8              mood                 0x8E2
+    u8              mood_time            0x8E3
+    u16             cloth                0x8E4
+    u16             remove_info          0x8E6
+    u8              is_home              0x8E8
+    u8              moved_in             0x8E9
+    u8              removing             0x8EA
+    u8              cloth_original_id    0x8EB
+    u8              umbrella_id          0x8EC
+    u8              unk_8ED              0x8ED
+    u16             present_cloth        0x8EE
+    u8              animal_relations[15] 0x8F0 bytes
+    AnmHPMail_c     hp_mail[4]           0x900
+    u8              unused[24]           0x970 bytes
+end
+struct Island_c size 0x1900 type "Island_c" same
+    u8                    name[8]               0x0 bytes
+    mLd_land_info_c       landinfo              0x8
+    mFM_fg_c              fgblock[1][2]         0x14
+    mHm_cottage_c         cottage               0x418
+    mNW_original_design_c flag_design           0xCE0
+    Animal_c_island       animal                0xF00
+    u16                   deposit[2][16]        0x1888
+    u8                    bg_data[2]            0x18C8 bytes
+    lbRTC_time_c          renew_time            0x18CA
+    u8                    unused_18D2[14]       0x18D2 bytes
+    u8                    grass_tex_type        0x18E0
+    u8                    last_song_to_island   0x18E1
+    u8                    last_song_from_island 0x18E2
+    u8                    unused_18E3[29]       0x18E3 bytes
+end
+struct mAGrw_SSPosInfo_c size 0x4 type "mAGrw_SSPosInfo_c" same
+    u8 block_x 0x0
+    u8 block_z 0x1
+    u8 ut_x    0x2
+    u8 ut_z    0x3
+end
+struct mAGrw_AllGrow_c size 0x28 type "mAGrw_AllGrow_c" same
+    mAGrw_SSPosInfo_c shine_pos[5] 0x0
+    mAGrw_SSPosInfo_c stone_pos[5] 0x14
+end
+struct mFR_record_c size 0x20 type "mFR_record_c" same
+    PersonalID_c pid  0x0
+    lbRTC_time_c time 0x14
+    s32          size 0x1C
+end
+struct mMC_design_c size 0x220 type "mMC_design_c" same
+    PersonalID_c       creator_pid 0x0
+    mNW_original_tex_c design      0x20
+end
+struct MaskCat_c size 0x240 type "MaskCat_c" same
+    mMC_design_c design     0x0
+    u8           palette_no 0x220
+    u8           cloth_no   0x221
+    u8           talk_idx   0x222
+    lbRTC_time_c time       0x224
+end
+struct Anmret_c size 0xC type "Anmret_c" same
+    u16          npc_id     0x0
+    u8           talk_bit   0x2
+    u8           exist      0x3
+    lbRTC_time_c renew_time 0x4
+end
+struct LightHouse_c size 0x8 type "LightHouse_c" same
+    lbRTC_ymd_c renew_time            0x0
+    u8          days_switched_on      0x4
+    u8          players_quest_started 0x5
+    u8          players_completed     0x6
+end
+struct mFAs_GoodField_c size 0xC type "mFAs_GoodField_c" same
+    lbRTC_time_c renew_time         0x0
+    s32          perfect_day_streak 0x8
+end
+struct Save_t size 0x242A0 type "Save_t" same
+    mFRm_chk_t             save_check                    0x0
+    s32                    scene_no                      0x14
+    u8                     now_npc_max                   0x18
+    u8                     remove_animal_idx             0x19
+    u16                    copy_protect                  0x1A
+    u8                     pad_1C[4]                     0x1C bytes
+    Private_c              private_data[4]               0x20
+    mLd_land_info_c        land_info                     0x9120
+    mNtc_board_post_c      noticeboard[15]               0x912C
+    u8                     pad_9CE4[4]                   0x9CE4 bytes
+    mHm_hs_c               homes[4]                      0x9CE8
+    mFM_fg_c               fg[6][5]                      0x137A8
+    mFM_combination_c      combi_table[10][7]            0x173A8
+    Animal_c               animals[15]                   0x17438
+    AnmPersonalID_c        last_removed_animal_id        0x20330
+    Shop_c                 shop                          0x20340
+    Kabu_price_c           kabu_price_schedule           0x20480
+    mEv_event_save_c       event_save_data               0x20498
+    mEv_save_common_data_c event_save_common             0x20554
+    u16                    fruit                         0x20688
+    u8                     house_arrangement             0x2068A
+    u8                     num_statues                   0x2068B
+    lbRTC_time_c           all_grow_renew_time           0x2068C
+    PostOffice_c           post_office                   0x20694
+    PoliceBox_c            police_box                    0x20ED0
+    mSN_snowman_save_c     snowmen                       0x20EF8
+    u64                    melody                        0x20F08
+    Config_c               config                        0x20F10
+    lbRTC_ymd_c            renew_time                    0x20F14
+    u8                     station_type                  0x20F18
+    u8                     weather                       0x20F19
+    u8                     save_exist                    0x20F1A
+    u8                     npc_force_go_home             0x20F1B
+    u16                    deposit[30][16]               0x20F1C
+    lbRTC_time_c           last_grow_time                0x212DC
+    mPr_mother_mail_info_c mother_mail[4]                0x212E4
+    mMsr_time_c            mushroom_time                 0x2131C
+    lbRTC_ymd_c            _021322                       0x21322
+    u16                    _021326[20]                   0x21326
+    u8                     npc_used_tbl[32]              0x2134E bytes
+    lbRTC_time_c           _02136E                       0x2136E
+    u8                     cheated_flag                  0x21376
+    u8                     _021377[7]                    0x21377 bytes
+    lbRTC_time_c           treasure_buried_time          0x2137E
+    lbRTC_time_c           treasure_checked_time         0x21386
+    u8                     saved_rom_debug               0x2138E
+    u8                     snowman_year                  0x2138F
+    u8                     snowman_month                 0x21390
+    u8                     snowman_day                   0x21391
+    u8                     snowman_hour                  0x21392
+    u8                     haniwa_scheduled              0x21393
+    u8                     dust_flag                     0x21394
+    u8                     clear_grass                   0x21395
+    u8                     _021396[2]                    0x21396 bytes
+    s16                    event_year                    0x21398
+    u8                     unused_2139C[6]               0x2139A bytes
+    u8                     keep_house_size[4]            0x213A0 bytes
+    lbRTC_ymd_c            force_remove_date             0x213A4
+    mMmd_info_c            museum_display                0x213A8
+    u8                     _tmp6[9]                      0x213E7 bytes
+    PlusBridge_c           bridge                        0x213F0
+    mNW_needlework_c       needlework                    0x21400
+    u8                     _tmp7[40]                     0x22500 bytes
+    s64                    time_delta                    0x22528
+    Island_c               island                        0x22540
+    mAGrw_AllGrow_c        allgrow_ss_pos_info           0x23E40
+    mFR_record_c           fishRecord[5]                 0x23E68
+    MaskCat_c              mask_cat                      0x23F20
+    Anmret_c               return_animal                 0x24160
+    LightHouse_c           LightHouse                    0x2416C
+    u8                     insect_term                   0x24174
+    u8                     insect_term_transition_offset 0x24175
+    u8                     gyoei_term                    0x24176
+    u8                     gyoei_term_transition_offset  0x24177
+    mFAs_GoodField_c       good_field                    0x24178
+    u8                     bg_tex_idx                    0x24184
+    u8                     rainbow_month                 0x24185
+    u8                     rainbow_day                   0x24186
+    u8                     rainbow_reserved              0x24187
+    u8                     _24188                        0x24188
+    u8                     first_present                 0x24189
+    u8                     town_day                      0x2418A
+    u8                     _2418B[13]                    0x2418B bytes
+    s64                    travel_hard_time              0x24198
+    lbRTC_time_c           saved_auto_nwrite_time        0x241A0
+    u8                     _241A8[248]                   0x241A8 bytes
+end
+struct mCD_keep_mail_c size 0xBAA4 type "mCD_keep_mail_c" same
+    u16    checksum            0x0
+    u16    landid              0x2
+    u8     folder_names[8][12] 0x4 bytes
+    Mail_c mail[8][20]         0x64
+end
+struct mCD_keep_original_c size 0xCCA0 type "mCD_keep_original_c" same
+    u16                   checksum            0x0
+    u16                   landid              0x2
+    u8                    folder_names[8][12] 0x4 bytes
+    mNW_original_design_c original[8][12]     0x80
+    s32                   _CC80               0xCC80
+end
+struct mDi_entry_c size 0x3E0 type "mDi_entry_c" same
+    u8 text[992] 0x0 bytes
+end
+struct mCD_keep_diary_c size 0xBA02 type "mCD_keep_diary_c" same
+    u16         checksum       0x0
+    mDi_entry_c entries[4][12] 0x2
+end
+struct mCD_foreigner_c size 0x2E20 type "mCD_foreigner_c" same
+    u16       checksum      0x0
+    Private_c priv          0x20
+    Animal_c  remove_animal 0x2460
+    u16       copy_protect  0x2DE8
+    u8        _2DEA[54]     0x2DEA bytes
+end
+struct PresentSave_c size 0xA7E type "PresentSave_c" same
+    u16    checksum      0x0
+    u16    present_count 0x2
+    Mail_c letters[9]    0x4
+end
+# The event save areas' structures, by the call sites of mEv_get_save_area and mEv_reserve_save_area.
+struct aAPC_event_save_data_c size 0x8 type "aAPC_event_save_data_c" same
+    u16 talk_bitfield[4] 0x0
+end
+struct aEv_hatumode_save_c size 0xE type "aEv_hatumode_save_c" same
+    u16 state          0x0
+    u16 flags0         0x2
+    u16 flags1         0x4
+    s16 yashiro_pos[3] 0x6
+    u8  cur_npc_idx    0xC
+end
+struct aNTT_event_save_c size 0x16 type "aNTT_event_save_c" same
+    s16 _00             0x0
+    u16 bitfield        0x2
+    u8  request_str[16] 0x4 bytes
+    u8  roll_flag       0x14
+    u8  copyright_alpha 0x15
+end
+struct mEv_dozaemon_c size 0x2 type "mEv_dozaemon_c" same
+    u16 flags 0x0
+end
+struct aSNMgr_event_save_c size 0x5 type "aSNMgr_event_save_c" same
+    u8 animal_idx[5] 0x0 bytes
+end
+struct aEANG_event_data_c size 0x20 type "aEANG_event_data_c" same
+    s32          size      0x0
+    PersonalID_c pID       0x4
+    s16          pos[2]    0x18
+    u8           talk_flag 0x1C
+    u8           flag      0x1D
+end
+struct aEv_tokyoso_c size 0x1E type "aEv_tokyoso_c" same
+    u8  _00           0x0
+    u8  _01           0x1
+    u16 flags         0x2
+    s16 yasiro_pos[3] 0x4
+    s16 pos_0A[2][2]  0xA
+    s16 angle[2]      0x12
+    s16 next_angle[2] 0x16
+    u8  lap[2]        0x1A bytes
+    u8  goal[2]       0x1C bytes
+end
+struct aEv_tunahiki_c size 0x18 type "aEv_tunahiki_c" same
+    f32 rope       0x0
+    f32 rope_base  0x4
+    f32 speed      0x8
+    f32 next_speed 0xC
+    s16 npc_state  0x10
+    u16 flag       0x12
+    s16 _14        0x14
+    u16 counter    0x16
+end
+struct mEv_gst_c size 0x8 type "mEv_gst_c" same
+    u16         okoruhito_str_no 0x0
+    u16         flags            0x2
+    lbRTC_ymd_c renew_time       0x4
+end
+struct aESC_event_save_c size 0x4 type "aESC_event_save_c" same
+    u16 _00    0x0
+    u8  msg_no 0x2
+end
+struct BlockOrUnit_c size 0x8 type "BlockOrUnit_c" same
+    s32 z 0x0
+    s32 x 0x4
+end
+struct mEv_place_data_c size 0x14 type "mEv_place_data_c" same
+    BlockOrUnit_c block      0x0
+    BlockOrUnit_c unit       0x8
+    u16           actor_name 0x10
+    s16           flag       0x12
+end
+struct aEv_turkey_save_c size 0x16 type "aEv_turkey_save_c" same
+    PersonalID_c pid                    0x0
+    u16          given_present_bitfield 0x14
+end
+struct mEv_santa_event_c size 0x2A type "mEv_santa_event_c" same
+    PersonalID_c pid           0x0
+    u8           present_count 0x14
+    u16          cloth[10]     0x16
+end
+struct aEv_yomise_save_c size 0x14 type "aEv_yomise_save_c" same
+    u16 goods[8] 0x0
+    s16 cnt      0x10
+    s16 kind     0x12
+end

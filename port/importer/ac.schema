@@ -1,6 +1,7 @@
-# The console layouts ac-import converts (sonarlib docs/roadmap.md, M6 step 6c), written by hand from the game's
-# headers: a JKR archive's four structures (JKRArchive.h:64-155) and Town's item layer (m_field_make.h:281-285). The
-# archive's types are nested in JKRArchive, so sonar_add_schema compiles the converters as C++.
+# The console layouts ac-import converts (sonarlib docs/roadmap.md, M6 steps 6c and 11c), written by hand from the
+# game's headers: a JKR archive's four structures (JKRArchive.h:64-155), Town's item layer (m_field_make.h:281-285) and
+# a texture's header (jsyswrap.h:14-37). The archive's types are nested in JKRArchive, so sonar_add_schema compiles the
+# converters as C++.
 struct ArcHeader size 0x20 type "JKRArchive::SArcHeader"
     u32  signature           0x00
     u32  file_length         0x04
@@ -41,4 +42,31 @@ struct FgData size 0x206 type "mFM_fg_data_c"
     u16  fg_id               0x000
     u16  items[16][16]       0x002
     u8   haniwa_step[4]      0x202 bytes
+end
+# The header of each banner and icon texture the card files take (jsyswrap.cpp:412-452). mCD_set_bti_data reads its
+# offsets natively and copies the texels and palette after it as they are (m_card_bti.c_inc). The four GXBools are
+# bool in C++.
+struct CResTIMG size 0x20 type "CResTIMG" same
+    u8  mTextureFormat     0x00
+    u8  mTransparency      0x01
+    u16 mSizeX             0x02
+    u16 mSizeY             0x04
+    u8  mWrapS             0x06
+    u8  mWrapT             0x07
+    u8  mPaletteFormat     0x08
+    u8  mColorFormat       0x09
+    u16 mPaletteEntryCount 0x0A
+    u32 mPaletteOffset     0x0C
+    u8  mIsMIPmapEnabled   0x10
+    u8  mDoEdgeLOD         0x11
+    u8  mIsBiasClamp       0x12
+    u8  mIsMaxAnisotropy   0x13
+    u8  mMinFilterType     0x14
+    u8  mMagFilterType     0x15
+    s8  mMinLOD            0x16
+    s8  mMaxLOD            0x17
+    u8  mTotalImageCount   0x18
+    u8  _19                0x19
+    s16 mLODBias           0x1A
+    u32 mImageDataOffset   0x1C
 end

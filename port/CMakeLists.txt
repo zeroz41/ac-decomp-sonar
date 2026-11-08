@@ -213,8 +213,28 @@ target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>
 target_link_libraries(ac_game PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
                       sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend sonar::fmt_card)
 
+# The views of the game's card files (NOTES.md, Saves): ac_saves.schema's converters and what ac_saves.c converts around
+# them, built with m_card.c's macros and char signedness. They are built without debug information, so the port's DWARF
+# that ac_save_schema_check reads holds the game's own definitions of the two saved structures the game defines in its
+# units, not ac_port.h's copies of them.
+add_library(ac_saves OBJECT adapter/ac_saves.c)
+sonar_add_schema(ac_saves adapter/ac_saves.schema PREFIX ac_saves
+                 INCLUDES m_common_data.h m_card.h m_event.h ac_aprilfool_control_h.h ac_hatumode_control.h
+                          ac_npc_totakeke.h ac_set_npc_manager.h ac_ev_angler.h ac_tokyoso_control.h
+                          ac_tunahiki_control.h ac_ev_turkey.h ac_ev_yomise.h ac_port.h)
+get_source_file_property(card_defines "${AC_ROOT}/src/game/m_card.c" COMPILE_DEFINITIONS)
+get_source_file_property(card_options "${AC_ROOT}/src/game/m_card.c" COMPILE_OPTIONS)
+target_include_directories(ac_saves PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter")
+target_compile_definitions(ac_saves PRIVATE ${card_defines} AC_SAVES_TYPES)
+target_compile_options(ac_saves PRIVATE ${card_options} -fwrapv -fno-strict-aliasing -fno-delete-null-pointer-checks)
+if(NOT CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    target_compile_options(ac_saves PRIVATE -g0)
+endif()
+set_target_properties(ac_saves PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
+target_link_libraries(ac_saves PRIVATE ac_headers sonar::base sonar::kit_card)
+
 # The program (NOTES.md, The program): the game and its glue, from boot to play's first frame.
-add_executable(ac_port adapter/main.c $<TARGET_OBJECTS:ac_game>)
+add_executable(ac_port adapter/main.c $<TARGET_OBJECTS:ac_game> $<TARGET_OBJECTS:ac_saves>)
 set_target_properties(ac_port PROPERTIES C_STANDARD 11 C_EXTENSIONS ON LINKER_LANGUAGE CXX)
 target_link_libraries(ac_port PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
                       sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend sonar::fmt_card)
@@ -225,7 +245,7 @@ target_link_libraries(ac_port PRIVATE ac_headers sonar::base sonar::core sonar::
 add_library(ac_import_lib STATIC importer/archive.cpp importer/audio.cpp importer/import.cpp
             ${AC_ROOT}/src/static/jaudio_NES/game/audioheaders.c)
 sonar_add_schema(ac_import_lib importer/ac.schema PREFIX ac LANGUAGE CXX
-                 INCLUDES JSystem/JKernel/JKRArchive.h m_field_make.h)
+                 INCLUDES JSystem/JKernel/JKRArchive.h m_field_make.h jsyswrap.h)
 # m_field_make.h needs the display-list switches the game's units take from configure.py's flags (cflags_common).
 target_compile_definitions(ac_import_lib PUBLIC F3DEX_GBI_2 _LANGUAGE_C)
 set_target_properties(ac_import_lib PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS ON)
@@ -322,8 +342,8 @@ target_link_libraries(ac_aram_port_test PRIVATE sonar::core)
 add_test(NAME ac_aram_port COMMAND ac_aram_port_test)
 
 
-# The SDK's memory cards on sonarlib's virtual card in a memory store.
-add_executable(ac_card_port_test tests/card_port_test.c adapter/dolphin_card.c)
+# The SDK's memory cards on sonarlib's virtual card in a memory store, with the views of the game's files.
+add_executable(ac_card_port_test tests/card_port_test.c adapter/dolphin_card.c $<TARGET_OBJECTS:ac_saves>)
 target_include_directories(ac_card_port_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter"
     "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include" "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin" "${AC_ROOT}")
 target_compile_definitions(ac_card_port_test PRIVATE SONAR_PORT=1)
@@ -331,6 +351,19 @@ target_compile_options(ac_card_port_test PRIVATE ${adapter_includes})
 set_target_properties(ac_card_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
 target_link_libraries(ac_card_port_test PRIVATE sonar::core sonar::kit_card)
 add_test(NAME ac_card_port COMMAND ac_card_port_test)
+
+# The views of the game's card files, each case worked by hand in the console's bytes, built as ac_saves is.
+add_executable(ac_save_views_test tests/save_views_test.c $<TARGET_OBJECTS:ac_saves>)
+target_include_directories(ac_save_views_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter")
+target_compile_definitions(ac_save_views_test PRIVATE ${card_defines} AC_SAVES_TYPES)
+target_compile_options(ac_save_views_test PRIVATE ${card_options} -fwrapv -fno-strict-aliasing)
+set_target_properties(ac_save_views_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
+target_link_libraries(ac_save_views_test PRIVATE ac_headers sonar::base sonar::kit_card)
+add_test(NAME ac_save_views COMMAND ac_save_views_test)
+
+# ac_saves.schema's coverage of the game's saved types, against the port's own DWARF: the event save areas' data is
+# ac_saves.c's.
+sonar_add_schema_check(ac_save_schema_check adapter/ac_saves.schema TARGET ac_port PORT_CONVERTS mEv_area_c.data)
 
 # The SDK's audio interface on sonarlib audio's frame, and the DSP answering jaudio's own boot and commands and
 # rendering its channels from ARAM.
@@ -356,13 +389,15 @@ set_target_properties(ac_import_archive_test PROPERTIES CXX_STANDARD 20 CXX_EXTE
 target_link_libraries(ac_import_archive_test PRIVATE ac_import_lib)
 add_test(NAME ac_import_archive COMMAND ac_import_archive_test)
 
-# ac-import on the player's disc, an image or an extracted directory; skipped (77) without one.
+# ac-import on the player's disc, an image or an extracted directory, and ac_port's refusal of a package from before
+# the importer's version; skipped (77) without one.
 set(AC_DISC "" CACHE PATH "The player's disc for ac_import_disc: an image, or a directory in sl-disc's extracted layout")
 add_executable(ac_import_disc_test tests/import_disc_test.cpp)
 set_target_properties(ac_import_disc_test PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS ON)
 target_link_libraries(ac_import_disc_test PRIVATE ac_import_lib sonar::core sonar::fmt_disc)
-add_dependencies(ac_import_disc_test ac-import)
-add_test(NAME ac_import_disc COMMAND ac_import_disc_test "$<TARGET_FILE:ac-import>" "${AC_DISC}" "${AC_VERSION}")
+add_dependencies(ac_import_disc_test ac-import ac_port)
+add_test(NAME ac_import_disc COMMAND ac_import_disc_test "$<TARGET_FILE:ac-import>" "${AC_DISC}" "${AC_VERSION}"
+                                     "$<TARGET_FILE:ac_port>")
 set_tests_properties(ac_import_disc PROPERTIES SKIP_RETURN_CODE 77)
 
 # ac-font's conversion on a font built by hand.

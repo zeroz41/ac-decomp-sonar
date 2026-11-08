@@ -23,6 +23,26 @@ BOOL ac_card_insert(s32 chan, const char* name);
 /* Ejects slot chan's card, as pulling it out of the console does. Main thread. */
 void ac_card_eject(s32 chan);
 
+struct sl_card_dir_entry;
+struct sl_memcard_view;
+
+/* The views of the game's card files, for CARDInit's sl_memcard_desc (ac_saves.c; NOTES.md, Saves). */
+void ac_saves_views(const struct sl_memcard_view** views, uint32_t* count);
+/* The three views' functions, as sl_memcard_view's: the town file, the passports and the gift letters. Under the
+   kit's lock, any thread. */
+void ac_saves_town_to_host(void* user, const struct sl_card_dir_entry* entry, const void* console, void* host,
+                           uint32_t length);
+void ac_saves_town_to_console(void* user, const struct sl_card_dir_entry* entry, const void* host, void* console,
+                              uint32_t length);
+void ac_saves_passport_to_host(void* user, const struct sl_card_dir_entry* entry, const void* console, void* host,
+                               uint32_t length);
+void ac_saves_passport_to_console(void* user, const struct sl_card_dir_entry* entry, const void* host, void* console,
+                                  uint32_t length);
+void ac_saves_letters_to_host(void* user, const struct sl_card_dir_entry* entry, const void* console, void* host,
+                              uint32_t length);
+void ac_saves_letters_to_console(void* user, const struct sl_card_dir_entry* entry, const void* host, void* console,
+                                 uint32_t length);
+
 /* The console's audio RAM as host memory, and its size in *size, for the DSP to read its samples from. Any
    thread. */
 const u8* ac_aram_memory(u32* size);
@@ -81,6 +101,27 @@ void ac_port_report(const char* what);
 
 #ifdef __cplusplus
 }
+#endif
+
+#ifdef AC_SAVES_TYPES
+#include "m_card.h"
+#include "m_common_data.h"
+
+/* The two saved structures the game defines in its own units, for ac_saves.c's converters and its test:
+   mCD_foreigner_c as m_card.c:1844-1850 has it and aESC_event_save_c as ac_ev_soncho.c:5-8 does. ac_saves builds
+   without debug information, so the port's DWARF that ac_save_schema_check reads holds only the game's. */
+typedef struct {
+    u16 checksum;
+    Private_c priv;
+    Animal_c remove_animal;
+    u16 copy_protect;
+    u8 _2DEA[54];
+} mCD_foreigner_c;
+
+typedef struct soncho_event_save_s {
+    u16 _00;
+    u8 msg_no;
+} aESC_event_save_c;
 #endif
 
 #endif

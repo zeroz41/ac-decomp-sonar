@@ -1,5 +1,5 @@
-# Runs ac_port --window with its user directories under OUT_DIR/user, twice to play and then with bad assignments
-# (sonarlib docs/roadmap.md, M6 steps 6k, 6l, 6m and 11a):
+# Runs ac_port --window with its user directories under OUT_DIR/user, twice to play, then with bad assignments and
+# twice with the memory cards (sonarlib docs/roadmap.md, M6 steps 6k, 6l, 6m, 11a and 11c):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
 #         -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P window_test.cmake
 # ac-import writes the package from the player's disc into OUT_DIR. Each run shows the game in real time in a window
@@ -30,6 +30,13 @@
 # Bad assignments: with no settings file, a run of --ticks 60 with --set sonar.audio.volum=30, a key nothing
 # registers, and one with --set sonar.audio.volume=500, a value its setting refuses, must each exit 2 with stderr naming
 # the assignment; and --set and --user-dir without --window must each exit 2 with the usage.
+#
+# The memory cards: with the user directories empty again, so no settings file, a run of --ticks 900, past play's
+# first frame and so past CARDInit, must put card-a in slot A and none in B, its window line reading "cards card-a -",
+# and the saves directory must hold card-a.slsave, the card's header save. A second run with --set
+# kit.card.slot_b=card-b must read "cards card-a card-b" and the directory must hold card-b.slsave. If either run
+# writes a settings file, it must hold no kit.card line: the defaults never changed, and an override is never saved.
+# Their exit status is not checked.
 #
 # It prints every line it checks. When AC_DISC names no disc or there is no lavapipe it prints the line the test's
 # SKIP_REGULAR_EXPRESSION matches and returns.
@@ -75,7 +82,8 @@ macro(run_window)
     string(REGEX MATCH "ac_port: settings [^\n]*" settings_line "${output}")
     # CMake keeps nine groups, so only the fields read below are captured.
     string(CONCAT window_line "ac_port: window ticks ([0-9]+) frames ([0-9]+) audio [0-9]+ loud ([0-9]+) dsp ([0-9]+) "
-           "pacing [a-z]+ limit [0-9]+ gain [0-9.]+ pipelines [0-9]+ warmed ([0-9]+) lists ([0-9]+)")
+           "pacing [a-z]+ limit [0-9]+ gain [0-9.]+ pipelines [0-9]+ warmed ([0-9]+) lists ([0-9]+) cards ([^ \n]+) "
+           "([^ \n]+)")
     string(REGEX MATCH "${window_line}" line "${output}")
     set(ticks "${CMAKE_MATCH_1}")
     set(frames "${CMAKE_MATCH_2}")
@@ -83,6 +91,7 @@ macro(run_window)
     set(dsp "${CMAKE_MATCH_4}")
     set(warmed "${CMAKE_MATCH_5}")
     set(lists "${CMAKE_MATCH_6}")
+    set(cards "${CMAKE_MATCH_7} ${CMAKE_MATCH_8}")
     list(LENGTH plays count)
 endmacro()
 
@@ -201,5 +210,35 @@ foreach(option IN ITEMS "--set;sonar.audio.volume=30" "--user-dir;${user}")
     message("without --window: ${name}: exit ${result}")
     if(NOT result EQUAL 2 OR at EQUAL -1)
         message(FATAL_ERROR "ac_port_window: ${name} without --window did not exit 2 with the usage:\n${errors}")
+    endif()
+endforeach()
+
+# The memory cards.
+file(REMOVE_RECURSE "${user}")
+set(saves "${user}/saves")
+foreach(run IN ITEMS "card-a -" "card-a card-b")
+    if(run STREQUAL "card-a -")
+        run_window(--ticks 900)
+        set(card "card-a")
+    else()
+        run_window(--ticks 900 --set kit.card.slot_b=card-b)
+        set(card "card-b")
+    endif()
+    file(GLOB held RELATIVE "${saves}" "${saves}/*.slsave")
+    message("memory cards: exit ${result}, ${seconds} s: cards ${cards}; ${saves} holds ${held}")
+    if(line STREQUAL "" OR NOT cards STREQUAL run)
+        tail_of("${errors}" errors)
+        message(FATAL_ERROR "ac_port_window: the window line does not read cards ${run}:\n${line}\n${errors}")
+    endif()
+    if(NOT EXISTS "${saves}/${card}.slsave")
+        message(FATAL_ERROR "ac_port_window: ${saves} holds no ${card}.slsave, the card's header save")
+    endif()
+    if(EXISTS "${settings}")
+        file(READ "${settings}" written_text)
+        message("memory cards: the run wrote ${settings}:\n${written_text}")
+        string(FIND "${written_text}" "kit.card" at)
+        if(NOT at EQUAL -1)
+            message(FATAL_ERROR "ac_port_window: the settings file holds a kit.card line:\n${written_text}")
+        endif()
     endif()
 endforeach()

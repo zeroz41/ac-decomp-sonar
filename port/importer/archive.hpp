@@ -13,7 +13,7 @@
 
 namespace ac {
 
-enum class Content : uint8_t { fg_data, u32_table, palettes, face }; // a file's conversion, below
+enum class Content : uint8_t { fg_data, u32_table, palettes, face, timg }; // a file's conversion, below
 
 struct ContentRule {
     const char* name; // a file in the archive's first node of type 'DATA'
@@ -29,7 +29,8 @@ struct ContentRule {
 
    The conversions run on a file's mSize bytes: fg_data converts each whole 0x206-byte mFM_fg_data_c; u32_table swaps
    each whole word; palettes swaps each 2-byte entry; face keeps each record's 0xE00 bytes of texels and swaps the
-   palettes around them as 2-byte entries.
+   palettes around them as 2-byte entries; timg converts the CResTIMG header at the file's start and keeps the texels
+   and palette after it, which the card files hold in the console's order.
 
    SL_ERROR_UNSUPPORTED for a whole compressed archive (Yaz0 or Yay0). SL_ERROR_IO for a signature other than RARC, a
    header_length other than 0x20, an info block, table or file data past the file, a node's entries past the entry

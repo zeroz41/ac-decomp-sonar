@@ -2,7 +2,8 @@
    slots whose cards keep each file in the save store. The kit's results are the SDK's codes. A call ending in Async
    returns once it has started and calls back in interrupt context; until then CARDGetResultCode gives BUSY, as on
    the console, even with no callback. The other calls return their result. The SDK callbacks ride in the kit's user
-   pointer. */
+   pointer. The game's town, passports and gift letters keep the console's bytes on the card through ac_saves.c's
+   views. */
 /* card.h takes the OS types from os.h. */
 #include "dolphin/os.h"
 #include "dolphin/card.h"
@@ -67,7 +68,8 @@ void ac_card_eject(s32 chan) {
 
 /* ---- The card ---- */
 
-/* Starts the virtual card library for the disc's game, in the console's encoding, and puts in the cards waiting. */
+/* Starts the virtual card library for the disc's game, in the console's encoding, with the views of its files
+   (ac_saves.c), and puts in the cards waiting. */
 void CARDInit(void) {
     const DVDDiskID* id = DVDGetCurrentDiskID();
     sl_memcard_desc desc;
@@ -78,6 +80,7 @@ void CARDInit(void) {
     memcpy(desc.game_code, id->gameName, sizeof desc.game_code);
     memcpy(desc.maker_code, id->company, sizeof desc.maker_code);
     desc.encoding = OSGetFontEncode();
+    ac_saves_views(&desc.views, &desc.view_count);
     if (sl_memcard_init(&desc) != SL_OK) {
         OSReport("CARDInit: the memory card kit did not start\n");
         return;

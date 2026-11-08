@@ -13,9 +13,10 @@
    --window: in real time, on the GPU sink, in a window, with the game's pads on the keyboard and gamepads and its
    sound on the audio device. The main thread presents at the clock's alpha for each image's time until the window
    is closed, or until --ticks's limit when it is given. It mounts the player's user directories, or every one under
-   --user-dir's directory, keeps the settings in config:settings.toml with each --set over them for the run, and shows
-   sonarlib's overlay on F1 (port/NOTES.md, The window). Every other run mounts no user directory, reads no settings
-   file and registers no setting.
+   --user-dir's directory, keeps the settings in config:settings.toml with each --set over them for the run, keeps the
+   memory cards in the save store at user:saves, the card in each slot by its setting, card-a in slot A unless the
+   settings name another, and shows sonarlib's overlay on F1 (port/NOTES.md, The window; README.md, Saves). Every
+   other run mounts no user directory, reads no settings file, registers no setting and puts no card in either slot.
 
    --goldens: headless and deterministic, but on the GPU sink with no window, writing the frames the scenes file names
    into the directory (sonar/goldens.h, port/NOTES.md, Goldens). The GX glue's frame begin hands each frame's keys to
@@ -36,6 +37,7 @@
 #include <port/goldens.h>
 
 #include <sonar/audio.h>
+#include <sonar/card/memcard.h>
 #include <sonar/emu64/emu64.h>
 #include <sonar/fs.h>
 #include <sonar/goldens.h>
@@ -85,6 +87,7 @@ static const char** assignments;    /* each --set's key=value, in order */
 static int assignment_count;        /* and how many */
 static char settings_path[4096];    /* the settings file's host path */
 static char user_path[4096];        /* and user:'s */
+static char saves_path[4096];       /* and the save store's, user:saves */
 static int settings_broken;         /* the file did not load, so it is never saved */
 static atomic_int settings_changed; /* a setting's value in effect changed since the last save */
 
@@ -300,8 +303,8 @@ static void save_settings(void) {
 }
 
 /* Headless, no user directories: the run reads and writes nothing of the player's. --window mounts user: and config:,
-   the player's directories or every one under --user-dir's, for the settings file, and the GPU sink keeps its
-   pipeline list in their cache. The cards stay in memory either way. */
+   the player's directories or every one under --user-dir's, for the settings file and the memory cards' save store
+   (start_saves), and the GPU sink keeps its pipeline list in their cache. */
 static sl_result start_fs(void) {
     sl_fs_desc desc;
     memset(&desc, 0, sizeof desc);
@@ -314,6 +317,24 @@ static sl_result start_fs(void) {
         desc.flags = SL_FS_INIT_NO_USER_MOUNT;
     }
     return sl_fs_init(&desc);
+}
+
+/* --window's memory cards, after sl_fs_init: a save store on user:saves, keeping two backups of each save, for
+   CARDInit to keep the cards in. The settings bind puts them in the slots (main). Returns 0, or main's exit code. */
+static int start_saves(void) {
+    sl_save_store_desc desc;
+    sl_save_store store;
+    sl_result result = sl_fs_user_dir(SL_USER_DIR_SAVES, saves_path, sizeof saves_path, NULL);
+    if (result != SL_OK)
+        return failed("sl_fs_user_dir", result);
+    memset(&desc, 0, sizeof desc);
+    desc.path = NULL; /* user:saves */
+    desc.backups = 2;
+    result = sl_save_store_open(&desc, &store);
+    if (result != SL_OK)
+        return failed("sl_save_store_open", result);
+    ac_card_set_store(store);
+    return 0;
 }
 
 /* --window's settings, after sl_fs_init: prints the file's host path, loads config:settings.toml, takes each --set
@@ -400,18 +421,22 @@ static int check_assignments(void) {
     return 0;
 }
 
-/* --window's overlay, after the window's, audio's and input's binds: sonarlib's pages and an Animal Crossing page
-   with the controls, as input's GameCube profile binds them by default, and the files' host paths. Returns 0, or
-   main's exit code. */
+/* --window's overlay, after the window's, audio's, input's and the cards' binds: sonarlib's pages and an Animal
+   Crossing page with the controls, as input's GameCube profile binds them by default, the files' host paths, and the
+   card in each slot, which the page edits (the kit's settings; sonarlib's Settings page lists only sonar.* keys). A
+   page's text is copied when it is added, so it cannot show that a slot was left empty for a name the kit refused.
+   Returns 0, or main's exit code. */
 static int start_overlay(void) {
     static char settings_line[sizeof settings_path + 32];
     static char user_line[sizeof user_path + 32];
+    static char saves_line[sizeof saves_path + 32];
     sl_ui_item items[16];
     sl_ui_page_desc page;
     uint32_t count = 0;
     sl_result result;
     snprintf(settings_line, sizeof settings_line, "Settings file: %s", settings_path);
     snprintf(user_line, sizeof user_line, "User directory: %s", user_path);
+    snprintf(saves_line, sizeof saves_line, "Saves directory: %s", saves_path);
     items[count].type = SL_UI_ITEM_SECTION;
     items[count++].text = "Controls";
     items[count].type = SL_UI_ITEM_TEXT;
@@ -432,6 +457,14 @@ static int start_overlay(void) {
     items[count++].text = settings_line;
     items[count].type = SL_UI_ITEM_TEXT;
     items[count++].text = user_line;
+    items[count].type = SL_UI_ITEM_TEXT;
+    items[count++].text = saves_line;
+    items[count].type = SL_UI_ITEM_SECTION;
+    items[count++].text = "Memory cards";
+    items[count].type = SL_UI_ITEM_SETTING; /* a change applies at the tick boundary, so its widget marks it */
+    items[count++].text = "kit.card.slot_a";
+    items[count].type = SL_UI_ITEM_SETTING;
+    items[count++].text = "kit.card.slot_b";
     result = sl_ui_init(NULL); /* F1 toggles it */
     if (result != SL_OK)
         return failed("sl_ui_init", result);
@@ -456,6 +489,8 @@ static uint64_t whole_hz(sl_rate rate) {
    and at the end, before the window line. Never returns. */
 static void present(sl_window shown) {
     static const char* const pacings[] = { "vsync", "mailbox", "immediate", "limiter" };
+    char cards[2][SL_MEMCARD_CARD_NAME_MAX + 1];
+    int slot;
     uint64_t frames = 0;
     uint64_t last = 0;
     int closed = 0;
@@ -499,12 +534,17 @@ static void present(sl_window shown) {
     memset(&info, 0, sizeof info);
     (void)sl_window_get_info(shown, &info);
     sl_render_get_stats(&render);
+    for (slot = 0; slot < 2; slot++) {
+        if (sl_memcard_get_card((uint32_t)slot, cards[slot]) != SL_MEMCARD_READY)
+            strcpy(cards[slot], "-"); /* no card */
+    }
     printf("ac_port: window ticks %" PRIu64 " frames %" PRIu64 " audio %" PRIu64 " loud %" PRIu64 " dsp %" PRIu64
-           " pacing %s limit %" PRIu64 " gain %.3f pipelines %" PRIu32 " warmed %" PRIu32 " lists %" PRIu32 "\n",
+           " pacing %s limit %" PRIu64 " gain %.3f pipelines %" PRIu32 " warmed %" PRIu32 " lists %" PRIu32
+           " cards %s %s\n",
            sl_tick_count(), frames, audio.frames, audio.loud_frames, (uint64_t)ac_dsp_sounding_frames(),
            (uint32_t)info.pacing < sizeof pacings / sizeof pacings[0] ? pacings[info.pacing] : "unknown",
            whole_hz(info.frame_limit), (double)sl_audio_output_gain(), render.pipelines, render.pipelines_warmed,
-           render.pipeline_lists_written);
+           render.pipeline_lists_written, cards[0], cards[1]);
     fflush(stdout);
     _Exit(closed || ac_play_reached() ? 0 : 1);
 }
@@ -584,7 +624,9 @@ int main(int argc, char** argv) {
         result = start_fs();
         if (result != SL_OK)
             return failed("sl_fs_init", result);
-        code = start_settings();
+        code = start_saves();
+        if (code == 0)
+            code = start_settings();
         if (code != 0)
             return code;
     }
@@ -657,7 +699,7 @@ int main(int argc, char** argv) {
         desc.host_path = package;
         desc.flags = SL_MOUNT_PACKAGE | SL_MOUNT_CASE_INSENSITIVE;
         desc.importer = "ac";      /* ac::importer_id */
-        desc.importer_version = 2; /* ac::importer_version */
+        desc.importer_version = 3; /* ac::importer_version */
         result = sl_fs_mount(&desc, &mount);
         if (result == SL_ERROR_VERSION_MISMATCH) {
             fprintf(stderr, "ac_port: %s is from another version of the port; import the disc again with ac-import\n",
@@ -710,8 +752,8 @@ int main(int argc, char** argv) {
         shown = sl_window_create(&desc);
         if (shown.id == 0)
             return failed("sl_window_create", SL_ERROR_UNSUPPORTED);
-        /* The window's mode, pacing and limiter, the volume and the rumble strength, as the settings hold them, then
-           the overlay. */
+        /* The window's mode, pacing and limiter, the volume, the rumble strength and the cards in the slots, as the
+           settings hold them, then the overlay. */
         result = sl_window_settings_bind(shown);
         if (result != SL_OK)
             return failed("sl_window_settings_bind", result);
@@ -721,6 +763,11 @@ int main(int argc, char** argv) {
         result = sl_input_settings_bind();
         if (result != SL_OK)
             return failed("sl_input_settings_bind", result);
+        /* The card in each slot, which CARDInit puts in: card-a in slot A and none in B unless the settings or --set
+           name others. */
+        result = sl_memcard_settings_bind("card-a", NULL);
+        if (result != SL_OK)
+            return failed("sl_memcard_settings_bind", result);
         {
             int code = check_assignments(); /* every setting --set can name is registered now */
             if (code == 0)
