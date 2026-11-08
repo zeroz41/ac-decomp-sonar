@@ -389,8 +389,8 @@ add_test(NAME ac_port_window
 set_tests_properties(ac_port_window PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_window: skipped, ")
 
 # ac_port --reference to play's first frame, and --measure --ticks 1200 with the kit and with --reference twice each,
-# on the GPU sink with no window through SDL's offscreen video driver and lavapipe's Vulkan; skipped without the disc or
-# lavapipe, when the script says so.
+# then with the kit at --present-hz 144 and 360 once each, on the GPU sink with no window through SDL's offscreen video
+# driver and lavapipe's Vulkan; skipped without the disc or lavapipe, when the script says so.
 add_test(NAME ac_port_measure
          COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
                  "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/measure"

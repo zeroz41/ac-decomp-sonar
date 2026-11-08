@@ -88,7 +88,8 @@ Options:
 | `--validate` | rechecks the game's display lists on every use |
 | `--diff` | draws each frame's 3D twice, once through sonarlib and once through the game's own renderer (emu64), and compares the two |
 | `--goldens <scenes> <dir>` | headless, on the GPU with no window: writes the frames a scenes file names into `dir`, for the goldens test |
-| `--measure` | headless, on the GPU with no window: runs to the tick limit, presenting each frame once, and prints how long the game, the renderer's preparation and each present took from play's first frame on, and what the presents drew |
+| `--measure` | headless, on the GPU with no window: runs to the tick limit, presenting each frame once unless `--present-hz` is given, and prints how long the game, the renderer's preparation and each present took from play's first frame on, and what the presents drew, then a presents line: the presents, those held, the display times passed late, the frames dropped, any present going backward, and the snaps by cause |
+| `--present-hz <n>` | with `--measure`, not with `--reference`: presents each frame at a display's rate of `n` Hz (1 to 1000) instead of once, at each of the display's times in the game frame it is handed over in, blended between frames as the clock says |
 | `--reference` | draws every frame with the game's own renderer (emu64) through the GX front end instead of sonarlib's kit, to measure the kit against; with `--measure` or `--goldens`, not with `--window`, `--diff` or `--validate` |
 | `--qrand-seed <hex>` | seeds the game's random numbers with this value instead of the clock, as the goldens test does with Dolphin's |
 

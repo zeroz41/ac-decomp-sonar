@@ -1,14 +1,18 @@
-# The port's measured runs (sonarlib docs/roadmap.md, M6 step 7b; port/NOTES.md, Measured runs):
+# The port's measured runs (sonarlib docs/roadmap.md, M6 steps 7b and 9a; port/NOTES.md, Measured runs):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
 #         -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P measure_test.cmake
 # ac-import writes the package from the player's disc into OUT_DIR. Then ac_port runs once as it is and once with
 # --reference, the console's emu64 drawing instead of the kit, to play's first frame: the reference's game is the
 # play line's, with no palette overflowed. Then --measure --ticks 1200 runs twice with the kit and twice with
 # --reference, on the GPU sink with no window through SDL's offscreen video driver and lavapipe's Vulkan. Each exits 0
-# with a measure line and a measured line, the same in both runs once the twelve times are taken out, with frames,
-# ticks, draws and calls, and nothing invalid, overflowed or refused. The kit's and the reference's run the same game
-# for the same frames. It prints every line. When AC_DISC names no disc or there is no lavapipe it prints the line the
-# test's SKIP_REGULAR_EXPRESSION matches and returns.
+# with a measure line, a presents line and a measured line, the same in both runs once the twelve times are taken out,
+# with frames, ticks, draws and calls, each frame presented once with nothing held, late, dropped or backward, and
+# nothing invalid, overflowed or refused. The kit's and the reference's run the same game for the same frames.
+# --present-hz without --measure, and with --measure --reference, exit 2 with the usage. Then the kit's measured run
+# at 144 Hz and at 360 Hz, once each: the same measured line and ticks as at no rate, its frames and its dropped ones
+# the frames at no rate, more presents than frames, more at 360 Hz than at 144 Hz, none held or backward, and the
+# same frames dropped, pairs and snaps at both rates. It prints every line. When AC_DISC names no disc or there is no
+# lavapipe it prints the line the test's SKIP_REGULAR_EXPRESSION matches and returns.
 cmake_minimum_required(VERSION 3.25)
 
 if("${AC_DISC}" STREQUAL "")
@@ -45,6 +49,11 @@ set(time "${count} ${count} ${count}")
 set(measure_pattern "ac_port: measure (kit|reference) frames ${count} ticks ${count} game ${time}")
 string(APPEND measure_pattern " prepare ${time} present ${time} gpu ${time} draws ${count} calls ${count}")
 string(APPEND measure_pattern " pipelines ${count} buffers ${count} textures ${count} storage ${count} pushes ${count}")
+set(presents_pattern "ac_port: presents ${count} count ${count} held ${count} late ${count} dropped ${count}")
+string(APPEND presents_pattern " backward ${count} pairs ${count} unexplained ${count} none ${count}")
+string(APPEND presents_pattern " unmatched ${count} explicit ${count} forget ${count} cut ${count} all ${count}")
+string(APPEND presents_pattern " duplicate ${count} rotation ${count} distance ${count} gap ${count} auto-cut ${count}")
+set(causes none unmatched explicit forget cut all duplicate rotation distance gap auto-cut)
 
 # Runs ac_port with the options, and fails unless it exits 0 with one line matching each pattern, in order, into the
 # list out.
@@ -81,6 +90,35 @@ function(run name out)
         message(FATAL_ERROR "ac_port_measure: ${name} did not exit 0 with one line of each:\n${output}${errors}")
     endif()
     set(${out} "${lines}" PARENT_SCOPE)
+endfunction()
+
+# Fails unless ac_port exits 2 with the usage for the options.
+function(refused name)
+    execute_process(COMMAND "${AC_PORT}" --package "${package}" ${ARGN}
+                    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 60)
+    message("${name}: exit ${result}")
+    if(NOT result EQUAL 2 OR NOT errors MATCHES "^usage: ac_port ")
+        message(FATAL_ERROR "ac_port_measure: ${name} did not exit 2 with the usage:\n${output}${errors}")
+    endif()
+endfunction()
+
+# Sets out to the presents line's value of each field, in order, as "<field> <value>" pairs.
+function(presents_fields line out)
+    set(fields "")
+    foreach(field IN LISTS ARGN)
+        if(NOT line MATCHES " ${field} ([0-9]+)")
+            message(FATAL_ERROR "ac_port_measure: the presents line has no ${field}:\n${line}")
+        endif()
+        list(APPEND fields "${field} ${CMAKE_MATCH_1}")
+    endforeach()
+    set(${out} "${fields}" PARENT_SCOPE)
+endfunction()
+
+# Sets out to the presents line's value of the field.
+function(presents_field line field out)
+    presents_fields("${line}" pair ${field})
+    string(REPLACE "${field} " "" value "${pair}")
+    set(${out} "${value}" PARENT_SCOPE)
 endfunction()
 
 # The fields the kit has no part in: the game's ticks, its retraces, DVD reads and sound.
@@ -126,7 +164,7 @@ if(NOT reference_lines MATCHES " palette-overflows 0$")
     message(FATAL_ERROR "ac_port_measure: the reference overflowed a palette:\n${reference_lines}")
 endif()
 
-# The measured runs, twice each.
+# The measured runs at no present rate, twice each.
 foreach(drawer IN ITEMS kit reference)
     set(options --measure --ticks 1200)
     if(drawer STREQUAL "reference")
@@ -135,9 +173,10 @@ foreach(drawer IN ITEMS kit reference)
     set(untimed "")
     foreach(attempt IN ITEMS 1 2)
         run("${drawer} ${attempt}" lines MEASURE OPTIONS ${options}
-            PATTERNS "${measure_pattern}" "ac_port: measured${report_pattern}")
+            PATTERNS "${measure_pattern}" "${presents_pattern}" "ac_port: measured${report_pattern}")
         list(GET lines 0 measure_line)
-        list(GET lines 1 measured_line)
+        list(GET lines 1 presents_line)
+        list(GET lines 2 measured_line)
         if(NOT measure_line MATCHES "^ac_port: measure ${drawer} ")
             message(FATAL_ERROR "ac_port_measure: the measure line is not the ${drawer}'s:\n${measure_line}")
         endif()
@@ -149,8 +188,16 @@ foreach(drawer IN ITEMS kit reference)
             message(FATAL_ERROR "ac_port_measure: the ${drawer}'s run measured no frame or no draw:\n${measure_line}")
         endif()
         check_report("the ${drawer}'s measured run" "${measured_line}")
+        # Each frame presented once, at alpha 1.
+        presents_field("${presents_line}" count presents)
+        presents_fields("${presents_line}" once held late dropped backward)
+        if(NOT presents_line MATCHES "^ac_port: presents 0 " OR NOT presents EQUAL frames
+           OR NOT once STREQUAL "held 0;late 0;dropped 0;backward 0")
+            message(FATAL_ERROR "ac_port_measure: the ${drawer}'s run did not present each frame once, at alpha 1:\n"
+                                "${measure_line}\n${presents_line}")
+        endif()
         string(REGEX REPLACE " (game|prepare|present|gpu) [0-9]+ [0-9]+ [0-9]+" " \\1" measure_line "${measure_line}")
-        list(APPEND untimed "${measure_line}\n${measured_line}")
+        list(APPEND untimed "${measure_line}\n${presents_line}\n${measured_line}")
     endforeach()
     list(GET untimed 0 first)
     list(GET untimed 1 second)
@@ -159,8 +206,67 @@ foreach(drawer IN ITEMS kit reference)
     endif()
     set(${drawer}_frames "frames ${frames} ticks ${ticks}")
     game_fields("${measured_line}" ${drawer}_game)
+    if(drawer STREQUAL "kit")
+        set(kit_frame_count "${frames}")
+        set(kit_tick_count "${ticks}")
+        set(kit_measured_line "${measured_line}")
+    endif()
 endforeach()
 if(NOT kit_frames STREQUAL reference_frames OR NOT kit_game STREQUAL reference_game)
     message(FATAL_ERROR "ac_port_measure: the kit's and the reference's runs differ:\n"
                         "${kit_frames}, ${kit_game}\n${reference_frames}, ${reference_game}")
+endif()
+
+# A display's rate is the measured run's, and the reference is measured at none.
+refused("--present-hz without --measure" --present-hz 144)
+refused("--present-hz with --reference" --measure --reference --present-hz 144)
+
+# The kit's measured run at a display's rate, once at each.
+set(rate_counts "")
+set(rate_snaps "")
+foreach(hz IN ITEMS 144 360)
+    run("kit at ${hz} Hz" lines MEASURE OPTIONS --measure --ticks 1200 --present-hz ${hz}
+        PATTERNS "${measure_pattern}" "${presents_pattern}" "ac_port: measured${report_pattern}")
+    list(GET lines 0 measure_line)
+    list(GET lines 1 presents_line)
+    list(GET lines 2 measured_line)
+    if(NOT measure_line MATCHES "^ac_port: measure kit " OR NOT presents_line MATCHES "^ac_port: presents ${hz} ")
+        message(FATAL_ERROR "ac_port_measure: the run at ${hz} Hz is not the kit's at that rate:\n"
+                            "${measure_line}\n${presents_line}")
+    endif()
+    # The same game: the measured line and the ticks of the runs at no rate, every frame presented or dropped.
+    if(NOT measured_line STREQUAL kit_measured_line)
+        message(FATAL_ERROR "ac_port_measure: the run at ${hz} Hz played another game:\n"
+                            "${kit_measured_line}\n${measured_line}")
+    endif()
+    string(REGEX MATCH " frames ([0-9]+) ticks ([0-9]+) " ignored "${measure_line}")
+    set(frames "${CMAKE_MATCH_1}")
+    set(ticks "${CMAKE_MATCH_2}")
+    presents_field("${presents_line}" dropped dropped)
+    math(EXPR handed "${frames} + ${dropped}")
+    if(NOT ticks EQUAL kit_tick_count OR NOT handed EQUAL kit_frame_count)
+        message(FATAL_ERROR "ac_port_measure: the run at ${hz} Hz did not take the ${kit_frame_count} frames over "
+                            "${kit_tick_count} ticks of the runs at no rate:\n${measure_line}\n${presents_line}")
+    endif()
+    # More presents than frames, more at 360 Hz than at 144 Hz, and none held or going backward.
+    presents_field("${presents_line}" count presents)
+    presents_fields("${presents_line}" kept held backward)
+    if(NOT presents GREATER frames OR NOT kept STREQUAL "held 0;backward 0")
+        message(FATAL_ERROR "ac_port_measure: the run at ${hz} Hz presented no frame more than once, or held one "
+                            "or went backward:\n${measure_line}\n${presents_line}")
+    endif()
+    if(NOT rate_counts STREQUAL "" AND NOT presents GREATER rate_counts)
+        message(FATAL_ERROR "ac_port_measure: the run at ${hz} Hz presented no more than ${rate_counts} times:\n"
+                            "${presents_line}")
+    endif()
+    set(rate_counts "${presents}")
+    presents_fields("${presents_line}" snaps dropped pairs unexplained ${causes})
+    list(APPEND rate_snaps "${snaps}")
+endforeach()
+# The same frames dropped and the same snaps at both rates.
+list(SUBLIST rate_snaps 0 14 at_144)
+list(SUBLIST rate_snaps 14 14 at_360)
+if(NOT at_144 STREQUAL at_360)
+    message(FATAL_ERROR "ac_port_measure: the runs at 144 Hz and 360 Hz dropped or snapped differently:\n"
+                        "${at_144}\n${at_360}")
 endif()
