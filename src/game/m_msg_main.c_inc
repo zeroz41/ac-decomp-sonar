@@ -698,7 +698,11 @@ extern int mMsg_CopyDay(u8* data, int start_idx, int len) {
 extern int mMsg_CopyHour(u8* data, int start_idx, int len) {
     int command_len = mFont_CodeSize_idx_get(data, start_idx);
     u8 hour = Common_Get(time.rtc_time.hour);
+#ifdef SONAR_PORT /* sonarlib port: mString_Load_HourStringFromRom2 writes 15 bytes; the console's overrun hit dead stack, the host's stack protector aborts */
+    u8 hour_str[15];
+#else
     u8 hour_str[2];
+#endif
     int hour_len = mString_Load_HourStringFromRom2(hour_str, hour);
     int new_len = mMsg_MoveDataCut(data, start_idx + hour_len, start_idx + command_len, len, FALSE);
 
@@ -709,7 +713,11 @@ extern int mMsg_CopyHour(u8* data, int start_idx, int len) {
 extern int mMsg_CopyMin(u8* data, int start_idx, int len) {
     int command_len = mFont_CodeSize_idx_get(data, start_idx);
     u8 min = Common_Get(time.rtc_time.min);
+#ifdef SONAR_PORT /* sonarlib port: mString_Load_MinStringFromRom writes 4 bytes; the console's overrun hit dead stack, the host's stack protector aborts */
+    u8 min_str[4];
+#else
     u8 min_str[2];
+#endif
     int min_len = mString_Load_MinStringFromRom(min_str, min);
     int new_len = mMsg_MoveDataCut(data, start_idx + min_len, start_idx + command_len, len, FALSE);
 
@@ -720,7 +728,11 @@ extern int mMsg_CopyMin(u8* data, int start_idx, int len) {
 extern int mMsg_CopySec(u8* data, int start_idx, int len) {
     int command_len = mFont_CodeSize_idx_get(data, start_idx);
     u8 sec = Common_Get(time.rtc_time.sec);
+#ifdef SONAR_PORT /* sonarlib port: mString_Load_SecStringFromRom writes 5 bytes; the console's overrun hit dead stack, the host's stack protector aborts */
+    u8 sec_str[5];
+#else
     u8 sec_str[2];
+#endif
     int sec_len = mString_Load_SecStringFromRom(sec_str, sec);
     int new_len = mMsg_MoveDataCut(data, start_idx + sec_len, start_idx + command_len, len, FALSE);
 

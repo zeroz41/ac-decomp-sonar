@@ -13,7 +13,11 @@ void aPG_set_mail_address(Mail_c *mail) {
 }
 
 void aPG_set_loan_balance() {
+#ifdef SONAR_PORT /* sonarlib port: the balance is written aPG_LOAN_STR_LEN bytes wide and a comma after it; the host's stack protector aborts on the overrun */
+    u8 str[aPG_LOAN_STR_LEN + 1];
+#else
     u8 str[2];
+#endif
     int length;
     u32 loan = 0;
     mMsg_Window_c *msg_p = mMsg_Get_base_window_p();
@@ -354,7 +358,11 @@ void aPG_deposit_before(NPC_POSTGIRL_ACTOR *postgirl, GAME_PLAY *play) {
 
 void aPG_deposit_menu_close_wait(NPC_POSTGIRL_ACTOR *postgirl, GAME_PLAY *play) {
     if (play->submenu.open_flag == FALSE) {
+#ifdef SONAR_PORT /* sonarlib port: the account is written 11 bytes wide; the host's stack protector aborts on the overrun */
+        u8 str[11];
+#else
         u8 str[8];
+#endif
         aPG_ChangeMsgData(postgirl, 0x2de2);
         mMsg_Set_ForceNext(mMsg_Get_base_window_p());
         mFont_UnintToString(str, 0xb, Now_Private->bank_account, 0x9, 0x1, 0x0, 0x1);
