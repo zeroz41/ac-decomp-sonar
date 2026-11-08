@@ -16,17 +16,6 @@
 #include <stdint.h>
 #include <string.h>
 
-/* Each structure converts in here and is copied to or from the kit's host copy, which is allocated at 16 bytes while
-   the game aligns its structures at 32 (ATTRIBUTE_ALIGN). The kit's lock keeps one view running at a time. */
-static union {
-    Save_t save;
-    mCD_keep_mail_c keep_mail;
-    mCD_keep_original_c keep_original;
-    mCD_keep_diary_c keep_diary;
-    mCD_foreigner_c foreigner;
-    PresentSave_c present;
-} bounce;
-
 /* ---- The event save areas ---- */
 
 /* The structure an event save area's data holds, as (info.type, info.id) picks it (NOTES.md, Saves, the event areas). */
@@ -126,6 +115,10 @@ static u8 unknown_logged[256 * 256 / 8];
 
 static void log_unknown(u8 type, u8 id) {
     const u32 bit = (u32)type << 8 | id;
+    /* A new file's 0xFF bytes show each area in use as (255, 255), a pair no area of the game's has: the game reserves
+       areas only of the types it is given (m_event.c:2267-2301), each below mEv_EVENT_NUM (m_event.h:407). */
+    if (type == 0xFF && id == 0xFF)
+        return;
     if (unknown_logged[bit >> 3] & (1u << (bit & 7)))
         return;
     unknown_logged[bit >> 3] |= (u8)(1u << (bit & 7));
@@ -202,20 +195,43 @@ typedef struct region {
     u32 checksum;
 } region;
 
-/* The file maps (NOTES.md, Saves), each in the order of its offsets. */
+/* Where the structures lie in their files (NOTES.md, Saves). */
+enum {
+    KEEP_MAIL_AT = 0x1460,
+    KEEP_ORIGINAL_AT = 0xCF20,
+    KEEP_DIARY_AT = 0x19BC0,
+    TOWN_AT = 0x26000,
+    TOWN_COPY_AT = 0x4C000,
+    FOREIGNER_AT = 0x3040,
+};
+
+/* Each structure converts in place in the kit's host copy, which starts on a multiple of SL_MEMCARD_HOST_ALIGN. */
+#define IN_PLACE(type, at)                                                                                             \
+    _Static_assert(_Alignof(type) <= SL_MEMCARD_HOST_ALIGN, #type " is aligned within the host copy's alignment");     \
+    _Static_assert((at) % _Alignof(type) == 0, #type " at " #at " is aligned in the host copy")
+IN_PLACE(u16, mCD_SAVE_DATA_OFS);
+IN_PLACE(mCD_keep_mail_c, KEEP_MAIL_AT);
+IN_PLACE(mCD_keep_original_c, KEEP_ORIGINAL_AT);
+IN_PLACE(mCD_keep_diary_c, KEEP_DIARY_AT);
+IN_PLACE(Save_t, TOWN_AT);
+IN_PLACE(Save_t, TOWN_COPY_AT);
+IN_PLACE(mCD_foreigner_c, FOREIGNER_AT);
+IN_PLACE(PresentSave_c, mCD_SAVE_DATA_OFS);
+
+/* The file maps, each in the order of its offsets. */
 #define SAVE_REGION(at)                                                                                                \
     { SAVE, (at), sizeof(Save_t), (at), sizeof(Save), (at) + offsetof(Save_t, save_check.checksum) }
 #define KEEP_REGION(kind, type, at, aligned) { (kind), (at), sizeof(type), (at), (aligned), (at) + offsetof(type, checksum) }
 static const region town_regions[] = {
     { PROTECT_CODE, mCD_SAVE_DATA_OFS, 4 * sizeof(u16), 0, 0, NO_CHECKSUM },
-    KEEP_REGION(KEEP_MAIL, mCD_keep_mail_c, 0x1460, mCD_KEEP_MAIL_SIZE),
-    KEEP_REGION(KEEP_ORIGINAL, mCD_keep_original_c, 0xCF20, mCD_KEEP_ORIGINAL_SIZE),
-    KEEP_REGION(KEEP_DIARY, mCD_keep_diary_c, 0x19BC0, mCD_KEEP_DIARY_SIZE),
-    SAVE_REGION(0x26000),
-    SAVE_REGION(0x4C000),
+    KEEP_REGION(KEEP_MAIL, mCD_keep_mail_c, KEEP_MAIL_AT, mCD_KEEP_MAIL_SIZE),
+    KEEP_REGION(KEEP_ORIGINAL, mCD_keep_original_c, KEEP_ORIGINAL_AT, mCD_KEEP_ORIGINAL_SIZE),
+    KEEP_REGION(KEEP_DIARY, mCD_keep_diary_c, KEEP_DIARY_AT, mCD_KEEP_DIARY_SIZE),
+    SAVE_REGION(TOWN_AT),
+    SAVE_REGION(TOWN_COPY_AT),
 };
 static const region passport_regions[] = {
-    KEEP_REGION(FOREIGNER, mCD_foreigner_c, 0x3040, sizeof(mCD_foreigner_c)),
+    KEEP_REGION(FOREIGNER, mCD_foreigner_c, FOREIGNER_AT, sizeof(mCD_foreigner_c)),
 };
 static const region letters_regions[] = {
     { PRESENT, mCD_SAVE_DATA_OFS, sizeof(PresentSave_c), 0, mCD_PRESENT_SAVE_SIZE,
@@ -246,67 +262,68 @@ static u16 sum_host(const u8* p, u32 size) {
     return sum;
 }
 
-/* The region's structure from the console's bytes at console into the bounce. */
-static void structure_to_host(int kind, const u8* console) {
+/* The region's structure from the console's bytes at console into the host copy at host, its region's place. */
+static void structure_to_host(int kind, const u8* console, u8* host) {
     switch (kind) {
     case SAVE:
-        ac_saves_Save_t_from_console(&bounce.save, console);
-        areas_to_host(&bounce.save, console);
+        ac_saves_Save_t_from_console((Save_t*)host, console);
+        areas_to_host((Save_t*)host, console);
         break;
     case KEEP_MAIL:
-        ac_saves_mCD_keep_mail_c_from_console(&bounce.keep_mail, console);
+        ac_saves_mCD_keep_mail_c_from_console((mCD_keep_mail_c*)host, console);
         break;
     case KEEP_ORIGINAL:
-        ac_saves_mCD_keep_original_c_from_console(&bounce.keep_original, console);
+        ac_saves_mCD_keep_original_c_from_console((mCD_keep_original_c*)host, console);
         break;
     case KEEP_DIARY:
-        ac_saves_mCD_keep_diary_c_from_console(&bounce.keep_diary, console);
+        ac_saves_mCD_keep_diary_c_from_console((mCD_keep_diary_c*)host, console);
         break;
     case FOREIGNER:
-        ac_saves_mCD_foreigner_c_from_console(&bounce.foreigner, console);
+        ac_saves_mCD_foreigner_c_from_console((mCD_foreigner_c*)host, console);
         break;
     case PRESENT:
-        ac_saves_PresentSave_c_from_console(&bounce.present, console);
+        ac_saves_PresentSave_c_from_console((PresentSave_c*)host, console);
         break;
     default: {
-        u16 words[4];
         u32 i;
-        for (i = 0; i < 4; ++i)
-            words[i] = sl_load_be16(console + i * 2);
-        memcpy(&bounce, words, sizeof words);
+        for (i = 0; i < 4; ++i) {
+            const u16 word = sl_load_be16(console + i * 2);
+            memcpy(host + i * 2, &word, sizeof word);
+        }
         break;
     }
     }
 }
 
-/* The bounce's structure over the console's bytes at console, which keep the bytes no field names. */
-static void structure_to_console(int kind, u8* console) {
+/* The host copy's structure at host over the console's bytes at console, which keep the bytes no field names. */
+static void structure_to_console(int kind, const u8* host, u8* console) {
     switch (kind) {
     case SAVE:
-        ac_saves_Save_t_update_console(console, &bounce.save);
-        areas_to_console(&bounce.save, console);
+        ac_saves_Save_t_update_console(console, (const Save_t*)host);
+        areas_to_console((const Save_t*)host, console);
         break;
     case KEEP_MAIL:
-        ac_saves_mCD_keep_mail_c_update_console(console, &bounce.keep_mail);
+        ac_saves_mCD_keep_mail_c_update_console(console, (const mCD_keep_mail_c*)host);
         break;
     case KEEP_ORIGINAL:
-        ac_saves_mCD_keep_original_c_update_console(console, &bounce.keep_original);
+        ac_saves_mCD_keep_original_c_update_console(console, (const mCD_keep_original_c*)host);
         break;
     case KEEP_DIARY:
-        ac_saves_mCD_keep_diary_c_update_console(console, &bounce.keep_diary);
+        ac_saves_mCD_keep_diary_c_update_console(console, (const mCD_keep_diary_c*)host);
         break;
     case FOREIGNER:
-        ac_saves_mCD_foreigner_c_update_console(console, &bounce.foreigner);
+        ac_saves_mCD_foreigner_c_update_console(console, (const mCD_foreigner_c*)host);
         break;
     case PRESENT:
-        ac_saves_PresentSave_c_update_console(console, &bounce.present);
+        ac_saves_PresentSave_c_update_console(console, (const PresentSave_c*)host);
         break;
     default: {
-        u16 words[4];
         u32 i;
-        memcpy(words, &bounce, sizeof words);
-        for (i = 0; i < 4; ++i)
-            sl_store_be16(console + i * 2, words[i]);
+        for (i = 0; i < 4; ++i) {
+            u16 word;
+            memcpy(&word, host + i * 2, sizeof word);
+            sl_store_be16(console + i * 2, word);
+        }
         break;
     }
     }
@@ -323,8 +340,7 @@ static void file_to_host(const region* regions, u32 count, const u8* console, u8
             continue;
         if (r->checksum != NO_CHECKSUM)
             sum = sum_console(console + r->sum_offset, r->sum_size);
-        structure_to_host(r->kind, console + r->offset);
-        memcpy(host + r->offset, &bounce, r->size);
+        structure_to_host(r->kind, console + r->offset, host + r->offset);
         if (r->checksum != NO_CHECKSUM) {
             u16 word;
             memcpy(&word, host + r->checksum, sizeof word);
@@ -353,8 +369,7 @@ static void file_to_console(const region* regions, u32 count, const u8* host, u8
             continue;
         if (r->checksum != NO_CHECKSUM)
             sum = sum_host(host + r->sum_offset, r->sum_size);
-        memcpy(&bounce, host + r->offset, r->size);
-        structure_to_console(r->kind, console + r->offset);
+        structure_to_console(r->kind, host + r->offset, console + r->offset);
         if (r->checksum != NO_CHECKSUM) {
             const u16 word = sl_load_be16(console + r->checksum);
             sl_store_be16(console + r->checksum, (u16)(word + sum - sum_console(console + r->sum_offset, r->sum_size)));

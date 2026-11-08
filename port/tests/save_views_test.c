@@ -1,7 +1,7 @@
 /* Checks ac_saves.c's views of the game's card files (NOTES.md, Saves), each case worked by hand in the console's
    bytes: one field of each kind, each container kind of bit-field, each union rule, the event save areas, the dates,
    the others' header, the keep regions' padding, the checksums of each region kind, and random files of each kind to
-   the host and back. Offsets are the console's, from the file's start. */
+   the host and back, and a new file's. Offsets are the console's, from the file's start. */
 #include "ac_port.h"
 #include "m_event.h"
 #include "ac_set_npc_manager.h"
@@ -383,6 +383,22 @@ static void event_areas(void) {
     CHECK(saves_logged == logged + 1);
 }
 
+/* A new town file, 0xFF in every byte (sonarlib's memcard.h), converts to the host and back to its bytes. Each of its
+   event areas is in use as (255, 255), a pair no area of the game's has, and none is logged. */
+static void new_file(void) {
+    const int logged = saves_logged;
+
+    memset(console, 0xFF, town.size);
+    to_host(&town);
+    for (int i = 0; i < mEv_AREA_NUM; ++i) {
+        CHECK(save->event_save_common.area_use_bitfield & (1 << i));
+        CHECK(save->event_save_common.area[i].info.type == 0xFF && save->event_save_common.area[i].info.id == 0xFF);
+    }
+    to_console(&town);
+    CHECK(memcmp(back, console, town.size) == 0);
+    CHECK(saves_logged == logged);
+}
+
 /* An event area's start_date, set by its month and day on the host, and renew_time, at 0x20F14. */
 static void dates(void) {
     mEv_info_c* const info = &save->event_save_common.area[0].info;
@@ -576,6 +592,7 @@ int main(void) {
     field_kinds();
     bit_fields();
     unions();
+    new_file();
     event_areas();
     dates();
     others_header();

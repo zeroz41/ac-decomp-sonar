@@ -145,3 +145,27 @@ Not saved as a GameCube saves them yet:
 
 - The NES games' saves. The NES games don't start in the port yet, and once they do, parts of their saves will be in your computer's byte order rather than the GameCube's.
 - Anything that needs the Game Boy Advance link: the port has no Game Boy Advance to connect.
+
+### Moving a town to and from Dolphin
+
+sonarlib's `sl-card`, built with the port at `port/build/sonarlib/tools/sl-card`, copies saves between the port's cards and Dolphin's. Quit both the game and Dolphin first: each holds its cards while it runs, and nothing stops the other from changing them meanwhile. Give it the port's saves as `--app animal-crossing --org sonarlib`, or `--user-dir <dir>` if you play with `--user-dir`.
+
+Dolphin keeps the US game's slot A card in one of two places, under its user folder (`~/.local/share/dolphin-emu`, or `~/.dolphin-emu` if you have one, on Linux; `~/Library/Application Support/Dolphin` on macOS; `%APPDATA%\Dolphin Emulator`, or `Documents\Dolphin Emulator` if you have one, on Windows):
+
+- a GCI folder, Dolphin's default: `GC/USA/Card A`;
+- a card image, if you picked one in Dolphin's settings: `GC/MemoryCardA.USA.raw`, or with the card's blocks before `.raw` for a card smaller than 2043 blocks, as in `MemoryCardA.USA.251.raw`.
+
+The port's first `--window` run makes `card-a`, so bringing a card from Dolphin over it needs `--replace`. Or import it under another name and set that name as `kit.card.slot_a`. On Linux, with Dolphin's GCI folder:
+
+```sh
+sl=port/build/sonarlib/tools/sl-card
+dolphin=~/.local/share/dolphin-emu/GC/USA/'Card A'
+# Dolphin's whole card, as card-a:
+$sl --app animal-crossing --org sonarlib import card-a "$dolphin" --replace
+# or only Animal Crossing's files, over the ones card-a has:
+$sl --app animal-crossing --org sonarlib add card-a "$dolphin" --game GAFE --replace
+# and back to Dolphin:
+$sl --app animal-crossing --org sonarlib extract card-a "$dolphin" --game GAFE --replace
+```
+
+`extract` writes each file over the one Dolphin loads for it, so your other games' saves in the folder stay as they are. With a card image, `import card-a <image> --replace` brings it in, and `export card-a <image> --replace` writes the whole card back as an image. `sl-card` with no arguments lists every command.

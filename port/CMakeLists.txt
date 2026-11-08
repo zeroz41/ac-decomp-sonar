@@ -238,6 +238,8 @@ add_executable(ac_port adapter/main.c $<TARGET_OBJECTS:ac_game> $<TARGET_OBJECTS
 set_target_properties(ac_port PROPERTIES C_STANDARD 11 C_EXTENSIONS ON LINKER_LANGUAGE CXX)
 target_link_libraries(ac_port PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
                       sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend sonar::fmt_card)
+# sonarlib's sl-card, which moves the cards' saves to and from Dolphin (README.md, Saves), is built with the program.
+add_dependencies(ac_port sl-card)
 
 # The importer (NOTES.md, The package): ac-import writes the package the game reads from boot to Town's first frame
 # from the player's disc, converting the structures the game reads in place (sonarlib docs/roadmap.md, M6 step 6c).
