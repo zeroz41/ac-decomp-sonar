@@ -5,6 +5,10 @@
 #include "m_rcp.h"
 #include "m_player_lib.h"
 #include "m_debug.h"
+#ifdef SONAR_PORT /* sonarlib port: the effects' parts of the port's emu64 glue */
+#include <port/emu64_glue.h>
+#include <stddef.h>
+#endif
 
 static eEC_PROFILE_c* profile_tbl[] = {
     &iam_ef_shock,
@@ -312,7 +316,15 @@ static void eEC_actor_draw(ACTOR* actorx, GAME* game) {
 
     for (i = 0; i < eEC_EFFECT_ACTIVE_MAX; i++, active_flags++, effect++) {
         if (*active_flags) {
+#ifdef SONAR_PORT /* sonarlib port: each effect's draws are its index's part of the control (adapter/emu64_glue.c) */
+            ac_emu64_marks marks;
+
+            ac_emu64_part_open(game->graph, (u32)i, &marks);
             profile_tbl[effect->name]->draw_proc(effect, game);
+            ac_emu64_part_close(game->graph, &marks);
+#else
+            profile_tbl[effect->name]->draw_proc(effect, game);
+#endif
         }
     }
 }
@@ -421,6 +433,11 @@ static eEC_Effect_c* eEC_MakeEffect(s16 effect_id, xyz_t pos, xyz_t* ofs, GAME* 
 
     use_idx = eEC_GetEffectBuff(prio);
     if (use_idx != -1) {
+#ifdef SONAR_PORT /* sonarlib port: a new effect in the index's part starts unmatched (adapter/emu64_glue.c) */
+        if (eEC_CLIP != NULL) {
+            ac_emu64_forget_part((ACTOR*)((u8*)eEC_CLIP - offsetof(EFFECT_CONTROL_ACTOR, clip)), (u32)use_idx);
+        }
+#endif
         active_flags[use_idx] = prio;
         effects[use_idx].name = effect_id;
         effects[use_idx].position = pos;

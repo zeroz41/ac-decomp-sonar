@@ -729,6 +729,10 @@ static aNPC_s_overlay_c aNPC_s_overlay[2];
 static aNPC_k_overlay_c aNPC_k_overlay[3];
 static aNPC_e_overlay_c aNPC_e_overlay[2];
 
+#ifdef SONAR_PORT /* sonarlib port: the static NPCs' owners of the port's emu64 glue */
+#include <port/emu64_glue.h>
+#endif
+
 static void aNPC_keep_actor_class(void) {
     NPC_ACTOR** actor = CLIP(npc_clip)->keep_actors;
     int* used = CLIP(npc_clip)->keep_actor_used;
@@ -741,6 +745,9 @@ static void aNPC_keep_actor_class(void) {
         actor++;
         used++;
     }
+#ifdef SONAR_PORT /* sonarlib port: the NPCs are table 0 of static actors (adapter/emu64_glue.c) */
+    ac_emu64_actor_table(0, aNPC_n_actor_cl_tbl, sizeof(aNPC_n_actor_cl_tbl[0]), 9);
+#endif
 }
 
 static void aNPC_free_actor_class(void) {

@@ -21,6 +21,9 @@
 #include "m_font.h"
 #include "libultra/libultra.h"
 #include "m_flashrom.h"
+#ifdef SONAR_PORT /* sonarlib port: the layers' parts of the port's emu64 glue */
+#include <port/emu64_glue.h>
+#endif
 
 #define G_CC_TITLE PRIMITIVE, ENVIRONMENT, TEXEL0, ENVIRONMENT, PRIMITIVE, 0, TEXEL0, 0
 #define G_CC_TM 0, 0, 0, PRIMITIVE, 0, 0, 0, TEXEL0
@@ -662,18 +665,40 @@ static void aAL_title_draw(GAME* game, ANIMAL_LOGO_ACTOR* actor) {
 static void aAL_actor_draw(ACTOR* actor, GAME* game) {
   ANIMAL_LOGO_ACTOR* logo_actor = (ANIMAL_LOGO_ACTOR*)actor;
   GRAPH* graph = game->graph;
+#ifdef SONAR_PORT /* sonarlib port: each layer's draws are a part of the logo's (adapter/emu64_glue.c) */
+  ac_emu64_marks marks;
+#endif
 
   mFont_SetMatrix(graph, mFont_MODE_FONT);
 
   if (logo_actor->action >= aAL_ACTION_BACK_FADE_IN) {
+#ifdef SONAR_PORT /* sonarlib port: part 1, the back */
+    ac_emu64_part_open(graph, 1, &marks);
     aAL_back_draw(graph, logo_actor);
+    ac_emu64_part_close(graph, &marks);
+#else
+    aAL_back_draw(graph, logo_actor);
+#endif
   }
 
+#ifdef SONAR_PORT /* sonarlib port: part 2, the title */
+  ac_emu64_part_open(graph, 2, &marks);
   aAL_title_draw(game, logo_actor);
+  ac_emu64_part_close(graph, &marks);
+#else
+  aAL_title_draw(game, logo_actor);
+#endif
 
   if (logo_actor->action >= aAL_ACTION_START_KEY_CHK_START) {
+#ifdef SONAR_PORT /* sonarlib port: part 3, the copyright and trademark */
+    ac_emu64_part_open(graph, 3, &marks);
     aAL_copyright_draw(logo_actor, graph);
     aAL_tm_draw(graph);
+    ac_emu64_part_close(graph, &marks);
+#else
+    aAL_copyright_draw(logo_actor, graph);
+    aAL_tm_draw(graph);
+#endif
   }
 
   mFont_SetMode(graph, mFont_MODE_FONT);
@@ -682,7 +707,13 @@ static void aAL_actor_draw(ACTOR* actor, GAME* game) {
       case aAL_ACTION_GAME_START:
       case aAL_ACTION_FADE_OUT_START:
       case aAL_ACTION_OUT:
+#ifdef SONAR_PORT /* sonarlib port: part 4, "press start" */
+        ac_emu64_part_open(graph, 4, &marks);
         aAL_press_start_draw(logo_actor, graph);
+        ac_emu64_part_close(graph, &marks);
+#else
+        aAL_press_start_draw(logo_actor, graph);
+#endif
         break;
     }
   }

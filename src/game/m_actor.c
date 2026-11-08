@@ -161,6 +161,9 @@ static void Actor_ct(ACTOR* actor, GAME* game) {
 
     if (Actor_data_bank_dma_end_check(actor, play) == TRUE) {
         (*actor->ct_proc)(actor, game);
+#ifdef SONAR_PORT /* sonarlib port: the actor's first move may jump, so it snaps (adapter/emu64_glue.c) */
+        ac_emu64_actor_made(actor);
+#endif
         actor->ct_proc = NULL;
     }
 }
@@ -434,6 +437,10 @@ extern void Actor_info_call_actor(GAME_PLAY* play, Actor_info* actor_info) {
     mFI_FieldMove(player_actor->actor_class.world.position);
     mBI_move(play);
 
+#ifdef SONAR_PORT /* sonarlib port: actors made since the last call snap at first moves (adapter/emu64_glue.c) */
+    ac_emu64_snap_made();
+#endif
+
     for (i = 0; i < ACTOR_PART_NUM; i++) {
         ACTOR* next;
         actor = actor_info->list[i].actor;
@@ -450,6 +457,9 @@ extern void Actor_info_call_actor(GAME_PLAY* play, Actor_info* actor_info) {
                 if (Actor_data_bank_dma_end_check(actor, play) == TRUE) {
                     play->game.doing_point_specific = 152;
                     (*actor->ct_proc)(actor, (GAME*)play);
+#ifdef SONAR_PORT /* sonarlib port: the actor's first move may jump, so it snaps (adapter/emu64_glue.c) */
+                    ac_emu64_actor_made(actor);
+#endif
                     play->game.doing_point_specific = 153;
                     actor->ct_proc = NULL;
                 }

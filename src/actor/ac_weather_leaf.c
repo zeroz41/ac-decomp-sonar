@@ -7,6 +7,9 @@
 #include "m_malloc.h"
 #include "m_player_lib.h"
 #include "sys_matrix.h"
+#ifdef SONAR_PORT /* sonarlib port: the particles' snaps of the port's emu64 glue */
+#include <port/emu64_glue.h>
+#endif
 
 extern Gfx ef_otiba01_setmode[];
 
@@ -111,6 +114,9 @@ static int aWeatherLeaf_CheckLeafBorder(aWeather_Priv* priv) {
 
 static void aWeatherLeaf_CheckLeafScroll(aWeather_Priv* priv) {
     int border = aWeatherLeaf_CheckLeafBorder(priv);
+#ifdef SONAR_PORT /* sonarlib port: a wrapped particle jumps, so its part snaps (adapter/emu64_glue.c) */
+    BOOL wrapped = border != 0;
+#endif
 
     if (border != 0) {
         if ((border >> 1) & 1) {
@@ -136,7 +142,15 @@ static void aWeatherLeaf_CheckLeafScroll(aWeather_Priv* priv) {
             if (priv->pos.y < +weather->pos.y) {
                 priv->pos.y = (y + (priv->pos.y - priv->currentY));
                 priv->currentY = y;
+#ifdef SONAR_PORT /* sonarlib port: so does one wrapped up */
+                wrapped = TRUE;
+#endif
             }
+#ifdef SONAR_PORT /* sonarlib port: the particle's part is its slot in the weather's (adapter/emu64_glue.c) */
+            if (wrapped) {
+                ac_emu64_snap_part(&weather->actor_class, (u32)(priv - weather->priv));
+            }
+#endif
         }
     }
 }

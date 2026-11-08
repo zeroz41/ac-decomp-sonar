@@ -13,6 +13,9 @@
 #include "m_player_lib.h"
 #include "m_event.h"
 #include "libultra/libultra.h"
+#ifdef SONAR_PORT /* sonarlib port: the particles' parts of the port's emu64 glue */
+#include <port/emu64_glue.h>
+#endif
 
 static void Weather_Actor_ct(ACTOR* actor, GAME* game);
 static void Weather_Actor_dt(ACTOR* actor, GAME* game);
@@ -142,6 +145,9 @@ static aWeather_Priv* aWeather_GetWeatherPrv(u8 status, s16 timer, xyz_t* pos, x
 
     if ((id != -1) && (id < 100)) {
         if (priv[id].use == 0) {
+#ifdef SONAR_PORT /* sonarlib port: a new particle in the slot's part starts unmatched (adapter/emu64_glue.c) */
+            ac_emu64_forget_part(actor, (u32)id);
+#endif
             priv[id].use = 1;
             priv[id].status = status;
             priv[id].timer = timer;
@@ -489,7 +495,15 @@ static void aWeather_DrawWeatherPrv(ACTOR* actor, GAME* game) {
         if (weather->current_profile->draw != NULL) {
             for (i = 0; i < 100; i++, priv++) {
                 if (priv->use != 0) {
+#ifdef SONAR_PORT /* sonarlib port: each particle's draws are its slot's part of the weather (adapter/emu64_glue.c) */
+                    ac_emu64_marks marks;
+
+                    ac_emu64_part_open(game->graph, (u32)i, &marks);
                     weather->current_profile->draw(priv, game);
+                    ac_emu64_part_close(game->graph, &marks);
+#else
+                    weather->current_profile->draw(priv, game);
+#endif
                 }
             }
         }

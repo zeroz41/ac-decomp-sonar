@@ -8,6 +8,9 @@
 #include "m_common_data.h"
 #include "m_rcp.h"
 #include "sys_matrix.h"
+#ifdef SONAR_PORT /* sonarlib port: the blocks' parts of the port's emu64 glue */
+#include <port/emu64_glue.h>
+#endif
 
 static void Bg_Draw_Actor_ct(ACTOR* actorx, GAME* game);
 static void Bg_Draw_Actor_dt(ACTOR* actorx, GAME* game);
@@ -439,6 +442,11 @@ static void aFD_DrawBlock(aFD_block_c* block, ACTOR* actorx, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
 
     if (exist != FALSE) {
+#ifdef SONAR_PORT /* sonarlib port: each block's draws are its part of the field's draw (adapter/emu64_glue.c) */
+        ac_emu64_marks marks;
+
+        ac_emu64_part_open(game->graph, (u32)(block->bz << 8 | block->bx), &marks);
+#endif
         opa_gfx = mFI_GetBGDisplayListRom(block->bx, block->bz);
         xlu_gfx = mFI_GetBGDisplayListRom_XLU(block->bx, block->bz);
         anime_data = mFI_GetBGTexAnimInfo(&anime_frame_count, block->bx, block->bz);
@@ -495,6 +503,9 @@ static void aFD_DrawBlock(aFD_block_c* block, ACTOR* actorx, GAME* game) {
                 aFD_DrawXluBg(xlu_gfx, exist, game);
             }
         }
+#ifdef SONAR_PORT /* sonarlib port: the block's part closes */
+        ac_emu64_part_close(game->graph, &marks);
+#endif
     }
 }
 

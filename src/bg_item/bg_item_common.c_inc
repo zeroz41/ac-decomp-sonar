@@ -2,6 +2,54 @@ static void bit_cmn_single_drawS(GAME* game, bg_item_common_info_c* common_info,
                                  s_xyz* angle, xyz_t* scale, u8 alpha, bIT_DRAW_BF_PROC draw_bf,
                                  bIT_DRAW_AF_PROC draw_af, rgba_t* col);
 
+#ifdef SONAR_PORT /* sonarlib port: the bg items' parts of the port's emu64 glue (adapter/emu64_glue.c) */
+#include <port/emu64_glue.h>
+
+/* A pool element's part: 2^23 + kind * 256 + slot, the kinds drop 0, fruit drop 1, pit 2, ten coin 3, fade 4 and
+   hole 5. */
+#define bIT_PART_DROP 0
+#define bIT_PART_FRUIT_DROP 1
+#define bIT_PART_PIT 2
+#define bIT_PART_TEN_COIN 3
+#define bIT_PART_FADE 4
+#define bIT_PART_HOLE 5
+#define bIT_POOL_PART(kind, slot) ((1u << 23) + (u32)(kind) * 256 + (u32)(slot))
+
+/* A new element in the slot's part starts unmatched. */
+static void bIT_forget_pool_part(int kind, int slot) {
+    if (bIT_CLIP != NULL && bIT_CLIP->bg_item_actorx != NULL) {
+        ac_emu64_forget_part(bIT_CLIP->bg_item_actorx, bIT_POOL_PART(kind, slot));
+    }
+}
+
+static int bIT_drop_part_kind(bg_item_drop_table_c* drop_info) {
+    if (bIT_CLIP != NULL && drop_info == &bIT_CLIP->bg_item_common_p->fruit_drop_info) {
+        return bIT_PART_FRUIT_DROP;
+    }
+    return bIT_PART_DROP;
+}
+
+/* What bg_item_common_draw_item and bg_item_common_draw_item_body hand the loops: the draw table drawn, NULL outside
+   them, its block, bz * 7 + bx, and j, the draw list's index in the body, 0 for the shadow. */
+static bg_item_draw_table_c* bIT_part_table;
+static u32 bIT_part_block;
+static u32 bIT_part_list;
+
+/* A position's part, (block * 256 + ut) * 16 + j, ut being its unit: the marker, NULL for none. */
+static Gfx* bIT_part_open_at(Gfx** gfx_pp, bg_item_draw_pos_c* draw_pos) {
+    int ut;
+
+    if (bIT_part_table == NULL || bIT_part_list >= 16) {
+        return NULL;
+    }
+    ut = draw_pos - &bIT_part_table->draw_data.draw_pos[1];
+    if (ut < 0 || ut > 255) {
+        return NULL;
+    }
+    return ac_emu64_part_open_at(gfx_pp, (bIT_part_block * 256 + (u32)ut) * 16 + bIT_part_list);
+}
+#endif
+
 static void bit_draw_ta_set(GAME* game) {
     OPEN_DISP(game->graph);
 
@@ -101,6 +149,9 @@ static int bIT_actor_fade_entry(mActor_name_t fg_name, xyz_t* pos) {
     }
 
     if (selected_fade != NULL) {
+#ifdef SONAR_PORT /* sonarlib port: what fills the slot starts its part unmatched */
+        bIT_forget_pool_part(bIT_PART_FADE, selected_fade - bIT_CLIP->bg_item_common_p->fade);
+#endif
         selected_fade->mode = 1;
         selected_fade->fg_item = fg_name;
         selected_fade->alpha = 255;
@@ -136,8 +187,16 @@ static void bIT_actor_fade_draw(GAME* game, bg_item_common_info_c* common_info, 
 
     for (i = 0; i < bIT_FADE_NUM; i++, bg_item_fade++) {
         if (bg_item_fade->mode != 0) {
+#ifdef SONAR_PORT /* sonarlib port: each fade's draws are its slot's part */
+            ac_emu64_marks marks;
+
+            ac_emu64_part_open(game->graph, bIT_POOL_PART(bIT_PART_FADE, i), &marks);
+#endif
             bit_cmn_single_drawS(game, common_info, bg_item_fade->fg_item, &bg_item_fade->position, &ZeroSVec, &d_size,
                                  bg_item_fade->alpha, NULL, NULL, NULL);
+#ifdef SONAR_PORT
+            ac_emu64_part_close(game->graph, &marks);
+#endif
         }
     }
 }
@@ -186,6 +245,9 @@ static int bIT_actor_ten_coin_entryR(bg_item_ten_coin_c* ten_coin, mActor_name_t
     }
 
     if (sel_ten_coin != NULL) {
+#ifdef SONAR_PORT /* sonarlib port: what fills the slot starts its part unmatched */
+        bIT_forget_pool_part(bIT_PART_TEN_COIN, sel_ten_coin - bIT_CLIP->bg_item_common_p->ten_coin);
+#endif
         sel_ten_coin->_44 = 0;
         sel_ten_coin->_4E = 10;
         sel_ten_coin->_50 = sel_ten_coin->_4E;
@@ -341,6 +403,11 @@ static void bIT_actor_ten_coin_draw(GAME* game, bg_item_common_info_c* common_in
             xyz_t display_pos;
             f32 percent;
             f32 scale;
+#ifdef SONAR_PORT /* sonarlib port: each coin's draws are its slot's part */
+            ac_emu64_marks marks;
+
+            ac_emu64_part_open(game->graph, bIT_POOL_PART(bIT_PART_TEN_COIN, i), &marks);
+#endif
 
             add_pos.y = 0.0f;
             if (ten_coin->_50 != 0) {
@@ -364,6 +431,9 @@ static void bIT_actor_ten_coin_draw(GAME* game, bg_item_common_info_c* common_in
                                  &bIT_actor_ten_coin_draw_bf, &bIT_actor_ten_coin_draw_af, &color);
             bit_cmn_single_drawS_shadow(game, common_info, ten_coin->fg_item, &display_pos, &ZeroSVec, &d_size, 255,
                                         shadow_pos, shadow_color);
+#ifdef SONAR_PORT
+            ac_emu64_part_close(game->graph, &marks);
+#endif
         }
     }
 }
@@ -719,6 +789,9 @@ static int bIT_actor_drop_entry_main(bg_item_drop_table_c* drop_info, bg_item_dr
 
     for (i = 0; i < drop_info->count; i++, drop++) {
         if (drop->move_proc == NULL) {
+#ifdef SONAR_PORT /* sonarlib port: what fills the slot starts its part unmatched */
+            bIT_forget_pool_part(bIT_drop_part_kind(drop_info), i);
+#endif
             bcopy(src_drop, drop, sizeof(bg_item_drop_c));
             drop->display_fg_item = src_drop->fg_item;
             drop->mode = 0;
@@ -1188,6 +1261,9 @@ static int bIT_actor_hole_effect_entry(bg_item_hole_c* hole, mActor_name_t fg_it
                 }
 
                 if (res) {
+#ifdef SONAR_PORT /* sonarlib port: what fills the slot starts its part unmatched */
+                    bIT_forget_pool_part(bIT_PART_HOLE, i);
+#endif
                     hole->mode = mode;
                     xyz_t_move(&hole->position, &target_pos);
                     hole->counter = 0;
@@ -1264,8 +1340,19 @@ static void bIT_actor_hole_effect_draw(GAME* game, bg_item_common_info_c* common
         scale.x = hole->scale * 0.01f;
         scale.y = hole->scale * 0.01f;
         scale.z = hole->scale * 0.01f;
+#ifdef SONAR_PORT /* sonarlib port: the hole's draws are its slot's part */
+        {
+            ac_emu64_marks marks;
+
+            ac_emu64_part_open(game->graph, bIT_POOL_PART(bIT_PART_HOLE, 0), &marks);
+            bit_cmn_single_drawS(game, common_info, hole->hole_fg_item, &hole->position, &hole->angle, &scale, 255,
+                                 NULL, NULL, NULL);
+            ac_emu64_part_close(game->graph, &marks);
+        }
+#else
         bit_cmn_single_drawS(game, common_info, hole->hole_fg_item, &hole->position, &hole->angle, &scale, 255, NULL,
                              NULL, NULL);
+#endif
     }
 }
 
@@ -1703,7 +1790,15 @@ static void bIT_actor_drop_draw(GAME* game, bg_item_common_info_c* common_info, 
 
     for (i = 0; i < drop_info->count; i++, drop++) {
         if (drop->draw_proc != NULL) {
+#ifdef SONAR_PORT /* sonarlib port: each drop's draws are its slot's part */
+            ac_emu64_marks marks;
+
+            ac_emu64_part_open(game->graph, bIT_POOL_PART(bIT_drop_part_kind(drop_info), i), &marks);
             drop->draw_proc(game, common_info, drop);
+            ac_emu64_part_close(game->graph, &marks);
+#else
+            drop->draw_proc(game, common_info, drop);
+#endif
         }
     }
 }
@@ -2295,6 +2390,9 @@ static int bIT_actor_pit_entry(bg_item_pit_c* pit, s16 mode, mActor_name_t fg_no
 
     for (i = 0; res == FALSE && i < bIT_PIT_NUM; i++, pit++) {
         if (pit->mode == 0) {
+#ifdef SONAR_PORT /* sonarlib port: what fills the slot starts its part unmatched */
+            bIT_forget_pool_part(bIT_PART_PIT, i);
+#endif
             pit->mode = mode;
             pit->fg_item_in_pit = fg_item_in_pit;
             pit->hole_fg_item = fg_no;
@@ -2947,9 +3045,15 @@ static void bg_item_common_draw_loop_type1(GRAPH* graph, Gfx** gfx_pp, bg_item_d
 
     while (draw_pos->next_add_cnt != 256) {
         if (draw_pos->cull_flag == FALSE) {
+#ifdef SONAR_PORT /* sonarlib port: each position's draws are its part (adapter/emu64_glue.c) */
+            Gfx* mark = bIT_part_open_at(gfx_pp, draw_pos);
+#endif
             Matrix_put(&draw_pos->mtxf);
             gSPMatrix((*gfx_pp)++, _Matrix_to_Mtx_new(graph), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
             gSPDisplayList((*gfx_pp)++, display_list_table[base_idx + draw_pos->sub_idx]);
+#ifdef SONAR_PORT
+            ac_emu64_part_close_at(gfx_pp, mark);
+#endif
         }
 
         draw_pos += draw_pos->next_add_cnt;
@@ -2963,10 +3067,16 @@ static void bg_item_common_s_draw_loop_type1(GRAPH* graph, Gfx** gfx_pp, bg_item
 
     while (draw_pos->next_add_cnt != 256) {
         if (draw_pos->cull_flag == FALSE) {
+#ifdef SONAR_PORT /* sonarlib port: each position's shadow is its part (adapter/emu64_glue.c) */
+            Gfx* mark = bIT_part_open_at(gfx_pp, draw_pos);
+#endif
             Matrix_put(&draw_pos->mtxf);
             gSPMatrix((*gfx_pp)++, _Matrix_to_Mtx_new(graph), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
             gSPVertex((*gfx_pp)++, shadow_vtx, shadow_vtx_count, 0);
             gSPDisplayList((*gfx_pp)++, base_gfx);
+#ifdef SONAR_PORT
+            ac_emu64_part_close_at(gfx_pp, mark);
+#endif
         }
 
         draw_pos += draw_pos->next_add_cnt;
@@ -2987,6 +3097,9 @@ static void bg_item_common_draw_item_body(GRAPH* graph, Gfx** gfx_pp, bg_item_dr
     display_list_table = draw_part->display_list_table_p;
 
     for (i = 0; i < count; i++, draw_list_table++) {
+#ifdef SONAR_PORT /* sonarlib port: j, the draw list's index, for the positions' parts */
+        bIT_part_list = (u32)i;
+#endif
         ((bIT_DRAW_PROC)(*draw_list_table)->draw_proc)(graph, gfx_pp, *draw_list_table, draw_pos, display_list_table);
     }
 }
@@ -3026,6 +3139,10 @@ static void bg_item_common_draw_item(GAME_PLAY* play, bg_item_draw_table_c* draw
     draw_part_table_p = draw_part_table;
     start_idx = draw_tbl->draw_data.idx_p;
     graph = play->game.graph;
+#ifdef SONAR_PORT /* sonarlib port: the draw table and its block, for the positions' parts */
+    bIT_part_table = draw_tbl;
+    bIT_part_block = (u32)(draw_tbl->bz * 7 + draw_tbl->bx);
+#endif
 
     OPEN_DISP(graph);
     gfx = NOW_POLY_OPA_DISP;
@@ -3044,6 +3161,9 @@ static void bg_item_common_draw_item(GAME_PLAY* play, bg_item_draw_table_c* draw
 
     start_idx = draw_tbl->draw_data.idx_p;
     draw_part_table_p = draw_part_table;
+#ifdef SONAR_PORT /* sonarlib port: j is 0 for the shadows, whose parts go into the sub-list the shadow list calls */
+    bIT_part_list = 0;
+#endif
     for (i = 0; i < draw_tbl->draw_data.val; i++, start_idx++, draw_part_table_p++) {
         if (*start_idx != 0) {
             bg_item_common_draw_item_shadow(graph, &gfx, draw_part_table_p->draw_part_p,
@@ -3055,6 +3175,9 @@ static void bg_item_common_draw_item(GAME_PLAY* play, bg_item_draw_table_c* draw
     gfxclose(start_gfx_p, gfx);
     SET_POLY_OPA_DISP(gfx);
     CLOSE_DISP(graph);
+#ifdef SONAR_PORT
+    bIT_part_table = NULL;
+#endif
 }
 
 static void bIT_actor_pit_draw_nrm(GAME* game, bg_item_common_info_c* common_info, bg_item_pit_c* pit,
@@ -3073,7 +3196,15 @@ static void bIT_actor_pit_draw(GAME* game, bg_item_common_info_c* common_info, b
 
     for (i = 0; i < bIT_PIT_NUM; i++, pit++) {
         if (pit->hole_fg_item != 0 && pit->mode != 0) {
+#ifdef SONAR_PORT /* sonarlib port: each pit's draws are its slot's part */
+            ac_emu64_marks marks;
+
+            ac_emu64_part_open(game->graph, bIT_POOL_PART(bIT_PART_PIT, i), &marks);
             bIT_actor_pit_draw_nrm(game, common_info, pit, NULL, NULL, NULL);
+            ac_emu64_part_close(game->graph, &marks);
+#else
+            bIT_actor_pit_draw_nrm(game, common_info, pit, NULL, NULL, NULL);
+#endif
         }
     }
 }

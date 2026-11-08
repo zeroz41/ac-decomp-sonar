@@ -10,8 +10,8 @@
    the two are compared (emu64_glue.c).
 
    --window: in real time, on the GPU sink, in a window, with the game's pads on the keyboard and gamepads and its
-   sound on the audio device. The main thread presents until the window is closed, or until --ticks's limit when it
-   is given.
+   sound on the audio device. The main thread presents at the clock's alpha for each image's time until the window
+   is closed, or until --ticks's limit when it is given.
 
    --goldens: headless and deterministic, but on the GPU sink with no window, writing the frames the scenes file names
    into the directory (sonar/goldens.h, port/NOTES.md, Goldens). The GX glue's frame begin hands each frame's keys to
@@ -263,8 +263,9 @@ static void* game_main(void* arg) {
     _Exit(1);
 }
 
-/* --window's main loop: presents the latest submitted frame until the window is closed or, with --ticks, the runtime
-   has begun the limit's ticks. Never returns. */
+/* --window's main loop: presents the latest submitted frame, at the clock's alpha for the image's presentation time
+   (1 for a stale window), until the window is closed or, with --ticks, the runtime has begun the limit's ticks.
+   Never returns. */
 static void present(sl_window shown) {
     uint64_t frames = 0;
     int closed = 0;
@@ -279,9 +280,10 @@ static void present(sl_window shown) {
         }
         if (ticks_given && sl_tick_count() >= tick_limit)
             break;
-        sl_window_frame_begin(shown);
-        sl_render_present(1.0f, NULL); /* SL_ERROR_NOT_FOUND until the game submits its first frame */
-        if (sl_window_present(shown, 1.0f) == SL_OK)
+        const uint64_t t = sl_window_frame_begin(shown);
+        const float alpha = t != 0 ? (float)sl_clock_alpha(t) : 1.0f;
+        sl_render_present(alpha, NULL); /* SL_ERROR_NOT_FOUND until the game submits its first frame */
+        if (sl_window_present(shown, alpha) == SL_OK)
             frames++;
     }
     sl_audio_mix_stats audio;
@@ -360,12 +362,18 @@ int main(int argc, char** argv) {
     }
     {
         /* Headless, the null sink; --window, --goldens and --measure, the GPU sink at 640 x 480. Each frame is
-           checked and hashed at submit. --diff captures each frame too. */
+           checked and hashed at submit. --diff captures each frame too. max_snaps: a frame's first moves can snap 256
+           actors' 11 owners, 2,816 calls, beside the weather's forgets and wraps, 11 calls a part; the default 256
+           refused forgets. snap_distance: the game's unit (mFI_UNIT_BASE_SIZE), which parts real motion in the
+           world's perspective views from the blends between two objects; core applies it to no orthographic view,
+           such as the logo's font view (port/NOTES.md, Measured runs, after step 9b). */
         sl_render_desc desc;
         memset(&desc, 0, sizeof desc);
         desc.sink = window || goldens != NULL || measure ? SL_RENDER_SINK_GPU : SL_RENDER_SINK_NULL;
         desc.flags = SL_RENDER_HASH_FRAMES | (ac_diff_enabled() ? SL_RENDER_CAPTURE_FRAMES : 0u);
         desc.max_views = 256;
+        desc.max_snaps = 8192;
+        desc.snap_distance = 40.0f;
         result = sl_render_init(&desc);
         if (result != SL_OK)
             return failed("sl_render_init", result);

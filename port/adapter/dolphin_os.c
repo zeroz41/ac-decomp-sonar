@@ -289,6 +289,8 @@ void OSResetSystem(int reset, u32 resetCode, BOOL forceMenu) {
 
 /* The console's 24 MB, scaled for 64-bit structures (sonarlib docs/platform.md, Memory). */
 #define AC_MAIN_MEMORY_SIZE (4u * 24u * 1024u * 1024u)
+/* The emu64 glue keys an actor by its offset here, below its static actors' keys from 2^27 (port/emu64_glue.h). */
+_Static_assert(AC_MAIN_MEMORY_SIZE <= 1u << 27, "main memory's offsets stay below the emu64 glue's table keys");
 
 /* The host has no uncached mirror, so both views are the same memory. */
 void* OSPhysicalToCached(u32 paddr) { return (u8*)sl_dolphin_os_memory_base() + paddr; }

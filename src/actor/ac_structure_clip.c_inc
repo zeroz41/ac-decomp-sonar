@@ -1,3 +1,7 @@
+#ifdef SONAR_PORT /* sonarlib port: the static structures' owners of the port's emu64 glue */
+#include <port/emu64_glue.h>
+#endif
+
 extern u16* structure_pal_adrs_nowinter[];
 extern u16* structure_pal_adrs_winter[];
 
@@ -247,6 +251,9 @@ static void aSTR_init_clip_area() {
 
                 overlay_info++;
             }
+#ifdef SONAR_PORT /* sonarlib port: the structures are table 1 of static actors (adapter/emu64_glue.c) */
+            ac_emu64_actor_table(1, aSTR_actor_cl, sizeof(aSTR_actor_cl[0]), aSTR_ACTOR_TBL_COUNT);
+#endif
         }
     }
 }

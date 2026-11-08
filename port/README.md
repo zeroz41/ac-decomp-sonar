@@ -77,13 +77,13 @@ Close the window to quit.
 
 The keyboard is controller 1. Gamepads work too: each one you plug in takes the next free controller.
 
-Without `--window` it runs headless, as the tests do: it runs to the first frame of play as fast as it can, prints one `ac_port: play …` line and exits with 0. Its sound is mixed but not played. It exits with 1 if it fails or hits the tick limit, and with 2 for bad arguments.
+Without `--window` it runs headless, as the tests do: it runs to the first frame of play as fast as it can, prints one `ac_port: play …` line and exits with 0. Among the line's counts, `unowned` counts the actors drawn with no identity of their own, and `strays` the markers the game's draws left that opened or closed nothing; both are 0 when every moving thing is kept apart. Its sound is mixed but not played. It exits with 1 if it fails or hits the tick limit, and with 2 for bad arguments.
 
 Options:
 
 | Option | What it does |
 |---|---|
-| `--window` | shows the game in a window, plays its sound, and reads the keyboard and gamepads |
+| `--window` | shows the game in a window, plays its sound, and reads the keyboard and gamepads; each image it shows blends the game's last two frames at the clock's alpha for the time it is shown |
 | `--ticks <n>` | headless: gives up after `n` game frames if play hasn't started (3600 by default); with `--window` or `--measure`: quits after `n` game frames (no limit by default with `--window`) |
 | `--validate` | rechecks the game's display lists on every use |
 | `--diff` | draws each frame's 3D twice, once through sonarlib and once through the game's own renderer (emu64), and compares the two |

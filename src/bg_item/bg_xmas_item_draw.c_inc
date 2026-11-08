@@ -14,6 +14,9 @@ static void bXI_draw_loop_type1_xtree(GRAPH* graph, Gfx** gfx_pp, bg_item_draw_l
     while (draw_pos->next_add_cnt != 256) {
         if (draw_pos->cull_flag == FALSE) {
             bg_item_idx_info_c* idx_info;
+#ifdef SONAR_PORT /* sonarlib port: each position's draws are its part (adapter/emu64_glue.c) */
+            Gfx* mark = bIT_part_open_at(gfx_pp, draw_pos);
+#endif
 
             Matrix_put(&draw_pos->mtxf);
             gSPMatrix((*gfx_pp)++, _Matrix_to_Mtx_new(graph), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
@@ -28,6 +31,9 @@ static void bXI_draw_loop_type1_xtree(GRAPH* graph, Gfx** gfx_pp, bg_item_draw_l
             }
 
             gSPDisplayList((*gfx_pp)++, dl);
+#ifdef SONAR_PORT
+            ac_emu64_part_close_at(gfx_pp, mark);
+#endif
         }
 
         draw_pos += draw_pos->next_add_cnt;

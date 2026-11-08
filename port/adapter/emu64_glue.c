@@ -19,6 +19,7 @@
 #include <port/emu64_glue.h>
 #include <port/goldens.h>
 
+#include <sonar/base/log.h>
 #include <sonar/dolphin_os/os.h>
 #include <sonar/emu64/emu64.h>
 #include <sonar/goldens.h>
@@ -53,7 +54,7 @@ static u8 aflags[AC_AFLAGS_MAX > 0 ? AC_AFLAGS_MAX : 1];
 u8 FrameCansel = FALSE;
 
 static sl_emu64* emu;
-static u64 unowned;    /* actors drawn outside main memory, without owners */
+static u64 unowned;    /* actors drawn with no key, outside main memory and every table, without owners */
 static BOOL play_task; /* play's first task was recorded */
 static BOOL window;    /* --window: the run goes on after play's first frame */
 static BOOL goldens;   /* --goldens: so does it, and each frame goes to the goldens */
@@ -156,37 +157,88 @@ void ac_emu64_written(const void* begin, const void* end) {
         sl_emu64_written(emu, begin, end);
 }
 
-/* The actor's offset from main memory's base, FALSE for an actor outside it. */
-static BOOL actor_offset(const ACTOR* actor, uint64_t* offset) {
-    const u8* const base = (const u8*)sl_dolphin_os_memory_base();
-    const u8* const p = (const u8*)actor;
-    if (base == NULL || p < base || p >= base + sl_dolphin_os_memory_size())
-        return FALSE;
-    *offset = (uint64_t)(p - base);
-    return TRUE;
+/* ---- Owners and parts (port/emu64_glue.h): an actor's eleven owners, one a list, by its key */
+
+#define AC_EMU64_TABLES 2              /* the NPCs' and the structures' */
+#define AC_EMU64_TABLE_SLOTS 256u      /* a table's most slots */
+#define AC_EMU64_TABLE_KEYS (1u << 27) /* table 0's slot 0, above every offset in main memory (dolphin_os.c) */
+#define AC_EMU64_MADE 256              /* the most actors made between two ac_emu64_snap_made */
+
+static struct {
+    uintptr_t base;
+    u32 stride;
+    u32 count;
+} tables[AC_EMU64_TABLES];
+
+static uint64_t made[AC_EMU64_MADE]; /* the keys of the actors made since the last ac_emu64_snap_made */
+static u32 made_count;
+static BOOL made_past; /* more than AC_EMU64_MADE were */
+
+void ac_emu64_actor_table(u32 table, const void* base, u32 stride, u32 count) {
+    if (table >= AC_EMU64_TABLES || stride == 0 || count > AC_EMU64_TABLE_SLOTS) {
+        SL_ERROR("emu64", "ac_emu64_actor_table(%u, %u, %u): past %d tables or %u slots", (unsigned)table,
+                 (unsigned)stride, (unsigned)count, AC_EMU64_TABLES, (unsigned)AC_EMU64_TABLE_SLOTS);
+        abort();
+    }
+    tables[table].base = (uintptr_t)base;
+    tables[table].stride = stride;
+    tables[table].count = count;
 }
 
-static uint64_t owner_of(uint64_t offset, int list) {
-    return offset << 4 | (uint64_t)(list + 1);
+/* The actor's key: its offset from main memory's base, or for an actor in a table, the table's key for its slot;
+   FALSE for an actor outside both. */
+static BOOL actor_key(const ACTOR* actor, uint64_t* key) {
+    const u8* const base = (const u8*)sl_dolphin_os_memory_base();
+    const u8* const p = (const u8*)actor;
+    const uintptr_t at = (uintptr_t)actor;
+    u32 table;
+    if (base != NULL && p >= base && p < base + sl_dolphin_os_memory_size()) {
+        *key = (uint64_t)(p - base);
+        return TRUE;
+    }
+    for (table = 0; table < AC_EMU64_TABLES; table++) {
+        const uintptr_t first = tables[table].base;
+        if (first != 0 && at >= first && at - first < (uintptr_t)tables[table].stride * tables[table].count) {
+            *key = AC_EMU64_TABLE_KEYS + (uint64_t)table * AC_EMU64_TABLE_SLOTS +
+                   (uint64_t)((at - first) / tables[table].stride);
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static uint64_t owner_of(uint64_t key, int list) {
+    return key << 4 | (uint64_t)(list + 1);
 }
 
 static THA_GA* list_of(GRAPH* graph, int list) {
     return (THA_GA*)((u8*)graph + list_fields[list]);
 }
 
-/* One G_NOOP of tag SL_EMU64_TAG_OWNER, opening owner, or closing with 0, at the list's head. */
+/* One G_NOOP of tag SL_EMU64_TAG_OWNER, opening owner, or closing with 0, at at. */
+static void owner_marker(Gfx* at, uint64_t owner) {
+    at->words.w0 = (u32)0x00 << 24 | (u32)SL_EMU64_TAG_OWNER << 16;
+    at->words.w1 = (u32)owner; /* below 2^32: keys are below 2^28 */
+}
+
+/* One G_NOOP of tag SL_EMU64_TAG_PART, opening part, at at. */
+static void part_marker(Gfx* at, u32 part) {
+    at->words.w0 = (u32)0x00 << 24 | (u32)SL_EMU64_TAG_PART << 16;
+    at->words.w1 = part;
+}
+
+/* The owner marker at the list's head. */
 static Gfx* write_marker(THA_GA* list, uint64_t owner) {
     Gfx* const at = list->thaGfx.head_p;
-    at->words.w0 = (u32)0x00 << 24 | (u32)SL_EMU64_TAG_OWNER << 16;
-    at->words.w1 = (u32)owner; /* below 2^32: main memory is far below 256 MiB */
+    owner_marker(at, owner);
     list->thaGfx.head_p = at + 1;
     return at;
 }
 
 void ac_emu64_owner_open(GRAPH* graph, ACTOR* actor, ac_emu64_marks* marks) {
-    uint64_t offset;
+    uint64_t key;
     int i;
-    if (emu == NULL || !actor_offset(actor, &offset)) {
+    if (emu == NULL || !actor_key(actor, &key)) {
         for (i = 0; i < AC_EMU64_LISTS; i++)
             marks->at[i] = NULL;
         if (emu != NULL)
@@ -196,7 +248,7 @@ void ac_emu64_owner_open(GRAPH* graph, ACTOR* actor, ac_emu64_marks* marks) {
     /* A list graph_ct gives no buffer (the line lists) gets none. */
     for (i = 0; i < AC_EMU64_LISTS; i++) {
         THA_GA* const list = list_of(graph, i);
-        marks->at[i] = list->thaGfx.buf_p != NULL ? write_marker(list, owner_of(offset, i)) : NULL;
+        marks->at[i] = list->thaGfx.buf_p != NULL ? write_marker(list, owner_of(key, i)) : NULL;
     }
 }
 
@@ -215,12 +267,110 @@ void ac_emu64_owner_close(GRAPH* graph, const ac_emu64_marks* marks) {
 }
 
 void ac_emu64_forget_actor(const ACTOR* actor) {
-    uint64_t offset;
+    uint64_t key;
     int i;
-    if (emu == NULL || !actor_offset(actor, &offset))
+    if (emu == NULL || !actor_key(actor, &key))
         return;
     for (i = 0; i < AC_EMU64_LISTS; i++)
-        sl_emu64_forget(emu, owner_of(offset, i));
+        sl_emu64_forget(emu, owner_of(key, i));
+}
+
+void ac_emu64_part_open(GRAPH* graph, u32 part, ac_emu64_marks* marks) {
+    int i;
+    for (i = 0; i < AC_EMU64_LISTS; i++) {
+        THA_GA* const list = list_of(graph, i);
+        marks->at[i] = NULL;
+        if (emu != NULL && list->thaGfx.buf_p != NULL) {
+            Gfx* const at = list->thaGfx.head_p;
+            part_marker(at, part);
+            list->thaGfx.head_p = at + 1;
+            marks->at[i] = at;
+        }
+    }
+}
+
+/* An owner marker of w1 0 closes a part as it closes an owner. */
+void ac_emu64_part_close(GRAPH* graph, const ac_emu64_marks* marks) {
+    ac_emu64_owner_close(graph, marks);
+}
+
+Gfx* ac_emu64_part_open_at(Gfx** gfx_pp, u32 part) {
+    Gfx* const at = *gfx_pp;
+    if (emu == NULL)
+        return NULL;
+    part_marker(at, part);
+    *gfx_pp = at + 1;
+    return at;
+}
+
+void ac_emu64_part_close_at(Gfx** gfx_pp, Gfx* mark) {
+    if (mark == NULL)
+        return;
+    if (*gfx_pp == mark + 1) {
+        *gfx_pp = mark; /* the part drew nothing: the marker is taken back */
+    } else {
+        owner_marker(*gfx_pp, 0);
+        (*gfx_pp)++;
+    }
+}
+
+void ac_emu64_forget_part(const ACTOR* actor, u32 part) {
+    uint64_t key;
+    int i;
+    if (emu == NULL || !actor_key(actor, &key))
+        return;
+    for (i = 0; i < AC_EMU64_LISTS; i++)
+        sl_emu64_forget(emu, sl_emu64_part(owner_of(key, i), part));
+}
+
+void ac_emu64_snap_part(const ACTOR* actor, u32 part) {
+    uint64_t key;
+    int i;
+    if (emu == NULL || !actor_key(actor, &key))
+        return;
+    for (i = 0; i < AC_EMU64_LISTS; i++)
+        sl_emu64_snap(emu, sl_emu64_part(owner_of(key, i), part));
+}
+
+static void snap_key(uint64_t key) {
+    int i;
+    for (i = 0; i < AC_EMU64_LISTS; i++)
+        sl_emu64_snap(emu, owner_of(key, i));
+}
+
+void ac_emu64_snap_actor(const ACTOR* actor) {
+    uint64_t key;
+    if (emu != NULL && actor_key(actor, &key))
+        snap_key(key);
+}
+
+void ac_emu64_snap_all(void) {
+    if (emu != NULL)
+        sl_emu64_snap_all(emu);
+}
+
+void ac_emu64_actor_made(const ACTOR* actor) {
+    uint64_t key;
+    if (emu == NULL || !actor_key(actor, &key))
+        return;
+    if (made_count < AC_EMU64_MADE)
+        made[made_count++] = key;
+    else
+        made_past = TRUE;
+}
+
+void ac_emu64_snap_made(void) {
+    u32 i;
+    if (emu == NULL)
+        return;
+    if (made_past) {
+        sl_emu64_snap_all(emu);
+    } else {
+        for (i = 0; i < made_count; i++)
+            snap_key(made[i]);
+    }
+    made_count = 0;
+    made_past = FALSE;
 }
 
 void ac_port_report(const char* what) {
@@ -237,13 +387,14 @@ void ac_port_report(const char* what) {
     printf("ac_port: %s tick %" PRIu64 " retrace %" PRIu64 " gx %" PRIu64 " dvd %" PRIu64 " %" PRIu64
            " hash %016" PRIx64 " instances %" PRIu32 " compiles %" PRIu64 " holes %" PRIu64 "/%" PRIu64 " cpu %" PRIu64
            " refused %" PRIu64 " views %" PRIu64 " invalid %" PRIu64 " problems %" PRIu64 " overflows %" PRIu64
-           " unowned %" PRIu64 " gx-errors %" PRIu64 " unmapped %" PRIu64 " outside %" PRIu64 " nested %" PRIu64
-           " refused-frames %" PRIu64 " audio %" PRIu64 " loud %" PRIu64 " dsp %" PRIu64 " sound %016" PRIx64,
+           " unowned %" PRIu64 " strays %" PRIu64 " gx-errors %" PRIu64 " unmapped %" PRIu64 " outside %" PRIu64
+           " nested %" PRIu64 " refused-frames %" PRIu64 " audio %" PRIu64 " loud %" PRIu64 " dsp %" PRIu64
+           " sound %016" PRIx64,
            what, sl_tick_count(), sl_retrace_count(), (uint64_t)ac_gx_bytes(), (uint64_t)ac_dvd_reads(),
            (uint64_t)ac_dvd_read_bytes(), sl_render_frame_hash(), kit.instances, kit.compiles, kit.vertex_holes,
            kit.list_holes, kit.cpu_draws, kit.refused, kit.view_overflows, render.frames_invalid, render.problems,
-           render.overflows, (uint64_t)unowned, (uint64_t)gx.errors, (uint64_t)gx.unmapped, (uint64_t)gx.outside,
-           (uint64_t)gx.nested, (uint64_t)gx.refused_frames, audio.frames, audio.loud_frames,
+           render.overflows, (uint64_t)unowned, kit.strays, (uint64_t)gx.errors, (uint64_t)gx.unmapped,
+           (uint64_t)gx.outside, (uint64_t)gx.nested, (uint64_t)gx.refused_frames, audio.frames, audio.loud_frames,
            (uint64_t)ac_dsp_sounding_frames(), audio.hash);
     if (reference)
         printf(" palette-overflows %" PRIu32, (uint32_t)emu64_ref_palette_overflows());

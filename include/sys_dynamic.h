@@ -24,6 +24,20 @@ extern "C" {
 #define FONT_SIZE 256
 */
 
+#ifdef SONAR_PORT
+/* sonarlib port: each list twice the console's, as the owner and part markers take room the console's lists never
+   had (port/adapter/emu64_glue.c; port/NOTES.md, Measured runs, The lists' room). unused is no list. */
+#define POLY_OPA_SIZE (9952 * 2)
+#define POLY_XLU_SIZE (2048 * 2)
+#define OVERLAY_SIZE (1024 * 2)
+#define WORK_SIZE (128 * 2)
+#define UNK_BUF0_SIZE 32
+#define FONT_SIZE (1792 * 2)
+#define SHADOW_SIZE (512 * 2)
+#define LIGHT_SIZE (256 * 2)
+#define NEW0_SIZE (512 * 2)
+#define NEW1_SIZE (256 * 2)
+#else
 #define POLY_OPA_SIZE 9952
 #define POLY_XLU_SIZE 2048
 #define OVERLAY_SIZE 1024
@@ -34,6 +48,7 @@ extern "C" {
 #define LIGHT_SIZE 256
 #define NEW0_SIZE 512
 #define NEW1_SIZE 256
+#endif
 
 typedef struct dynamic_s {
     u16 start_magic;

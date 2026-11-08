@@ -7,6 +7,9 @@
 #include "m_malloc.h"
 #include "m_player_lib.h"
 #include "sys_matrix.h"
+#ifdef SONAR_PORT /* sonarlib port: the particles' snaps of the port's emu64 glue */
+#include <port/emu64_glue.h>
+#endif
 
 extern Gfx ef_yuki01_setmode[];
 
@@ -102,6 +105,9 @@ static int aWeatherSnow_CheckSnowBorder(aWeather_Priv* priv, GAME_PLAY* play) {
 static void aWeatherSnow_CheckSnowScroll(aWeather_Priv* priv, GAME_PLAY* play) {
     int border = aWeatherSnow_CheckSnowBorder(priv, play);
     PLAYER_ACTOR* player = get_player_actor_withoutCheck(play);
+#ifdef SONAR_PORT /* sonarlib port: a wrapped particle jumps, so its part snaps (adapter/emu64_glue.c) */
+    BOOL wrapped = border != 0;
+#endif
 
     if (border != 0) {
         if ((border >> 1) & 1) {
@@ -127,7 +133,15 @@ static void aWeatherSnow_CheckSnowScroll(aWeather_Priv* priv, GAME_PLAY* play) {
             if (priv->pos.y < (40.0f + player->actor_class.world.position.y)) {
                 priv->pos.y = (y + (priv->pos.y - priv->currentY));
                 priv->currentY = y;
+#ifdef SONAR_PORT /* sonarlib port: so does one wrapped up */
+                wrapped = TRUE;
+#endif
             }
+#ifdef SONAR_PORT /* sonarlib port: the particle's part is its slot in the weather's (adapter/emu64_glue.c) */
+            if (wrapped) {
+                ac_emu64_snap_part(&weather->actor_class, (u32)(priv - weather->priv));
+            }
+#endif
         }
     }
 }

@@ -16,6 +16,9 @@
 #include "libc64/malloc.h"
 #include "GBA/gba.h"
 #include "m_vibctl.h"
+#ifdef SONAR_PORT /* sonarlib port: the scene change's snap of the port's emu64 glue */
+#include <port/emu64_glue.h>
+#endif
 
 GAME* gamePT = NULL;
 
@@ -200,6 +203,9 @@ extern void game_resize_hyral(GAME* this, int size) {
 }
 
 extern void game_ct(GAME* this, void (*init)(GAME*), GRAPH* graph) {
+#ifdef SONAR_PORT /* sonarlib port: a new scene, so nothing blends with the last (adapter/emu64_glue.c) */
+    ac_emu64_snap_all();
+#endif
     gamePT = this;
     graph->need_viupdate = TRUE;
     mCon_ct();

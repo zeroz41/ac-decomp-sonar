@@ -1,11 +1,11 @@
-# Runs ac_port --diff from boot to play's first frame (sonarlib docs/roadmap.md, M6 step 6j):
+# Runs ac_port --diff from boot to play's first frame (sonarlib docs/roadmap.md, M6 steps 6j and 9b):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
 #         -P diff_test.cmake
 # ac-import writes the package from the player's disc into OUT_DIR, then the run draws every emu64 task through the
 # kit and through the console's emu64, the reference, each into a frame of its own, and compares the two captures. It
-# must reach play's first frame and exit 0 with tasks compared, none different and none refused. It prints the
-# differences, the diff line and the play line. When AC_DISC names no disc it prints the line the test's
-# SKIP_REGULAR_EXPRESSION matches and returns.
+# must reach play's first frame and exit 0 with tasks compared, none different and none refused, and a play line with
+# its unowned and strays. It prints the differences, the diff line and the play line. When AC_DISC names no disc it
+# prints the line the test's SKIP_REGULAR_EXPRESSION matches and returns.
 cmake_minimum_required(VERSION 3.25)
 
 if("${AC_DISC}" STREQUAL "")
@@ -40,7 +40,7 @@ foreach(difference IN LISTS differences)
     message("${difference}")
 endforeach()
 string(REGEX MATCH "${diff_pattern}" line "${output}")
-string(REGEX MATCH "ac_port: play [^\n]*" play "${output}")
+string(REGEX MATCH "ac_port: play [^\n]* unowned ${count} strays ${count} [^\n]*" play "${output}")
 message("exit ${result}, ${seconds} s:\n${line}\n${play}")
 if(NOT result EQUAL 0 OR line STREQUAL "" OR play STREQUAL "")
     string(LENGTH "${errors}" length)

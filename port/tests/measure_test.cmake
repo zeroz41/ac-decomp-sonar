@@ -1,4 +1,4 @@
-# The port's measured runs (sonarlib docs/roadmap.md, M6 steps 7b and 9a; port/NOTES.md, Measured runs):
+# The port's measured runs (sonarlib docs/roadmap.md, M6 steps 7b, 9a and 9b; port/NOTES.md, Measured runs):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
 #         -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P measure_test.cmake
 # ac-import writes the package from the player's disc into OUT_DIR. Then ac_port runs once as it is and once with
@@ -7,12 +7,13 @@
 # --reference, on the GPU sink with no window through SDL's offscreen video driver and lavapipe's Vulkan. Each exits 0
 # with a measure line, a presents line and a measured line, the same in both runs once the twelve times are taken out,
 # with frames, ticks, draws and calls, each frame presented once with nothing held, late, dropped or backward, and
-# nothing invalid, overflowed or refused. The kit's and the reference's run the same game for the same frames.
-# --present-hz without --measure, and with --measure --reference, exit 2 with the usage. Then the kit's measured run
-# at 144 Hz and at 360 Hz, once each: the same measured line and ticks as at no rate, its frames and its dropped ones
-# the frames at no rate, more presents than frames, more at 360 Hz than at 144 Hz, none held or backward, and the
-# same frames dropped, pairs and snaps at both rates. It prints every line. When AC_DISC names no disc or there is no
-# lavapipe it prints the line the test's SKIP_REGULAR_EXPRESSION matches and returns.
+# nothing invalid, overflowed, refused, unowned or stray; the kit's have no unexplained snap. The kit's and the
+# reference's run the same game for the same frames. --present-hz without --measure, and with --measure --reference,
+# exit 2 with the usage. Then the kit's measured run at 144 Hz and at 360 Hz, once each: the same measured line and
+# ticks as at no rate, its frames and its dropped ones the frames at no rate, more presents than frames, more at
+# 360 Hz than at 144 Hz, none held or backward, no unexplained snap, and the same frames dropped, pairs and snaps at
+# both rates. It prints every line. When AC_DISC names no disc or there is no lavapipe it prints the line the test's
+# SKIP_REGULAR_EXPRESSION matches and returns.
 cmake_minimum_required(VERSION 3.25)
 
 if("${AC_DISC}" STREQUAL "")
@@ -42,8 +43,8 @@ set(count "[0-9]+")
 set(report_pattern " tick ${count} retrace ${count} gx ${count} dvd ${count} ${count} hash [0-9a-f]+")
 string(APPEND report_pattern " instances ${count} compiles ${count} holes ${count}/${count} cpu ${count}")
 string(APPEND report_pattern " refused ${count} views ${count} invalid ${count} problems ${count} overflows ${count}")
-string(APPEND report_pattern " unowned ${count} gx-errors ${count} unmapped ${count} outside ${count} nested ${count}")
-string(APPEND report_pattern " refused-frames ${count} audio ${count} loud ${count} dsp ${count}")
+string(APPEND report_pattern " unowned ${count} strays ${count} gx-errors ${count} unmapped ${count} outside ${count}")
+string(APPEND report_pattern " nested ${count} refused-frames ${count} audio ${count} loud ${count} dsp ${count}")
 string(APPEND report_pattern " sound [0-9a-f]+( palette-overflows ${count})?")
 set(time "${count} ${count} ${count}")
 set(measure_pattern "ac_port: measure (kit|reference) frames ${count} ticks ${count} game ${time}")
@@ -130,7 +131,8 @@ function(game_fields line out)
     set(${out} "${fields}" PARENT_SCOPE)
 endfunction()
 
-# Fails unless the report line counts nothing invalid, overflowed or refused, and none of the GX glue's errors.
+# Fails unless the report line counts nothing invalid, overflowed, refused, unowned or stray, and none of the GX glue's
+# errors.
 function(check_report name line)
     string(REGEX MATCH " refused ([0-9]+) views ([0-9]+) invalid ([0-9]+) problems ([0-9]+) overflows ([0-9]+) "
            ignored "${line}")
@@ -141,6 +143,9 @@ function(check_report name line)
            ignored "${line}")
     list(APPEND values "${CMAKE_MATCH_1};${CMAKE_MATCH_2};${CMAKE_MATCH_3};${CMAKE_MATCH_4};${CMAKE_MATCH_5}")
     list(APPEND names "gx-errors;unmapped;outside;nested;refused-frames")
+    string(REGEX MATCH " unowned ([0-9]+) strays ([0-9]+) " ignored "${line}")
+    list(APPEND values "${CMAKE_MATCH_1};${CMAKE_MATCH_2}")
+    list(APPEND names "unowned;strays")
     if(line MATCHES " palette-overflows ([0-9]+)")
         list(APPEND values "${CMAKE_MATCH_1}")
         list(APPEND names "palette-overflows")
@@ -195,6 +200,11 @@ foreach(drawer IN ITEMS kit reference)
            OR NOT once STREQUAL "held 0;late 0;dropped 0;backward 0")
             message(FATAL_ERROR "ac_port_measure: the ${drawer}'s run did not present each frame once, at alpha 1:\n"
                                 "${measure_line}\n${presents_line}")
+        endif()
+        # The kit's snaps are each explained; the reference's are not checked.
+        presents_field("${presents_line}" unexplained unexplained)
+        if(drawer STREQUAL "kit" AND NOT unexplained EQUAL 0)
+            message(FATAL_ERROR "ac_port_measure: the kit's run snapped unexplained:\n${presents_line}")
         endif()
         string(REGEX REPLACE " (game|prepare|present|gpu) [0-9]+ [0-9]+ [0-9]+" " \\1" measure_line "${measure_line}")
         list(APPEND untimed "${measure_line}\n${presents_line}\n${measured_line}")
@@ -260,6 +270,10 @@ foreach(hz IN ITEMS 144 360)
                             "${presents_line}")
     endif()
     set(rate_counts "${presents}")
+    presents_field("${presents_line}" unexplained unexplained)
+    if(NOT unexplained EQUAL 0)
+        message(FATAL_ERROR "ac_port_measure: the run at ${hz} Hz snapped unexplained:\n${presents_line}")
+    endif()
     presents_fields("${presents_line}" snaps dropped pairs unexplained ${causes})
     list(APPEND rate_snaps "${snaps}")
 endforeach()

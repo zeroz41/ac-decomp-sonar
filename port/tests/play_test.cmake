@@ -1,15 +1,15 @@
 # Runs ac_port from boot to play's first frame, twice and once with --validate (sonarlib docs/roadmap.md, M6 steps 6f,
-# 6g, 6h, 6l and 6m):
+# 6g, 6h, 6l, 6m and 9b):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
 #         -P play_test.cmake
 # ac-import writes the package from the player's disc into OUT_DIR, then each run must reach play's first frame, exit 0
 # and print the same ac_port line, so the frame recorded on emu64's kit matches run to run and no static list on the
 # path was drawn stale. The frame must hold instances and a hash, with no invalid frame, view overflow or render
-# overflow; the kit's refusals and the render module's problems are reported as they are. The GX glue's counts must all
-# be 0: no GX error, no unmapped address, no task outside a frame, no nested frame and no refused frame. The game's
-# sound must have mixed output frames, the same in each run with the same hash (loud frames come after play's first
-# frame), and the DSP must have rendered sounding frames: the boot jingle. When AC_DISC names no disc it prints the line
-# the test's SKIP_REGULAR_EXPRESSION matches and returns.
+# overflow; the kit's refusals and strays and the render module's problems are reported as they are. The GX glue's
+# counts must all be 0: no GX error, no unmapped address, no task outside a frame, no nested frame and no refused
+# frame. The game's sound must have mixed output frames, the same in each run with the same hash (loud frames come
+# after play's first frame), and the DSP must have rendered sounding frames: the boot jingle. When AC_DISC names no
+# disc it prints the line the test's SKIP_REGULAR_EXPRESSION matches and returns.
 cmake_minimum_required(VERSION 3.25)
 
 if("${AC_DISC}" STREQUAL "")
@@ -36,8 +36,8 @@ set(count "[0-9]+")
 set(line_pattern "ac_port: [a-z]+ tick ${count} retrace ${count} gx ${count} dvd ${count} ${count} hash [0-9a-f]+")
 string(APPEND line_pattern " instances ${count} compiles ${count} holes ${count}/${count} cpu ${count}")
 string(APPEND line_pattern " refused ${count} views ${count} invalid ${count} problems ${count} overflows ${count}")
-string(APPEND line_pattern " unowned ${count} gx-errors ${count} unmapped ${count} outside ${count} nested ${count}")
-string(APPEND line_pattern " refused-frames ${count} audio ${count} loud ${count} dsp ${count}")
+string(APPEND line_pattern " unowned ${count} strays ${count} gx-errors ${count} unmapped ${count} outside ${count}")
+string(APPEND line_pattern " nested ${count} refused-frames ${count} audio ${count} loud ${count} dsp ${count}")
 string(APPEND line_pattern " sound [0-9a-f]+")
 foreach(run IN ITEMS 1 2 validate)
     set(options "")
