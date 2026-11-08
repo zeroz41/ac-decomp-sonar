@@ -395,8 +395,10 @@ add_test(NAME ac_port_diff
                  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/diff_test.cmake")
 set_tests_properties(ac_port_diff PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_diff: skipped, AC_DISC is not set")
 
-# ac_port --window --ticks 1800 on SDL's offscreen video driver and dummy audio driver, with lavapipe's Vulkan, so
-# nothing opens on the desktop and nothing plays; skipped without the disc or lavapipe, when the script says so.
+# ac_port --window, a settings round trip at --ticks 1800 that keeps the GPU sink's pipeline list, a broken settings
+# file at --ticks 120 that warms from it, and bad --set assignments, with the user directories under OUT_DIR/user, on
+# SDL's offscreen video driver and dummy audio driver, with lavapipe's Vulkan, so nothing opens on the desktop, nothing
+# plays and no player's file is read or written; skipped without the disc or lavapipe, when the script says so.
 find_file(AC_LAVAPIPE_ICD NAMES lvp_icd.x86_64.json lvp_icd.json PATHS /usr/share/vulkan/icd.d NO_DEFAULT_PATH)
 if(NOT AC_LAVAPIPE_ICD)
     set(AC_LAVAPIPE_ICD "")

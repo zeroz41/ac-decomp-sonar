@@ -60,7 +60,7 @@ Then play the game in a window, with sound:
 port/build/ac_port --package ac.pkg --window
 ```
 
-Close the window to quit.
+Close the window to quit. F11 or Alt+Enter switches between a window and fullscreen at once, even while the overlay is shown, and the next run opens the same way. F1 shows or hides sonarlib's overlay over the game, with its settings, its statistics, and an Animal Crossing page listing the controls and where your files are. While the overlay is shown, the game doesn't get the keyboard or gamepads.
 
 | Keyboard | GameCube |
 |---|---|
@@ -84,6 +84,8 @@ Options:
 | Option | What it does |
 |---|---|
 | `--window` | shows the game in a window, plays its sound, and reads the keyboard and gamepads; each image it shows blends the game's last two frames at the clock's alpha for the time it is shown |
+| `--user-dir <dir>` | with `--window`: keeps every user directory under `dir` instead of your own, the settings file at `dir/config/settings.toml` and the pipeline list in `dir/cache`, for a portable install |
+| `--set <key>=<value>` | with `--window`, any number of times: sets a setting for this run only, over the settings file, and never saves it, as in `--set sonar.audio.volume=30`. One that isn't `key=value`, names no setting the port has, or gives a value its setting doesn't take prints `ac_port: --set <key>=<value>: …` and exits with 2 before the game starts |
 | `--ticks <n>` | headless: gives up after `n` game frames if play hasn't started (3600 by default); with `--window` or `--measure`: quits after `n` game frames (no limit by default with `--window`) |
 | `--validate` | rechecks the game's display lists on every use |
 | `--diff` | draws each frame's 3D twice, once through sonarlib and once through the game's own renderer (emu64), and compares the two |
@@ -102,3 +104,22 @@ ctest --test-dir port/build
 The tests that need your disc are skipped when `AC_DISC` isn't set.
 
 For how the port works inside (the package, the glue, every edit to the game's code), see [NOTES.md](NOTES.md).
+
+## Settings
+
+With `--window` the port keeps your settings in `settings.toml` and prints where it is as it starts, as `ac_port: settings <path>`. On Linux that is `~/.config/sonarlib/animal-crossing/settings.toml`, and your user directory is `~/.local/share/sonarlib/animal-crossing`. With `--user-dir <dir>` they are `<dir>/config/settings.toml` and `<dir>`. The overlay's Animal Crossing page shows both. Runs without `--window` never read or write them.
+
+The first time the game shows a scene, the GPU has to prepare how it draws it, which can make the first moments stutter. The port remembers what it prepared in `pipelines.slpc`, written a few seconds after each new scene settles, and prepares all of it before the next run's first frame. On Linux it is `~/.cache/sonarlib/animal-crossing/pipelines.slpc`, or `<dir>/cache/pipelines.slpc` with `--user-dir <dir>`. Deleting it is safe: the port only stutters again until it has written it anew.
+
+Change settings on the overlay's Settings page, or edit the file while the game isn't running. A change is saved as soon as the overlay is hidden: one made on the overlay once you close it, F11's at once, or when you close the overlay if it is shown, and any still unsaved when the game quits. A save writes the file anew, without your comments. A run that changes nothing leaves the file as it is, and `--set` is only for that run. Removing a line from the file restores that setting's default. The ones that matter most:
+
+| Setting | Values |
+|---|---|
+| `sonar.video.mode` | `windowed` (the default), `borderless` or `exclusive` fullscreen, on the display the window is on. F11 and Alt+Enter set it. If the display refuses a mode, the window stays as it was and the setting keeps your choice, to try again next run; F11 then switches between a window and the last fullscreen the display took, borderless if it took none |
+| `sonar.video.pacing` | `vsync` (the default), one frame per refresh; `mailbox`, VSync with less latency; `immediate`, with no waiting and tearing allowed; or `limiter`, at `frame_limit`'s rate |
+| `sonar.video.frame_limit` | the limiter's rate in Hz, 0 to 1000; 0 (the default) is the display's refresh rate |
+| `sonar.audio.volume` | 0 to 100, 100 by default |
+| `sonar.input.rumble` | the rumble's strength, 0 to 100, 100 by default |
+| `sonar.system.sound_mode` | `mono`, `stereo` or `surround`: the game's options set it, and it lasts, as the console kept it |
+
+If the file doesn't parse, the port prints where, as `ac_port: <path>:<line>:<column>: <message>; it is left as it is`, and the game runs at the default settings, with any `--set`. It doesn't save the file that run, so your text is never overwritten and nothing you change that run is kept. Fix the line or delete the file.

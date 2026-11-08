@@ -1,8 +1,9 @@
 /* ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--reference]
-           [--window | --goldens <scenes> <dir> | --measure [--present-hz <n>]] [--qrand-seed <hex>]: Animal Crossing
-   on sonarlib (port/NOTES.md, The program). The process's main thread starts the library and the render module, makes
-   the emu64 the glue records each task with, mounts the package as game:, starts the CPU model, and creates the game
-   thread "main", which starts the runtime and calls boot's main, which never returns.
+           [--window [--user-dir <dir>] [--set <key>=<value>]... | --goldens <scenes> <dir>
+            | --measure [--present-hz <n>]] [--qrand-seed <hex>]: Animal Crossing on sonarlib (port/NOTES.md, The
+   program). The process's main thread starts the library and the render module, makes the emu64 the glue records
+   each task with, mounts the package as game:, starts the CPU model, and creates the game thread "main", which starts
+   the runtime and calls boot's main, which never returns.
 
    Headless, the default: deterministic, on the null sinks, the game's sound mixed and counted but not heard. The main
    thread joins "main", and the run ends at the submit of the frame that holds play's first task (emu64_glue.c, from
@@ -11,7 +12,10 @@
 
    --window: in real time, on the GPU sink, in a window, with the game's pads on the keyboard and gamepads and its
    sound on the audio device. The main thread presents at the clock's alpha for each image's time until the window
-   is closed, or until --ticks's limit when it is given.
+   is closed, or until --ticks's limit when it is given. It mounts the player's user directories, or every one under
+   --user-dir's directory, keeps the settings in config:settings.toml with each --set over them for the run, and shows
+   sonarlib's overlay on F1 (port/NOTES.md, The window). Every other run mounts no user directory, reads no settings
+   file and registers no setting.
 
    --goldens: headless and deterministic, but on the GPU sink with no window, writing the frames the scenes file names
    into the directory (sonar/goldens.h, port/NOTES.md, Goldens). The GX glue's frame begin hands each frame's keys to
@@ -41,12 +45,15 @@
 #include <sonar/os.h>
 #include <sonar/render.h>
 #include <sonar/runtime.h>
+#include <sonar/settings.h>
 #include <sonar/sonar.h>
+#include <sonar/ui.h>
 #include <sonar/window.h>
 
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,7 +62,8 @@
 int ac_boot_main(int argc, const char** argv); /* src/static/boot.c's main */
 
 static const char usage[] = "usage: ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--reference]\n"
-                            "               [--window | --goldens <scenes> <dir> | --measure [--present-hz <n>]]\n"
+                            "               [--window [--user-dir <dir>] [--set <key>=<value>]...\n"
+                            "                | --goldens <scenes> <dir> | --measure [--present-hz <n>]]\n"
                             "               [--qrand-seed <hex>]\n";
 
 static uint64_t tick_limit = 3600;
@@ -70,6 +78,15 @@ static uint64_t measured_last;   /* and of the latest */
 static uint32_t present_hz;      /* --present-hz: the measured run's display rate; 0, each frame presented once */
 static int seed_given;           /* --qrand-seed */
 static u32 seed;
+
+/* --window's settings. */
+static const char* user_dir;        /* --user-dir */
+static const char** assignments;    /* each --set's key=value, in order */
+static int assignment_count;        /* and how many */
+static char settings_path[4096];    /* the settings file's host path */
+static char user_path[4096];        /* and user:'s */
+static int settings_broken;         /* the file did not load, so it is never saved */
+static atomic_int settings_changed; /* a setting's value in effect changed since the last save */
 
 u32 ac_port_rnd_seed(u32 tick) {
     return seed_given ? seed : tick;
@@ -263,16 +280,192 @@ static void* game_main(void* arg) {
     _Exit(1);
 }
 
+/* Marks the settings changed, on whichever thread applied the change: the main loop saves them. */
+static void settings_changed_watch(void* user, sl_setting setting) {
+    (void)user;
+    (void)setting;
+    atomic_store(&settings_changed, 1);
+}
+
+/* Writes the settings file when a setting changed since the last save, unless the file did not load, so a run that
+   changes nothing leaves the player's text as it is. A failure is printed and the run goes on. Main thread. */
+static void save_settings(void) {
+    sl_result result;
+    if (settings_broken || !atomic_load(&settings_changed))
+        return;
+    atomic_store(&settings_changed, 0);
+    result = sl_settings_save_file(NULL);
+    if (result != SL_OK)
+        fprintf(stderr, "ac_port: cannot save settings: %s\n", sl_result_string(result));
+}
+
+/* Headless, no user directories: the run reads and writes nothing of the player's. --window mounts user: and config:,
+   the player's directories or every one under --user-dir's, for the settings file, and the GPU sink keeps its
+   pipeline list in their cache. The cards stay in memory either way. */
+static sl_result start_fs(void) {
+    sl_fs_desc desc;
+    memset(&desc, 0, sizeof desc);
+    if (window) {
+        desc.org_name = "sonarlib";
+        desc.app_name = "animal-crossing";
+        desc.user_root = user_dir;
+    } else {
+        desc.app_name = "ac_port";
+        desc.flags = SL_FS_INIT_NO_USER_MOUNT;
+    }
+    return sl_fs_init(&desc);
+}
+
+/* --window's settings, after sl_fs_init: prints the file's host path, loads config:settings.toml, takes each --set
+   over it for the run, watches the settings to save them, and binds os's system settings before os starts, so the
+   game boots with the stored ones. A file that does not load is left as it is: the run goes on at the defaults and
+   never saves it. Returns 0, or main's exit code. */
+static int start_settings(void) {
+    static const char file[] = "/settings.toml";
+    sl_settings_error error;
+    size_t length = 0;
+    sl_result result;
+    int i;
+    result = sl_fs_user_dir(SL_USER_DIR_CONFIG, settings_path, sizeof settings_path - (sizeof file - 1), &length);
+    if (result != SL_OK)
+        return failed("sl_fs_user_dir", result);
+    memcpy(settings_path + length, file, sizeof file);
+    result = sl_fs_user_dir(SL_USER_DIR_DATA, user_path, sizeof user_path, NULL);
+    if (result != SL_OK)
+        return failed("sl_fs_user_dir", result);
+    printf("ac_port: settings %s\n", settings_path);
+    fflush(stdout);
+    memset(&error, 0, sizeof error);
+    result = sl_settings_load_file(NULL, &error);
+    if (result != SL_OK && result != SL_ERROR_NOT_FOUND) { /* no file is a first run */
+        const char* message = error.message != NULL ? error.message : sl_result_string(result);
+        settings_broken = 1;
+        if (error.line != 0)
+            fprintf(stderr, "ac_port: %s:%" PRIu32 ":%" PRIu32 ": %s; it is left as it is\n", settings_path, error.line,
+                    error.column, message);
+        else
+            fprintf(stderr, "ac_port: %s: %s; it is left as it is\n", settings_path, message);
+    }
+    for (i = 0; i < assignment_count; i++) {
+        result = sl_settings_override(assignments[i]);
+        if (result == SL_ERROR_INVALID_ARGUMENT) {
+            /* malformed; a key or value no setting takes is found after the binds (check_assignments) */
+            fprintf(stderr, "ac_port: --set %s: malformed\n", assignments[i]);
+            return usage_error();
+        }
+        if (result != SL_OK)
+            return failed("sl_settings_override", result);
+    }
+    result = sl_settings_add_watch(settings_changed_watch, NULL);
+    if (result != SL_OK)
+        return failed("sl_settings_add_watch", result);
+    result = sl_os_settings_bind();
+    if (result != SL_OK)
+        return failed("sl_os_settings_bind", result);
+    return 0;
+}
+
+/* After the last bind, each --set must name a registered setting that holds its override: one naming a key nothing
+   registers, or with a value its setting refused at registration (logged then), is a usage error naming the
+   assignment. Returns 0, or main's exit code. */
+static int check_assignments(void) {
+    int i;
+    for (i = 0; i < assignment_count; i++) {
+        /* sl_settings_override took it, so it has an '=' and a key of at most SL_SETTINGS_MAX_KEY - 1 bytes, which
+           it read with spaces and tabs trimmed */
+        const char* text = assignments[i];
+        const char* equals = strchr(text, '=');
+        char key[SL_SETTINGS_MAX_KEY];
+        size_t begin = 0;
+        size_t end = equals != NULL ? (size_t)(equals - text) : 0;
+        sl_setting setting;
+        while (begin < end && (text[begin] == ' ' || text[begin] == '\t'))
+            begin++;
+        while (end > begin && (text[end - 1] == ' ' || text[end - 1] == '\t'))
+            end--;
+        if (end - begin >= sizeof key)
+            end = begin; /* none */
+        memcpy(key, text + begin, end - begin);
+        key[end - begin] = '\0';
+        setting = sl_settings_find(key);
+        if (setting.id == 0) {
+            fprintf(stderr, "ac_port: --set %s: no setting has the key \"%s\"\n", text, key);
+            return usage_error();
+        }
+        if (!sl_settings_is_overridden(setting)) {
+            fprintf(stderr, "ac_port: --set %s: the setting refused the value\n", text);
+            return usage_error();
+        }
+    }
+    return 0;
+}
+
+/* --window's overlay, after the window's, audio's and input's binds: sonarlib's pages and an Animal Crossing page
+   with the controls, as input's GameCube profile binds them by default, and the files' host paths. Returns 0, or
+   main's exit code. */
+static int start_overlay(void) {
+    static char settings_line[sizeof settings_path + 32];
+    static char user_line[sizeof user_path + 32];
+    sl_ui_item items[16];
+    sl_ui_page_desc page;
+    uint32_t count = 0;
+    sl_result result;
+    snprintf(settings_line, sizeof settings_line, "Settings file: %s", settings_path);
+    snprintf(user_line, sizeof user_line, "User directory: %s", user_path);
+    items[count].type = SL_UI_ITEM_SECTION;
+    items[count++].text = "Controls";
+    items[count].type = SL_UI_ITEM_TEXT;
+    items[count++].text = "The keyboard is controller 1. Each gamepad takes the next free controller.";
+    items[count].type = SL_UI_ITEM_TEXT;
+    items[count++].text = "W A S D: control stick. I J K L: C-stick.";
+    items[count].type = SL_UI_ITEM_TEXT;
+    items[count++].text = "Space: A. Left Shift: B. E: X. Q: Y. R: Z. Return: Start.";
+    items[count].type = SL_UI_ITEM_TEXT;
+    items[count++].text = "Arrow keys: D-pad. 1 and 3: L and R.";
+    items[count].type = SL_UI_ITEM_TEXT;
+    items[count++].text = "F1: shows or hides this overlay.";
+    items[count].type = SL_UI_ITEM_TEXT;
+    items[count++].text = "F11 or Alt+Enter: switches between a window and fullscreen.";
+    items[count].type = SL_UI_ITEM_SECTION;
+    items[count++].text = "Files";
+    items[count].type = SL_UI_ITEM_TEXT;
+    items[count++].text = settings_line;
+    items[count].type = SL_UI_ITEM_TEXT;
+    items[count++].text = user_line;
+    result = sl_ui_init(NULL); /* F1 toggles it */
+    if (result != SL_OK)
+        return failed("sl_ui_init", result);
+    memset(&page, 0, sizeof page);
+    page.title = "Animal Crossing";
+    page.items = items;
+    page.item_count = count;
+    result = sl_ui_add_page(&page, NULL);
+    if (result != SL_OK)
+        return failed("sl_ui_add_page", result);
+    return 0;
+}
+
+/* A rate in whole Hz, rounded as the window's binding rounds the limiter's; 0 for none. */
+static uint64_t whole_hz(sl_rate rate) {
+    return sl_rate_is_valid(rate) ? ((uint64_t)rate.num + rate.den / 2) / rate.den : 0;
+}
+
 /* --window's main loop: presents the latest submitted frame, at the clock's alpha for the image's presentation time
-   (1 for a stale window), until the window is closed or, with --ticks, the runtime has begun the limit's ticks.
-   Never returns. */
+   (1 for a stale window), with the overlay over it, until the window is closed or, with --ticks, the runtime has begun
+   the limit's ticks. The pump updates input. The settings are saved when they changed, while the overlay is hidden
+   and at the end, before the window line. Never returns. */
 static void present(sl_window shown) {
+    static const char* const pacings[] = { "vsync", "mailbox", "immediate", "limiter" };
     uint64_t frames = 0;
+    uint64_t last = 0;
     int closed = 0;
     for (;;) {
         sl_window_info info;
+        sl_resolved_frame resolved;
+        sl_ui_frame_desc overlay;
+        uint64_t now;
+        float alpha;
         sl_window_pump();
-        sl_input_update();
         memset(&info, 0, sizeof info);
         if (sl_window_quit_requested() || (sl_window_get_info(shown, &info) == SL_OK && info.close_requested)) {
             closed = 1;
@@ -280,16 +473,38 @@ static void present(sl_window shown) {
         }
         if (ticks_given && sl_tick_count() >= tick_limit)
             break;
-        const uint64_t t = sl_window_frame_begin(shown);
-        const float alpha = t != 0 ? (float)sl_clock_alpha(t) : 1.0f;
-        sl_render_present(alpha, NULL); /* SL_ERROR_NOT_FOUND until the game submits its first frame */
+        now = sl_window_frame_begin(shown);
+        alpha = now != 0 ? (float)sl_clock_alpha(now) : 1.0f;
+        memset(&overlay, 0, sizeof overlay);
+        /* SL_ERROR_NOT_FOUND until the game submits its first frame */
+        if (sl_render_present(alpha, &resolved) == SL_OK)
+            overlay.resolved = &resolved;
+        overlay.delta_seconds = last != 0 && now > last ? (float)((double)(now - last) * 1e-9) : 0.0f;
+        overlay.width = info.width;
+        overlay.height = info.height;
+        overlay.framebuffer_scale = info.pixel_density;
+        overlay.window = shown;
+        (void)sl_ui_frame(&overlay);
+        last = now;
         if (sl_window_present(shown, alpha) == SL_OK)
             frames++;
+        if (!sl_ui_is_visible())
+            save_settings();
     }
+    save_settings();
     sl_audio_mix_stats audio;
+    sl_window_info info;
+    sl_render_stats render;
     sl_audio_get_mix_stats(&audio);
-    printf("ac_port: window ticks %" PRIu64 " frames %" PRIu64 " audio %" PRIu64 " loud %" PRIu64 " dsp %" PRIu64 "\n",
-           sl_tick_count(), frames, audio.frames, audio.loud_frames, (uint64_t)ac_dsp_sounding_frames());
+    memset(&info, 0, sizeof info);
+    (void)sl_window_get_info(shown, &info);
+    sl_render_get_stats(&render);
+    printf("ac_port: window ticks %" PRIu64 " frames %" PRIu64 " audio %" PRIu64 " loud %" PRIu64 " dsp %" PRIu64
+           " pacing %s limit %" PRIu64 " gain %.3f pipelines %" PRIu32 " warmed %" PRIu32 " lists %" PRIu32 "\n",
+           sl_tick_count(), frames, audio.frames, audio.loud_frames, (uint64_t)ac_dsp_sounding_frames(),
+           (uint32_t)info.pacing < sizeof pacings / sizeof pacings[0] ? pacings[info.pacing] : "unknown",
+           whole_hz(info.frame_limit), (double)sl_audio_output_gain(), render.pipelines, render.pipelines_warmed,
+           render.pipeline_lists_written);
     fflush(stdout);
     _Exit(closed || ac_play_reached() ? 0 : 1);
 }
@@ -300,6 +515,9 @@ int main(int argc, char** argv) {
     uint32_t emu64_flags = 0;
     sl_result result;
     int i;
+    assignments = calloc((size_t)argc, sizeof *assignments);
+    if (assignments == NULL)
+        return failed("calloc", SL_ERROR_OUT_OF_MEMORY);
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--package") == 0 && i + 1 < argc && package == NULL) {
             package = argv[++i];
@@ -322,6 +540,10 @@ int main(int argc, char** argv) {
         } else if (strcmp(argv[i], "--window") == 0 && goldens == NULL) {
             window = 1;
             ac_window_enable(); /* play's first frame ends no run */
+        } else if (strcmp(argv[i], "--user-dir") == 0 && i + 1 < argc && user_dir == NULL) {
+            user_dir = argv[++i];
+        } else if (strcmp(argv[i], "--set") == 0 && i + 1 < argc) {
+            assignments[assignment_count++] = argv[++i]; /* applied after the settings file, which needs fs */
         } else if (strcmp(argv[i], "--goldens") == 0 && i + 2 < argc && goldens == NULL && !window) {
             goldens = argv[++i];
             goldens_dir = argv[++i];
@@ -342,6 +564,8 @@ int main(int argc, char** argv) {
         return usage_error(); /* a display's rate is the measured run's, and the reference is measured at none */
     if (ac_reference_enabled() && (window || ac_diff_enabled() || (emu64_flags & SL_EMU64_VALIDATE) != 0))
         return usage_error(); /* the reference runs headless, without the kit */
+    if ((user_dir != NULL || assignment_count != 0) && !window)
+        return usage_error(); /* only --window keeps the player's directories and settings */
 
     {
         sl_init_desc desc;
@@ -352,6 +576,17 @@ int main(int argc, char** argv) {
         result = sl_init(&desc);
         if (result != SL_OK)
             return failed("sl_init", result);
+    }
+    if (window) {
+        /* The player's files before the render module, which finds the GPU sink's pipeline list in their cache; then
+           the settings. */
+        int code;
+        result = start_fs();
+        if (result != SL_OK)
+            return failed("sl_fs_init", result);
+        code = start_settings();
+        if (code != 0)
+            return code;
     }
     if (window) {
         /* The window system before the render module, so the GPU sink's device shares its video driver: the
@@ -408,13 +643,9 @@ int main(int argc, char** argv) {
             sl_emu64_static_range(emu, ranges[n].begin, ranges[n].end);
         ac_emu64_start(emu);
     }
-    {
-        /* No user directories: the run writes nothing, and the cards stay in memory. */
-        sl_fs_desc desc;
-        memset(&desc, 0, sizeof desc);
-        desc.app_name = "ac_port";
-        desc.flags = SL_FS_INIT_NO_USER_MOUNT;
-        result = sl_fs_init(&desc);
+    if (!window) {
+        /* Headless, after the render module, as before: the GPU sink keeps no pipeline list. */
+        result = start_fs();
         if (result != SL_OK)
             return failed("sl_fs_init", result);
     }
@@ -479,6 +710,24 @@ int main(int argc, char** argv) {
         shown = sl_window_create(&desc);
         if (shown.id == 0)
             return failed("sl_window_create", SL_ERROR_UNSUPPORTED);
+        /* The window's mode, pacing and limiter, the volume and the rumble strength, as the settings hold them, then
+           the overlay. */
+        result = sl_window_settings_bind(shown);
+        if (result != SL_OK)
+            return failed("sl_window_settings_bind", result);
+        result = sl_audio_settings_bind();
+        if (result != SL_OK)
+            return failed("sl_audio_settings_bind", result);
+        result = sl_input_settings_bind();
+        if (result != SL_OK)
+            return failed("sl_input_settings_bind", result);
+        {
+            int code = check_assignments(); /* every setting --set can name is registered now */
+            if (code == 0)
+                code = start_overlay();
+            if (code != 0)
+                return code;
+        }
     }
     {
         /* Boot's main on a game thread of its own, at the attach's default priority. */

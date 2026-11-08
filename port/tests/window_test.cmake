@@ -1,13 +1,38 @@
-# Runs ac_port --window --ticks 1800 (sonarlib docs/roadmap.md, M6 steps 6k, 6l and 6m):
+# Runs ac_port --window with its user directories under OUT_DIR/user, twice to play and then with bad assignments
+# (sonarlib docs/roadmap.md, M6 steps 6k, 6l, 6m and 11a):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
 #         -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P window_test.cmake
-# ac-import writes the package from the player's disc into OUT_DIR, then the run shows the game in real time in a window
+# ac-import writes the package from the player's disc into OUT_DIR. Each run shows the game in real time in a window
 # on SDL's offscreen video driver, through lavapipe's Vulkan, with SDL's dummy audio driver: nothing opens on the
-# desktop and the game's sound is mixed but not heard. It must exit 0 with one play line and a window line with at least
-# the limit's ticks (the main loop checks the limit once a presented frame) and frames presented, and the game's sound
-# must have mixed loud frames, the title's music, and the DSP rendered sounding frames, the boot jingle. It prints both
-# lines. When AC_DISC names no disc or there is no lavapipe it prints the line the test's SKIP_REGULAR_EXPRESSION
-# matches and returns.
+# desktop and the game's sound is mixed but not heard. --user-dir keeps the settings under OUT_DIR/user, never in the
+# player's directories.
+#
+# The settings round trip: the user directories start empty, and config/settings.toml is written first with a comment,
+# the limiter at 120 Hz, the volume at 50 and a key no code registers, then the run of --ticks 1800 sets the limiter
+# to 90 Hz for the session with --set. It must exit 0 with one play line and a window line with at least the limit's
+# ticks (the main loop checks the limit once a presented frame) and frames presented; the game's sound must have mixed
+# loud frames, the title's music, and the DSP rendered sounding frames, the boot jingle; and the window line must read
+# the limiter at the override's 90 Hz and the gain of a volume of 50, 0.250.
+#
+# Unchanged settings: the round trip changes no setting, as an override is for the session and never a change, so
+# afterwards the file must be byte for byte as written, its comment too: the limiter's 120, the volume's 50, and the
+# key no code registers.
+#
+# The pipeline list: after the round trip, the GPU sink's list must exist in the user directories' cache,
+# cache/pipelines.slpc, and the window line must count at least one list written: the run ends with _Exit, so the
+# lists are those the sink wrote while it ran. The broken file's run then starts from it, so its window line must count
+# pipelines warmed.
+#
+# A broken file: config/settings.toml is replaced by a line that does not parse, then a run of --ticks 120. Its stderr
+# must name the file at line 1, its window line must read the default volume's gain, 1.000, and the file must be byte
+# for byte as written. Its exit status is not checked: 120 ticks reach no play.
+#
+# Bad assignments: with no settings file, a run of --ticks 60 with --set sonar.audio.volum=30, a key nothing
+# registers, and one with --set sonar.audio.volume=500, a value its setting refuses, must each exit 2 with stderr naming
+# the assignment; and --set and --user-dir without --window must each exit 2 with the usage.
+#
+# It prints every line it checks. When AC_DISC names no disc or there is no lavapipe it prints the line the test's
+# SKIP_REGULAR_EXPRESSION matches and returns.
 cmake_minimum_required(VERSION 3.25)
 
 if("${AC_DISC}" STREQUAL "")
@@ -33,29 +58,60 @@ if(NOT result EQUAL 0)
 endif()
 message("ac-import: ${output}")
 
-set(limit 1800)
-string(TIMESTAMP started "%s")
-execute_process(COMMAND "${CMAKE_COMMAND}" -E env SDL_VIDEO_DRIVER=offscreen SDL_AUDIO_DRIVER=dummy
-                        "VK_DRIVER_FILES=${AC_LAVAPIPE_ICD}" "${AC_PORT}" --package "${package}" --window
-                        --ticks ${limit}
-                RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 600)
-string(TIMESTAMP ended "%s")
-math(EXPR seconds "${ended} - ${started}")
-string(REGEX MATCHALL "ac_port: play [^\n]*" plays "${output}")
-string(REGEX MATCH "ac_port: window ticks ([0-9]+) frames ([0-9]+) audio ([0-9]+) loud ([0-9]+) dsp ([0-9]+)" line "${output}")
-set(ticks "${CMAKE_MATCH_1}")
-set(frames "${CMAKE_MATCH_2}")
-set(loud "${CMAKE_MATCH_4}")
-set(dsp "${CMAKE_MATCH_5}")
-list(LENGTH plays count)
-message("exit ${result}, ${seconds} s:\n${plays}\n${line}")
-if(NOT result EQUAL 0 OR NOT count EQUAL 1 OR line STREQUAL "")
-    string(LENGTH "${errors}" length)
+set(user "${OUT_DIR}/user")
+set(settings "${user}/config/settings.toml")
+
+# Runs ac_port --window with the arguments given, setting result, output and errors, the play lines, the window line
+# and its fields, and seconds, the run's time.
+macro(run_window)
+    string(TIMESTAMP started "%s")
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env SDL_VIDEO_DRIVER=offscreen SDL_AUDIO_DRIVER=dummy
+                            "VK_DRIVER_FILES=${AC_LAVAPIPE_ICD}" "${AC_PORT}" --package "${package}" --window
+                            --user-dir "${user}" ${ARGN}
+                    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 600)
+    string(TIMESTAMP ended "%s")
+    math(EXPR seconds "${ended} - ${started}")
+    string(REGEX MATCHALL "ac_port: play [^\n]*" plays "${output}")
+    string(REGEX MATCH "ac_port: settings [^\n]*" settings_line "${output}")
+    # CMake keeps nine groups, so only the fields read below are captured.
+    string(CONCAT window_line "ac_port: window ticks ([0-9]+) frames ([0-9]+) audio [0-9]+ loud ([0-9]+) dsp ([0-9]+) "
+           "pacing [a-z]+ limit [0-9]+ gain [0-9.]+ pipelines [0-9]+ warmed ([0-9]+) lists ([0-9]+)")
+    string(REGEX MATCH "${window_line}" line "${output}")
+    set(ticks "${CMAKE_MATCH_1}")
+    set(frames "${CMAKE_MATCH_2}")
+    set(loud "${CMAKE_MATCH_3}")
+    set(dsp "${CMAKE_MATCH_4}")
+    set(warmed "${CMAKE_MATCH_5}")
+    set(lists "${CMAKE_MATCH_6}")
+    list(LENGTH plays count)
+endmacro()
+
+# The last 4000 bytes of a run's stderr, for a failure's message.
+function(tail_of text out)
+    string(LENGTH "${text}" length)
     if(length GREATER 4000)
         math(EXPR from "${length} - 4000")
-        string(SUBSTRING "${errors}" ${from} -1 errors)
+        string(SUBSTRING "${text}" ${from} -1 text)
     endif()
+    set(${out} "${text}" PARENT_SCOPE)
+endfunction()
+
+# The settings round trip.
+set(limit 1800)
+file(REMOVE_RECURSE "${user}")
+string(CONCAT written "# The player's note: a run that changes no setting leaves it.\n"
+       "sonar.video.pacing = \"limiter\"\nsonar.video.frame_limit = 120\n"
+       "sonar.audio.volume = 50\nport.later.kept = 1\n")
+file(WRITE "${settings}" "${written}")
+file(SHA256 "${settings}" before)
+run_window(--ticks ${limit} --set sonar.video.frame_limit=90)
+message("round trip: exit ${result}, ${seconds} s:\n${settings_line}\n${plays}\n${line}")
+if(NOT result EQUAL 0 OR NOT count EQUAL 1 OR line STREQUAL "")
+    tail_of("${errors}" errors)
     message(FATAL_ERROR "ac_port_window: the run did not reach play's first frame and end at the limit:\n${errors}")
+endif()
+if(NOT settings_line STREQUAL "ac_port: settings ${settings}")
+    message(FATAL_ERROR "ac_port_window: the settings line does not name ${settings}:\n${settings_line}")
 endif()
 if(ticks LESS limit OR NOT frames GREATER 0)
     message(FATAL_ERROR "ac_port_window: the window line has fewer ticks than the limit or no frame presented:\n${line}")
@@ -66,3 +122,84 @@ endif()
 if(NOT dsp GREATER 0)
     message(FATAL_ERROR "ac_port_window: the DSP rendered no sounding frame, so the boot jingle is silent:\n${line}")
 endif()
+string(FIND "${line}" " pacing limiter limit 90 gain 0.250" at)
+if(at EQUAL -1)
+    message(FATAL_ERROR "ac_port_window: the window line does not read the limiter at 90 Hz and a gain of 0.250:\n${line}")
+endif()
+string(FIND "${errors}" "ac_port: cannot save settings" at)
+if(NOT at EQUAL -1)
+    tail_of("${errors}" errors)
+    message(FATAL_ERROR "ac_port_window: a save of the settings failed:\n${errors}")
+endif()
+
+# Unchanged settings.
+file(SHA256 "${settings}" after)
+file(READ "${settings}" kept_text)
+message("unchanged settings: ${settings} sha256 ${before} before, ${after} after:\n${kept_text}")
+if(NOT after STREQUAL before OR NOT kept_text STREQUAL written)
+    message(FATAL_ERROR "ac_port_window: a run that changed no setting rewrote the settings file:\n${kept_text}")
+endif()
+
+# The pipeline list.
+set(pipeline_list "${user}/cache/pipelines.slpc")
+set(list_size "none")
+if(EXISTS "${pipeline_list}")
+    file(SIZE "${pipeline_list}" list_size)
+endif()
+message("pipeline list: ${pipeline_list} ${list_size} bytes, lists ${lists}")
+if(list_size STREQUAL "none" OR NOT lists GREATER 0)
+    message(FATAL_ERROR "ac_port_window: the run wrote no pipeline list to ${pipeline_list}:\n${line}")
+endif()
+
+# A broken file.
+set(limit 120)
+set(broken "sonar.audio.volume = fifty\n")
+file(WRITE "${settings}" "${broken}")
+file(SHA256 "${settings}" before)
+run_window(--ticks ${limit})
+string(REGEX MATCHALL "ac_port: [^\n]*; it is left as it is" reported "${errors}")
+message("broken file: exit ${result}, ${seconds} s:\n${settings_line}\n${reported}\n${line}")
+string(FIND "${errors}" "ac_port: ${settings}:1:" at)
+if(at EQUAL -1 OR reported STREQUAL "")
+    tail_of("${errors}" errors)
+    message(FATAL_ERROR "ac_port_window: stderr does not name ${settings} at line 1:\n${errors}")
+endif()
+string(FIND "${line}" " gain 1.000" at)
+if(line STREQUAL "" OR at EQUAL -1)
+    tail_of("${errors}" errors)
+    message(FATAL_ERROR "ac_port_window: the window line does not read a gain of 1.000:\n${line}\n${errors}")
+endif()
+message("pipeline list: warmed ${warmed}")
+if(NOT warmed GREATER 0)
+    message(FATAL_ERROR "ac_port_window: the second run warmed no pipeline from ${pipeline_list}:\n${line}")
+endif()
+file(SHA256 "${settings}" after)
+file(READ "${settings}" kept_text)
+message("broken file: ${settings} sha256 ${before} before, ${after} after")
+if(NOT after STREQUAL before OR NOT kept_text STREQUAL broken)
+    message(FATAL_ERROR "ac_port_window: the broken settings file was changed:\n${kept_text}")
+endif()
+
+# Bad assignments.
+file(REMOVE "${settings}")
+foreach(assignment IN ITEMS sonar.audio.volum=30 sonar.audio.volume=500)
+    run_window(--ticks 60 --set ${assignment})
+    string(REGEX MATCH "ac_port: --set [^\n]*" named "${errors}")
+    message("bad assignment: exit ${result}: ${named}")
+    if(NOT result EQUAL 2 OR NOT named MATCHES "^ac_port: --set ${assignment}: ")
+        tail_of("${errors}" errors)
+        message(FATAL_ERROR "ac_port_window: --set ${assignment} did not exit 2 naming it:\n${errors}")
+    endif()
+endforeach()
+foreach(option IN ITEMS "--set;sonar.audio.volume=30" "--user-dir;${user}")
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env SDL_VIDEO_DRIVER=offscreen SDL_AUDIO_DRIVER=dummy
+                            "VK_DRIVER_FILES=${AC_LAVAPIPE_ICD}" "${AC_PORT}" --package "${package}" --ticks 60
+                            ${option}
+                    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 60)
+    list(GET option 0 name)
+    string(FIND "${errors}" "usage: ac_port" at)
+    message("without --window: ${name}: exit ${result}")
+    if(NOT result EQUAL 2 OR at EQUAL -1)
+        message(FATAL_ERROR "ac_port_window: ${name} without --window did not exit 2 with the usage:\n${errors}")
+    endif()
+endforeach()
