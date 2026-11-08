@@ -334,7 +334,13 @@ extern int lbRTC_IsEqualDate(
   ymd1.ymd.month = m1;
   ymd1.ymd.day = d1;
 
+#ifdef SONAR_PORT
+  /* sonarlib port: subtract the words as the console reads them, year << 16 | month << 8 | day */
+  res = (int)(((u32)ymd0.ymd.year << 16 | (u32)ymd0.ymd.month << 8 | ymd0.ymd.day) -
+              ((u32)ymd1.ymd.year << 16 | (u32)ymd1.ymd.month << 8 | ymd1.ymd.day));
+#else
   res = ymd0.raw - ymd1.raw;
+#endif
   if (res == 0) {
     return lbRTC_EQUAL;
   }

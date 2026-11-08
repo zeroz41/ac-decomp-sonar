@@ -200,7 +200,12 @@ void _Putfld(_Pft* px, va_list ap, u8 code, u8* ac) {
         case 'G':
             px->v.ld = px->qual == 'L' ? va_arg(ap, f64) : va_arg(ap, f64);
 
+#ifdef SONAR_PORT
+            /* sonarlib port: the double's sign bit, which a little-endian host keeps in its last u16 */
+            if (px->v.ll < 0) {
+#else
             if (*(u16*)&px->v.ll & 0x8000) {
+#endif
                 ac[px->n0++] = '-';
             } else {
                 if (px->flags & FLAGS_PLUS) {

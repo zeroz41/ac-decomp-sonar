@@ -49,7 +49,12 @@ typedef union {
 
 typedef union {
     struct {
+#ifdef SONAR_PORT
+        /* sonarlib port: rgba reads r << 24 | g << 16 | b << 8 | a on a little-endian host too */
+        u8 a, b, g, r;
+#else
         u8 r, g, b, a;
+#endif
     };
     u32 rgba;
 } Color_RGBA8_u32;

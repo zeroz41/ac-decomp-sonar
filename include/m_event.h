@@ -68,8 +68,14 @@ enum {
 
 typedef union event_monthday_s {
     struct {
+#ifdef SONAR_PORT
+        /* sonarlib port: raw reads month << 8 | day on a little-endian host too */
+        u8 day;
+        u8 month;
+#else
         u8 month;
         u8 day;
+#endif
     };
     u16 raw;
 } mEv_MonthDay_u;
@@ -84,17 +90,49 @@ typedef struct event_today_s {
 } mEv_event_today_c;
 
 typedef struct event_date_s {
+#ifdef SONAR_PORT
+    /* sonarlib port: raw reads month << 24 | day << 16 | _2 << 8 | hour on a little-endian host too */
+    u8 hour;
+    u8 _2;
+    u8 day;
+    u8 month;
+#else
     u8 month;
     u8 day;
     u8 _2;
     u8 hour;
+#endif
 } mEv_schedule_date_c;
 
 typedef union {
     mEv_schedule_date_c d;
+#ifdef SONAR_PORT
+    /* sonarlib port: md is raw's high half, month << 8 | day, as on the console */
+    struct {
+        u16 _lo;
+        union {
+            u16 md, _h;
+        };
+    };
+#else
     u16 md, _h;
+#endif
     u32 raw;
 } mEv_schedule_date_u;
+
+#ifdef SONAR_PORT
+/* sonarlib port: m_event.c's and ac_event_manager.c's year, month, day and hour word, raw reading
+   year << 24 | month << 16 | day << 8 | hour on a little-endian host too */
+typedef union ymdh {
+    struct {
+        u8 hour;
+        u8 day;
+        u8 month;
+        u8 year;
+    };
+    u32 raw;
+} mEv_ymdh_u;
+#endif
 
 typedef struct event_schedule_s {
     mEv_schedule_date_u date[2]; /* 0 = begin, 1 = end */

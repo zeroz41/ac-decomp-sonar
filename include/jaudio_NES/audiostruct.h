@@ -180,12 +180,23 @@ typedef struct phase_ {
     //     /* 0x00 */ u8 asU8;
     // };
 
+#ifdef SONAR_PORT
+    /* sonarlib port: the host's compilers allocate bit-fields from the least significant bit, and the byte
+       comes from the sequence in the console's order */
+    /* 0x00 */ u8 strong_reverb_left : 1;
+    /* 0x00 */ u8 strong_reverb_right : 1;
+    /* 0x00 */ u8 strong_left : 1;
+    /* 0x00 */ u8 strong_right : 1;
+    /* 0x00 */ u8 type : 2;
+    /* 0x00 */ u8 _unused : 2;
+#else
     /* 0x00 */ u8 _unused : 2;
     /* 0x00 */ u8 type : 2;
     /* 0x00 */ u8 strong_right : 1;
     /* 0x00 */ u8 strong_left : 1;
     /* 0x00 */ u8 strong_reverb_right : 1;
     /* 0x00 */ u8 strong_reverb_left : 1;
+#endif
 } phase;
 
 /* sizeof(sweep) == 0x0C */
@@ -625,6 +636,27 @@ struct note_ {
 
     union {
         struct {
+#ifdef SONAR_PORT
+            /* sonarlib port: the host's compilers allocate bit-fields from the least significant bit, and asU16
+               is masked by a sequence word in the console's order. The offsets are each flag's byte on the
+               console; on the host the first eight declared, bitF to skip_pan_update, sit in 0x0A */
+            /* 0x0B */ u16 bitF : 1;
+            /* 0x0B */ u16 bitE : 1;
+            /* 0x0B */ u16 bitD : 1;
+            /* 0x0B */ u16 bitC : 1;
+            /* 0x0B */ u16 bitB : 1;
+            /* 0x0B */ u16 bitA : 1;
+            /* 0x0B */ u16 bit9 : 1;
+            /* 0x0B */ u16 skip_pan_update : 1;
+            /* 0x0A */ u16 bit7 : 1;
+            /* 0x0A */ u16 bit6 : 1;
+            /* 0x0A */ u16 bit5 : 1;
+            /* 0x0A */ u16 add_subtrack_transposition : 1;
+            /* 0x0A */ u16 use_vibrato : 1;
+            /* 0x0A */ u16 bit2 : 1;
+            /* 0x0A */ u16 skip_freq_scale_update : 1;
+            /* 0x0A */ u16 skip_volume_update : 1;
+#else
             /* 0x0A */ u16 skip_volume_update : 1;
             /* 0x0A */ u16 skip_freq_scale_update : 1;
             /* 0x0A */ u16 bit2 : 1;
@@ -641,6 +673,7 @@ struct note_ {
             /* 0x0B */ u16 bitD : 1;
             /* 0x0B */ u16 bitE : 1;
             /* 0x0B */ u16 bitF : 1;
+#endif
         } flags;
         /* 0x0A */ u16 asU16;
     } _0A;

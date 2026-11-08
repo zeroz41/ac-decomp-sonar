@@ -291,6 +291,26 @@ set_target_properties(ac_mtx_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
 target_link_libraries(ac_mtx_port_test PRIVATE sonar::base m)
 add_test(NAME ac_mtx_port COMMAND ac_mtx_port_test)
 
+# Game units built as ac_game builds them, each source keeping its unit's char signedness and macros, with the stubs
+# their other references need: lbRTC_IsEqualDate's date order, libultra's formatter of doubles through libc64's
+# sprintf, and the pad display's colors.
+foreach(name IN ITEMS rtc printf hayakawa)
+    add_executable(ac_${name}_port_test tests/${name}_port_test.c)
+    target_include_directories(ac_${name}_port_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include"
+        "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin" "${AC_ROOT}")
+    target_compile_definitions(ac_${name}_port_test PRIVATE SONAR_PORT=1 DEBUG=0 VERSION=0 F3DEX_GBI_2 _LANGUAGE_C)
+    target_compile_options(ac_${name}_port_test PRIVATE ${adapter_includes} -fwrapv -fno-strict-aliasing
+                           -fno-delete-null-pointer-checks -ffp-contract=off)
+    set_target_properties(ac_${name}_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
+    target_link_libraries(ac_${name}_port_test PRIVATE sonar::base m)
+    add_test(NAME ac_${name}_port COMMAND ac_${name}_port_test)
+endforeach()
+target_sources(ac_rtc_port_test PRIVATE "${AC_ROOT}/src/lb_rtc.c")
+target_sources(ac_printf_port_test PRIVATE "${AC_ROOT}/src/static/libultra/xprintf.c"
+    "${AC_ROOT}/src/static/libultra/xldtob.c" "${AC_ROOT}/src/static/libultra/xlitob.c"
+    "${AC_ROOT}/src/static/libc64/sprintf.c")
+target_sources(ac_hayakawa_port_test PRIVATE "${AC_ROOT}/src/game/m_debug_hayakawa.c")
+
 
 # The SDK's ARAM and its DMA queue on core os.
 add_executable(ac_aram_port_test tests/aram_port_test.c adapter/dolphin_aram.c)

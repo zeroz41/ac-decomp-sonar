@@ -175,6 +175,16 @@ typedef union collision_bg_u {
     u32 raw;
 } mCoBG_Collision_u;
 
+#ifdef SONAR_PORT
+/* sonarlib port: the word raw reads on the console, built from the fields, since the host's
+   compilers allocate bit-fields from the least significant bit */
+#define mCoBG_CONSOLE_RAW(col)                                          \
+    ((u32)(col).data.slate_flag << 31 | (u32)(col).data.center << 26 |  \
+     (u32)(col).data.top_left << 21 | (u32)(col).data.bot_left << 16 |  \
+     (u32)(col).data.bot_right << 11 | (u32)(col).data.top_right << 6 | \
+     (u32)(col).data.unit_attribute)
+#endif
+
 typedef struct collision_unit_info_s {
     mCoBG_Collision_u* collision;
     f32 leftUp_offset;

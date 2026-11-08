@@ -11,7 +11,12 @@ void _Genld(_Pft*, u8, u8*, s16, s16);
 const f64 pows[] = { 10e0L, 10e1L, 10e3L, 10e7L, 10e15L, 10e31L, 10e63L, 10e127L, 10e255L };
 
 /* float properties */
+#ifdef SONAR_PORT
+/* sonarlib port: a little-endian host keeps a double's sign and exponent in its last u16 */
+#define _D0 3
+#else
 #define _D0 0
+#endif
 #define _DBIAS 0x3FF
 #define _DLONG 1
 #define _DOFF 4

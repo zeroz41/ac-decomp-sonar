@@ -4455,6 +4455,10 @@ static int set_today_event(void) {
     return TRUE;
 }
 
+#ifdef SONAR_PORT
+/* sonarlib port: m_event.h's word, whose raw reads year << 24 | month << 16 | day << 8 | hour */
+typedef mEv_ymdh_u ymdh;
+#else
 typedef union {
     struct {
         u8 year;
@@ -4464,6 +4468,7 @@ typedef union {
     };
     u32 raw;
 } ymdh;
+#endif
 
 static int mail_event_check(void) {
     lbRTC_time_c* now = Common_GetPointer(time.rtc_time);

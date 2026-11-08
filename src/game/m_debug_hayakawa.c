@@ -452,7 +452,14 @@ static void pad_disp(u8 pad, u16 button, Gfx** gfx_pp) {
 
     for (i = 0; i < 16; i++) {
         if (button & (1 << i)) {
+#ifdef SONAR_PORT
+            /* sonarlib port: the color word as raw reads it on the console, r in its high byte */
+            gDPSetColor(gfx++, G_SETPRIMCOLOR,
+                        (u32)pad_color2[i].color.r << 24 | (u32)pad_color2[i].color.g << 16 |
+                            (u32)pad_color2[i].color.b << 8 | pad_color2[i].color.a);
+#else
             gDPSetColor(gfx++, G_SETPRIMCOLOR, pad_color2[i].raw);
+#endif
             x0 = pad_start_x + (int)(i * 4);
             x1 = pad_start_x + (int)((i + 1) * 4);
             gfx = gfx_gDPFillRectangle1(gfx, x0, 226, x1 - 1, 229);

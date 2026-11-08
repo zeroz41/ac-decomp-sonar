@@ -1,6 +1,23 @@
 /* Event schedule data */
 
+#ifdef SONAR_PORT
+/* sonarlib port: mEv_schedule_c's dates are reordered for the host, so the table keeps its
+   source order in its own type and mEv_copy_schedule_data copies an entry field by field */
+typedef struct {
+    struct {
+        u8 month;
+        u8 day;
+        u8 _2;
+        u8 hour;
+    } date[2];
+    s16 _8;
+    s16 type;
+} mEv_schedule_src_c;
+
+static mEv_schedule_src_c event_schedule_data[] = {
+#else
 static mEv_schedule_c event_schedule_data[] = {
+#endif
   {{{mEv_SCHEDULE_SAVE_MONTH(3), 0, 0x00, mEv_SCHEDULE_MULTIDAY | 4 }, {mEv_SCHEDULE_SAVE_MONTH(4), 0, 0x00, mEv_SCHEDULE_HOUR_SLOT(mEv_SAVE_DATE_SPECIAL3) }}, 0x0000, mEv_EVENT_HANDBILL_SHOP_SALE},
   {{{mEv_SCHEDULE_SAVE_MONTH(4), 0, 0x00, 0 }, {mEv_SCHEDULE_SAVE_MONTH(4), 0, 0x00, 23 }}, 0x0000, mEv_EVENT_SHOP_SALE},
   {{{mEv_SCHEDULE_SAVE_MONTH(4), 0, 0x00, mEv_SCHEDULE_MULTIDAY | 6 }, {mEv_SCHEDULE_SAVE_MONTH(5), 0, 0x00, 5 }}, 0x0000, mEv_EVENT_DESIGNER},
@@ -136,3 +153,18 @@ static mEv_schedule_c event_schedule_data[] = {
   {{{lbRTC_JANUARY, 1, 0x00, 7 }, {lbRTC_DECEMBER, 31, 0x00, 23 }}, 0x0000, mEv_EVENT_SONCHO_BRIDGE_MAKE},
   {{{lbRTC_MAY, 1, 0x00, 0 }, {lbRTC_MAY, 5, 0x00, 23 }}, 0x0000, mEv_EVENT_KOINOBORI}
 };
+
+#ifdef SONAR_PORT
+static void mEv_copy_schedule_data(mEv_schedule_c* sched, const mEv_schedule_src_c* src) {
+    int i;
+
+    for (i = 0; i < 2; i++) {
+        sched->date[i].d.month = src->date[i].month;
+        sched->date[i].d.day = src->date[i].day;
+        sched->date[i].d._2 = src->date[i]._2;
+        sched->date[i].d.hour = src->date[i].hour;
+    }
+    sched->_8 = src->_8;
+    sched->type = src->type;
+}
+#endif

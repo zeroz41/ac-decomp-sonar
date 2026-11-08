@@ -18,6 +18,7 @@ enum {
     mEv_INIT_NUM
 };
 
+#ifndef SONAR_PORT /* sonarlib port: m_event.h reorders it for the host */
 typedef union ymdh {
     struct {
         u8 year;
@@ -27,6 +28,7 @@ typedef union ymdh {
     };
     u32 raw;
 } mEv_ymdh_u;
+#endif
 
 static int update_save_area(void);
 
@@ -1715,7 +1717,11 @@ static void update_schedule_today(Event_c* event) {
 
         /* Process every event */
         for (i = 0; i < ARRAY_COUNT(event_schedule_data); i++) {
+#ifdef SONAR_PORT
+            mEv_copy_schedule_data(sched_p, &event_schedule_data[i]);
+#else
             memcpy(sched_p, &event_schedule_data[i], sizeof(mEv_schedule_c));
+#endif
 
             /* Perform necessary adjustments */
             update_soncho_event(sched_p);
@@ -1788,6 +1794,17 @@ static void update_schedule_today(Event_c* event) {
         }
 
         if (type != 0 && gamePT->frame_counter == 0) {
+#ifdef SONAR_PORT
+            /* sonarlib port: the dates are reordered for the host, so they are set by name */
+            mEv_schedule_c new_ev_sched = {
+                {
+                    { .d = { .month = 100, .day = 0, ._2 = 0, .hour = 23 } },
+                    { .d = { .month = 100, .day = 0, ._2 = 0, .hour = 0 } },
+                },
+                0,
+                0,
+            };
+#else
             mEv_schedule_c new_ev_sched = {
                 {
                     { 100, 0, 0, 23 },
@@ -1796,6 +1813,7 @@ static void update_schedule_today(Event_c* event) {
                 0,
                 0,
             };
+#endif
 
             new_ev_sched.type = type;
             new_ev_sched.date[1].d.month = rtc_time->month;
@@ -1832,6 +1850,17 @@ static void update_schedule_today(Event_c* event) {
         }
 
         if (type != 0) {
+#ifdef SONAR_PORT
+            /* sonarlib port: the dates are reordered for the host, so they are set by name */
+            mEv_schedule_c new_ev_sched = {
+                {
+                    { .d = { .month = 100, .day = 0, ._2 = 0, .hour = 0 } },
+                    { .d = { .month = 100, .day = 0, ._2 = 0, .hour = 23 } },
+                },
+                0,
+                0,
+            };
+#else
             mEv_schedule_c new_ev_sched = {
                 {
                     { 100, 0, 0, 0 },
@@ -1840,6 +1869,7 @@ static void update_schedule_today(Event_c* event) {
                 0,
                 0,
             };
+#endif
 
             new_ev_sched.type = type;
             new_ev_sched.date[1].d.month = rtc_time->month;
@@ -2631,7 +2661,11 @@ extern void mEv_make_new_special_event() {
 
         Save_Get(event_save_common).special_event.flags = 1;
         for (i = 0; i < ARRAY_COUNT(event_schedule_data); i++) {
+#ifdef SONAR_PORT
+            mEv_copy_schedule_data(sched_p, &event_schedule_data[i]);
+#else
             memcpy(sched_p, &event_schedule_data[i], sizeof(mEv_schedule_c));
+#endif
 
             if (update_special_event(sched_p)) {
                 sched.date[0].raw = decode_date(sched.date[0].raw);
