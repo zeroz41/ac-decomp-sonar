@@ -269,25 +269,24 @@ target_link_libraries(ac_bitfield_views_test PRIVATE sonar::base)
 add_test(NAME ac_bitfield_views COMMAND ac_bitfield_views_test)
 
 # The SDK's matrix library on the port's paired-single fallbacks: the matrices and vectors its assembly computes.
+# The library's units are built as ac_game builds them, each source keeping its unit's char signedness and macros, with
+# the game's names and intrinsics; the test's own file takes neither, since its reference math is the host's.
 set(mtx_sources "")
 foreach(name IN ITEMS mtx mtx44 mtxvec vec)
     list(APPEND mtx_sources "${AC_ROOT}/src/static/dolphin/mtx/${name}.c")
 endforeach()
-add_executable(ac_mtx_port_test tests/mtx_port_test.c ${mtx_sources})
-target_include_directories(ac_mtx_port_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include"
-    "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin" "${AC_ROOT}")
-target_compile_definitions(ac_mtx_port_test PRIVATE SONAR_PORT=1 DEBUG=0 VERSION=0)
-# The game's names and intrinsics in the library's units only: the test's reference math is the host's.
-if(CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
-    set(mtx_adapter_includes ${adapter_includes})
-else()
-    # A source's COMPILE_OPTIONS takes no SHELL: groups.
-    set(mtx_adapter_includes -include "${CMAKE_CURRENT_SOURCE_DIR}/adapter/intrinsics.h"
-        -include "${CMAKE_CURRENT_SOURCE_DIR}/adapter/names.h")
-endif()
-set_source_files_properties(${mtx_sources} PROPERTIES COMPILE_OPTIONS "${mtx_adapter_includes}")
-target_compile_options(ac_mtx_port_test PRIVATE -ffp-contract=off)
-set_target_properties(ac_mtx_port_test PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
+add_library(ac_mtx_units OBJECT ${mtx_sources})
+add_executable(ac_mtx_port_test tests/mtx_port_test.c $<TARGET_OBJECTS:ac_mtx_units>)
+foreach(target IN ITEMS ac_mtx_units ac_mtx_port_test)
+    target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/adapter/include"
+        "${AC_ROOT}/include" "${AC_ROOT}/src/static/dolphin" "${AC_ROOT}")
+    target_compile_definitions(${target} PRIVATE SONAR_PORT=1 DEBUG=0 VERSION=0)
+    target_compile_options(${target} PRIVATE -ffp-contract=off)
+    set_target_properties(${target} PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
+endforeach()
+target_compile_options(ac_mtx_units PRIVATE ${adapter_includes} -fwrapv -fno-strict-aliasing
+                       -fno-delete-null-pointer-checks)
+target_link_libraries(ac_mtx_units PRIVATE sonar::base)
 target_link_libraries(ac_mtx_port_test PRIVATE sonar::base m)
 add_test(NAME ac_mtx_port COMMAND ac_mtx_port_test)
 
