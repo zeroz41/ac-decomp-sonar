@@ -130,6 +130,10 @@ set_property(SOURCE "${AC_ROOT}/src/static/libforest/emu64/emu64.c" APPEND PROPE
              ${emu64_ref_names})
 set_property(SOURCE "${AC_ROOT}/src/static/libforest/emu64/emu64.c" APPEND PROPERTY COMPILE_OPTIONS -Wno-register
              -Wno-write-strings -Wno-enum-compare)
+# JUTConsole's static_assert takes the offset of mNode in a class that is not standard-layout, which the compilers
+# support and warn of (NOTES.md, The edits on the path).
+set_property(SOURCE "${AC_ROOT}/src/static/JSystem/JUtility/JUTConsole.cpp" APPEND PROPERTY COMPILE_OPTIONS
+             -Wno-invalid-offsetof)
 # The one definition of each of MSL's math inlines (include/MSL_C/w_math.h).
 target_sources(ac_game PRIVATE adapter/msl_inlines.c)
 set_source_files_properties(adapter/msl_inlines.c PROPERTIES COMPILE_DEFINITIONS AC_PORT_MSL_INLINES)
@@ -158,6 +162,9 @@ target_sources(ac_game PRIVATE adapter/dolphin_gx.c)
 # What the game calls of emu64, on sonarlib's kit, and the proof's stop at play's first frame.
 target_sources(ac_game PRIVATE adapter/emu64_glue.c)
 set_source_files_properties(adapter/emu64_glue.c PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
+# The game's state the tick boundaries hash, for --state-hashes (NOTES.md, State hashes).
+target_sources(ac_game PRIVATE adapter/ac_state.c)
+set_source_files_properties(adapter/ac_state.c PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
 # The out-of-line copies of the game's C99 inlines.
 target_sources(ac_game PRIVATE adapter/game_inlines.c)
 set_source_files_properties(adapter/game_inlines.c PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
@@ -234,13 +241,59 @@ set_target_properties(ac_saves PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
 target_link_libraries(ac_saves PRIVATE ac_headers sonar::base sonar::kit_card)
 
 # The program (NOTES.md, The program): the game and its glue, from boot to play's first frame.
-add_executable(ac_port adapter/main.c $<TARGET_OBJECTS:ac_game> $<TARGET_OBJECTS:ac_saves>)
+add_executable(ac_port adapter/ac_port.c $<TARGET_OBJECTS:ac_game> $<TARGET_OBJECTS:ac_saves>)
 set_target_properties(ac_port PROPERTIES C_STANDARD 11 C_EXTENSIONS ON LINKER_LANGUAGE CXX)
 target_link_libraries(ac_port PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
                       sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend sonar::fmt_card)
 # sonarlib's sl-card, which moves the cards' saves to and from Dolphin (README.md, Saves), and sl-replay, which builds
 # the recordings --replay plays (NOTES.md, Replays), are built with the program.
 add_dependencies(ac_port sl-card sl-replay)
+
+# The file names of the adapter's sources and of the game's, as each object's symbol table names its source. The
+# symbol manifest leaves out the adapter's file-local variables by file name, so no adapter source may share a game
+# source's (NOTES.md, State hashes).
+set(adapter_dir "${CMAKE_CURRENT_SOURCE_DIR}/adapter")
+set(game_dir "${AC_ROOT}/src")
+set(adapter_files "")
+set(game_files "")
+foreach(target IN ITEMS ac_game ac_saves ac_port)
+    get_target_property(sources ${target} SOURCES)
+    foreach(source IN LISTS sources)
+        if(NOT source MATCHES "\\.(c|cpp)$")
+            continue()
+        endif()
+        get_filename_component(source_path "${source}" ABSOLUTE)
+        get_filename_component(source_name "${source}" NAME)
+        cmake_path(IS_PREFIX adapter_dir "${source_path}" in_adapter)
+        cmake_path(IS_PREFIX game_dir "${source_path}" in_game)
+        if(in_adapter)
+            list(APPEND adapter_files "${source_name}")
+        elseif(in_game)
+            list(APPEND game_files "${source_name}")
+        endif()
+    endforeach()
+endforeach()
+foreach(name IN LISTS adapter_files)
+    if(name IN_LIST game_files)
+        message(FATAL_ERROR "port/adapter/${name} has the file name of a game source: rename it, as the symbol manifest "
+                            "tells the adapter's variables from the game's by file name (NOTES.md, State hashes)")
+    endif()
+endforeach()
+# The symbol manifest, ac_port.slsym, which sl-dump-compare reads --dump's dumps with (NOTES.md, State hashes): the
+# game's variables, without those that hold pointers into the host's heap or stacks or are not the game's.
+set(manifest_excludes "")
+foreach(name IN LISTS adapter_files)
+    list(APPEND manifest_excludes "${name}:*")
+endforeach()
+sonar_add_symbol_manifest(ac_port EXCLUDE ${manifest_excludes}
+    # The adapter's globals.
+    ac_nmi_save_area FrameCansel __DSPRegs __OSCurrHeap
+    # jaudio's DVD task records, which point into the host's heap and stacks, and the message window, whose request
+    # keeps the upper half of a host pointer at +0x474.
+    dvdthread.c:CALLSTACK m_msg.c:mMsg_window
+    # The kits': dolphin_os's tables of sonarlib's os handles and its threads, and the card's, jaudio's DSP's, the
+    # pad's and the VI's state.
+    os.cpp:* memcard.cpp:* dsp.cpp:* pad.cpp:* vi.cpp:*)
 
 # The importer (NOTES.md, The package): ac-import writes the package the game reads from boot to Town's first frame
 # from the player's disc, converting the structures the game reads in place (sonarlib docs/roadmap.md, M6 step 6c).
@@ -504,6 +557,35 @@ add_test(NAME ac_port_measure
                  "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/measure"
                  "-DAC_LAVAPIPE_ICD=${AC_LAVAPIPE_ICD}" -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/measure_test.cmake")
 set_tests_properties(ac_port_measure PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_measure: skipped, ")
+
+# State hashes and dumps (NOTES.md, State hashes): sonarlib's sl-replay builds tests/town_replay.txt and
+# tests/title_replay.txt, and ac_port runs the town headless twice with --state-hashes and a dump, which sonarlib's
+# sl-dump-compare compares with ac_port.slsym, with --window --unpaced uncapped and with interpolation off, whose state
+# hashes the headless run's must begin, and with --plant, which must be found at its tick and named, then the title
+# measured past its end, and six usage errors, offscreen as ac_port_window; skipped without the disc or lavapipe, when
+# the script says so.
+add_test(NAME ac_port_state
+         COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
+                 "-DSL_REPLAY=$<TARGET_FILE:sl-replay>" "-DSL_DUMP_COMPARE=$<TARGET_FILE:sl-dump-compare>"
+                 "-DSYMBOLS=$<TARGET_FILE_DIR:ac_port>/ac_port.slsym"
+                 "-DTOWN_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/town_replay.txt"
+                 "-DTITLE_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/title_replay.txt" "-DAC_DISC=${AC_DISC}"
+                 "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/state"
+                 "-DAC_LAVAPIPE_ICD=${AC_LAVAPIPE_ICD}" -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/state_test.cmake")
+set_tests_properties(ac_port_state PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_state: skipped, ")
+
+# The town replay's state hashes measured (NOTES.md, State hashes): sonarlib's sl-replay builds tests/town_replay.txt,
+# and ac_port runs it headless with --state-hashes, then --measure --replay --ticks 3000 --state-hashes at --present-hz
+# 144 and 360 once each, whose state hashes the headless run's must begin and whose measured lines must be the same,
+# on the GPU sink with no window, offscreen as ac_port_measure; skipped without the disc or lavapipe, when the script
+# says so.
+add_test(NAME ac_port_state_measured
+         COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
+                 "-DSL_REPLAY=$<TARGET_FILE:sl-replay>" "-DTOWN_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/town_replay.txt"
+                 "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}"
+                 "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/state_measured" "-DAC_LAVAPIPE_ICD=${AC_LAVAPIPE_ICD}"
+                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/state_measured_test.cmake")
+set_tests_properties(ac_port_state_measured PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_state_measured: skipped, ")
 
 # The goldens: sonarlib's sl-capture runs Dolphin on the player's disc and caches its frames in the build tree, ac_port
 # --goldens writes the same scenes on the GPU sink with no window, offscreen through lavapipe, and sl-capture compares

@@ -13,6 +13,10 @@
 #define OUTPUT_OSREPORT 2
 #define OUTPUT_ALL (OUTPUT_OSREPORT | OUTPUT_CONSOLE)
 
+#ifdef SONAR_PORT /* sonarlib port: the manager's list reaches each console's mNode, not its JKRDisposer link */
+static_assert(JUTCONSOLE_NODE_OFS == TLINKLIST_NODE_OFS(JUTConsole), "JUTCONSOLE_NODE_OFS is mNode's offset");
+#endif
+
 JUTConsoleManager* JUTConsoleManager::sManager;
 
 JUTConsole* JUTConsole::create(uint param_0, uint maxLines, JKRHeap* pHeap) {
@@ -376,8 +380,9 @@ void JUTConsoleManager::removeConsole(JUTConsole* const console) {
 void JUTConsoleManager::draw() const {
     // this cast is needed to match release, luckily doesn't affect tp debug either, so maybe there's another temp or
     // cast somewhere?
-    JGadget::TLinkList<JUTConsole, -24>::const_iterator it = ((const JUTConsoleManager*)this)->soLink_.begin();
-    JGadget::TLinkList<JUTConsole, -24>::const_iterator itEnd = soLink_.end();
+    JGadget::TLinkList<JUTConsole, JUTCONSOLE_NODE_OFS>::const_iterator it =
+        ((const JUTConsoleManager*)this)->soLink_.begin();
+    JGadget::TLinkList<JUTConsole, JUTCONSOLE_NODE_OFS>::const_iterator itEnd = soLink_.end();
 
     for (; it != itEnd; ++it) {
         const JUTConsole& console = *it;

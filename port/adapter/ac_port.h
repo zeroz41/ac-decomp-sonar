@@ -68,13 +68,13 @@ u64 ac_dsp_sounding_frames(void);
 u64 ac_dvd_reads(void);
 u64 ac_dvd_read_bytes(void);
 
-/* --window: play's first frame prints the play line and ends no run (emu64_glue.c). main.c's, before boot. */
+/* --window: play's first frame prints the play line and ends no run (emu64_glue.c). ac_port.c's, before boot. */
 void ac_window_enable(void);
 /* Whether play's first frame was submitted. Any thread. */
 BOOL ac_play_reached(void);
 
 /* --goldens: play's first frame prints the play line and ends no run, and each frame's begin hands the frame submitted
-   before it to the goldens with its keys (emu64_glue.c). main.c's, before boot. */
+   before it to the goldens with its keys (emu64_glue.c). ac_port.c's, before boot. */
 void ac_goldens_enable(void);
 /* The GX glue's frame begin, before it begins the frame, when a frame was submitted since the last: with the goldens
    on, calls sl_goldens_frame for that frame with the keys as they stand, after its tick, and the VI's pan; a failure
@@ -83,16 +83,23 @@ void ac_goldens_frame(void);
 /* The frames handed to the goldens. Any thread. */
 u64 ac_goldens_frames(void);
 
-/* --measure: play's first frame prints the play line and ends no run (emu64_glue.c). main.c's, before boot. */
+/* --measure: play's first frame prints the play line and ends no run (emu64_glue.c). ac_port.c's, before boot. */
 void ac_measure_enable(void);
 
 /* --replay and --record: play's first frame prints the play line and ends no run, and each line ac_port_report prints
-   ends with " scene <n>", Save_Get(scene_no) (emu64_glue.c). main.c's, before boot. */
+   ends with " scene <n>", Save_Get(scene_no) (emu64_glue.c). ac_port.c's, before boot. */
 void ac_replay_enable(void);
 /* The GX glue's frame end, after its submit and ac_emu64_frame_submitted, for a frame submitted: from play's first
    frame on, with the measured run on, calls sl_measure_frame, which waits until the main thread has presented it, and
-   keeps the tick; a failure stops the run with a message (main.c). Game thread. */
+   keeps the tick; a failure stops the run with a message (ac_port.c). Game thread. */
 void ac_measure_frame(void);
+
+/* --state-hashes: opens the file, replacing it, registers the game's state with sonar/state.h and sets the listener,
+   which writes each tick boundary's line, "<tick> <hash>", the hash as 16 hex digits, and flushes it; with plant, at
+   the boundary that begins plant_at, after its hash, it adds 1 to one byte of the save (ac_state.c; NOTES.md, State
+   hashes). FALSE, with a message, when the file cannot be opened or a registration fails. ac_port.c's, after sl_init
+   and before the runtime starts. */
+BOOL ac_state_start(const char* hashes, BOOL plant, u64 plant_at);
 
 /* Prints the proof's line, "ac_port: <what> tick <t> retrace <r> gx <bytes> dvd <reads> <bytes> hash <h> instances
    <n> compiles <n> holes <vertex>/<list> cpu <n> refused <n> views <overflows> invalid <frames> problems <n>

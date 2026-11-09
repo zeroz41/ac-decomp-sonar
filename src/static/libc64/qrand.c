@@ -24,3 +24,10 @@ float fqrand2(void){
     __qrand_itemp = __qrand_idum >> 9 | 0x3F800000;
     return *(float*)&__qrand_itemp - 1.5f;
 }
+
+#ifdef SONAR_PORT /* sonarlib port: the two words' addresses, for the port's state hashes (adapter/ac_state.c) */
+void qrand_state(const u32** idum, const u32** itemp) {
+    *idum = &__qrand_idum;
+    *itemp = &__qrand_itemp;
+}
+#endif

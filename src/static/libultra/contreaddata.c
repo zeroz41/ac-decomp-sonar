@@ -22,6 +22,9 @@ extern void osContGetReadData(OSContPad* pad) {
     OSContPadEx padEx[PAD_MAX_CONTROLLERS];
     u32 i;
     
+#ifdef SONAR_PORT /* sonarlib port: an empty port's pad reads as zeros, not the host's leftovers (port/NOTES.md) */
+    bzero(padEx, sizeof(padEx));
+#endif
     osContGetReadDataEx(padEx);
     for (i = 0; i < PAD_MAX_CONTROLLERS; i++) {
         bcopy(&padEx[i].pad, &pad[i], sizeof(OSContPad));

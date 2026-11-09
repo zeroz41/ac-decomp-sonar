@@ -26,7 +26,7 @@ typedef struct ac_emu64_marks {
     void* at[AC_EMU64_LISTS];
 } ac_emu64_marks;
 
-/* The emu64 the glue records each of emu64's tasks with, made by the program (main.c). Main thread, before the game
+/* The emu64 the glue records each of emu64's tasks with, made by the program (ac_port.c). Main thread, before the game
    runs. */
 void ac_emu64_start(struct sl_emu64* emu);
 
@@ -87,13 +87,13 @@ void ac_emu64_frame_submitted(void);
 
 /* The differential test (port/NOTES.md, --diff; sonarlib docs/roadmap.md, M6 step 6j): each task is drawn by the
    kit and by the console's emu64, the reference, into frames of their own, and the two captures are compared.
-   ac_diff_enable is main.c's, before boot; ac_diff_enabled is for any game thread. */
+   ac_diff_enable is ac_port.c's, before boot; ac_diff_enabled is for any game thread. */
 void ac_diff_enable(void);
 BOOL ac_diff_enabled(void);
 
 /* The reference run (port/NOTES.md, --reference; sonarlib docs/roadmap.md, M6 step 7b): the kit is not made, and the
    console's emu64 draws every task through the GX front end into the game's own frame. ac_reference_enable is
-   main.c's, before boot; ac_reference_enabled is for any game thread. */
+   ac_port.c's, before boot; ac_reference_enabled is for any game thread. */
 void ac_reference_enable(void);
 BOOL ac_reference_enabled(void);
 

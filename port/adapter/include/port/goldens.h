@@ -16,7 +16,7 @@ u32 ac_initial_menu_frame(void);
    (jsyswrap.cpp). */
 void ac_fader_state(u32* status, u32* time);
 /* The seed init_rnd gives sqrand, for the tick it would give: --qrand-seed's value when it is given, else tick
-   (main.c). */
+   (ac_port.c). */
 u32 ac_port_rnd_seed(u32 tick);
 
 #ifdef __cplusplus

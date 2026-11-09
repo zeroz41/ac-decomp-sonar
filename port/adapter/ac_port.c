@@ -2,7 +2,8 @@
            [--window [--user-dir <dir>] [--set <key>=<value>]...
                      [--replay <recording> [--unpaced]
                       | --record <recording> [--input-script <script>] [--date <date>] [--unpaced]]
-            | --goldens <scenes> <dir> | --measure [--present-hz <n>] | --replay <recording>] [--qrand-seed <hex>]:
+            | --goldens <scenes> <dir> | --measure [--present-hz <n>] [--replay <recording>] | --replay <recording>]
+           [--qrand-seed <hex>] [--state-hashes <file> [--plant <n>]] [--dump <dir> --dump-tick <n>]:
    Animal Crossing on sonarlib
    (port/NOTES.md, The program). The process's main thread starts the library and the render module, makes the emu64
    the glue records each task with, mounts the package as game:, starts the CPU model, and creates the game thread
@@ -42,7 +43,9 @@
    tick limit (sonar/measure.h, port/NOTES.md, Measured runs). The GX glue's frame end hands each frame to the
    measured run, which waits while the main thread presents it: once at alpha 1, or with --present-hz at each of the
    display's times at that rate in the frame's tick, at the clock's alpha. At the limit the game thread prints the
-   measure line, the presents line and the report, named measured, and the run ends, exit 0.
+   measure line, the presents line and the report, named measured, and the run ends, exit 0. With --replay, which needs
+   --ticks, the recording plays from tick 0, as headless: when it ends before the limit, the game thread prints the
+   measure and presents lines, then the report, named replay, and the saves line, and the run ends, exit 0.
 
    --reference: the kit is not made, and the console's emu64 draws every task through the GX front end into the
    game's own frame (emu64_glue.c), headless, with --goldens or with --measure at no present rate.
@@ -54,7 +57,14 @@
    settings bound and given the recorded slots; one that carries none has no card in either slot. Play's first frame
    prints the play line and ends no run, and when the replay ends, at the tick after its last, the run prints the
    report, named replay, then the saves line when it has a store, and ends, exit 0. Each line names the scene. No tick
-   limit applies unless --ticks gives one (port/NOTES.md, Replays). With --window, above. */
+   limit applies unless --ticks gives one (port/NOTES.md, Replays). With --window, above.
+
+   --state-hashes: the game's state hashed at each tick boundary (sonar/state.h, ac_state.c), a line for each written
+   to the file, which is replaced: the tick, then the hash as 16 hex digits. --plant adds 1 to one byte of the save at
+   the boundary that begins its tick, after its hash, for the test. --dump writes a state dump (sonar/dump.h) of the
+   tick --dump-tick gives, to dumps:tick<n>.sldump, the directory mounted writable as dumps: and created when missing,
+   for sl-dump-compare to read with ac_port.slsym. Both in every deterministic run: headless and measured runs, and a
+   window's replay or recording (port/NOTES.md, State hashes). */
 #include "ac_port.h"
 
 #include <port/emu64_glue.h>
@@ -63,6 +73,7 @@
 #include <sonar/audio.h>
 #include <sonar/base/hash.h>
 #include <sonar/card/memcard.h>
+#include <sonar/dump.h>
 #include <sonar/emu64/emu64.h>
 #include <sonar/fs.h>
 #include <sonar/goldens.h>
@@ -89,14 +100,16 @@
 
 int ac_boot_main(int argc, const char** argv); /* src/static/boot.c's main */
 
-static const char usage[] = "usage: ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--reference]\n"
-                            "               [--window [--user-dir <dir>] [--set <key>=<value>]...\n"
-                            "                         [--replay <recording> [--unpaced]\n"
-                            "                          | --record <recording> [--input-script <script>] [--date <date>]\n"
-                            "                                     [--unpaced]]\n"
-                            "                | --goldens <scenes> <dir> | --measure [--present-hz <n>]\n"
-                            "                | --replay <recording>]\n"
-                            "               [--qrand-seed <hex>]\n";
+static const char usage[] =
+    "usage: ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--reference]\n"
+    "               [--window [--user-dir <dir>] [--set <key>=<value>]...\n"
+    "                         [--replay <recording> [--unpaced]\n"
+    "                          | --record <recording> [--input-script <script>] [--date <date>]\n"
+    "                                     [--unpaced]]\n"
+    "                | --goldens <scenes> <dir> | --measure [--present-hz <n>] [--replay <recording>]\n"
+    "                | --replay <recording>]\n"
+    "               [--qrand-seed <hex>] [--state-hashes <file> [--plant <n>]]\n"
+    "               [--dump <dir> --dump-tick <n>]\n";
 
 static uint64_t tick_limit = 3600;
 static int ticks_given;          /* --ticks */
@@ -125,6 +138,12 @@ static sl_os_calendar date_start;        /* and its date and time, a recording's
 static int unpaced;                      /* --unpaced: a window replay or recording as fast as it can */
 static atomic_int run_ended;             /* a window replay's or recording's end, which ends the present loop */
 static sl_save_store card_store;         /* the cards' store: the player's (start_saves) or a replay's (seed_saves) */
+static const char* state_hashes;         /* --state-hashes's file */
+static int plant_given;                  /* --plant */
+static uint64_t plant_tick;              /* and its tick */
+static const char* dump_dir;             /* --dump's directory */
+static int dump_tick_given;              /* --dump-tick */
+static uint64_t dump_tick;               /* and its tick */
 
 /* --window's settings. */
 static const char* user_dir;        /* --user-dir */
@@ -278,12 +297,12 @@ static sl_result saves_report(void) {
    captures, and the main thread ends the run. With --measure, once play was reached, stops the measured run and
    prints its two lines and the report, here on the game thread at a retrace, while no present runs: the game thread
    waits in sl_measure_frame for each frame's presents. With --replay, first ends the run once the replay has ended,
-   with the report, named replay, and the saves line. In a window, the only runs it is registered for are a replay's,
-   for which it prints the two lines once and tells the present loop, which ends the run, as it does at --ticks's
-   limit, and a recording's: at the retrace where the runtime has begun the limit's ticks, or the first after the
-   window closed, it stops the recording, which ends at that tick's boundary, after the retrace callbacks, and one
-   retrace later, where a replay of it ends, it closes the file, prints the report, named record, and the saves line,
-   and tells the present loop. */
+   with the report, named replay, and the saves line, after the measured run's two lines with --measure. In a window,
+   the only runs it is registered for are a replay's, for which it prints the two lines once and tells the present loop,
+   which ends the run, as it does at --ticks's limit, and a recording's: at the retrace where the runtime has begun the
+   limit's ticks, or the first after the window closed, it stops the recording, which ends at that tick's boundary,
+   after the retrace callbacks, and one retrace later, where a replay of it ends, it closes the file, prints the report,
+   named record, and the saves line, and tells the present loop. */
 static void stop_at_limit(void* user, uint64_t retrace) {
     (void)user;
     (void)retrace;
@@ -295,6 +314,11 @@ static void stop_at_limit(void* user, uint64_t retrace) {
                 atomic_store(&run_ended, 1);
             }
             return;
+        }
+        if (measure) {
+            sl_measure_stop();
+            measure_report();
+            presents_report();
         }
         ac_port_report("replay");
         _Exit(saves_report() == SL_OK ? 0 : 1);
@@ -340,17 +364,23 @@ static void stop_at_limit(void* user, uint64_t retrace) {
     }
 }
 
-static int parse_ticks(const char* text, uint64_t* ticks) {
+/* A tick, --dump-tick's and --plant's: a whole number. */
+static int parse_tick(const char* text, uint64_t* tick) {
     char* end = NULL;
     unsigned long long value;
     if (text[0] < '0' || text[0] > '9')
         return 0;
     errno = 0;
     value = strtoull(text, &end, 10);
-    if (errno != 0 || *end != '\0' || value == 0)
+    if (errno != 0 || *end != '\0')
         return 0;
-    *ticks = (uint64_t)value;
+    *tick = (uint64_t)value;
     return 1;
+}
+
+/* --ticks's count: a tick, not 0. */
+static int parse_ticks(const char* text, uint64_t* ticks) {
+    return parse_tick(text, ticks) && *ticks != 0;
 }
 
 /* --present-hz's rate: a whole number from 1 to 1000. */
@@ -1005,6 +1035,18 @@ int main(int argc, char** argv) {
             if (!parse_seed(argv[++i], &seed))
                 return usage_error();
             seed_given = 1;
+        } else if (strcmp(argv[i], "--state-hashes") == 0 && i + 1 < argc && state_hashes == NULL) {
+            state_hashes = argv[++i];
+        } else if (strcmp(argv[i], "--plant") == 0 && i + 1 < argc && !plant_given) {
+            if (!parse_tick(argv[++i], &plant_tick))
+                return usage_error();
+            plant_given = 1;
+        } else if (strcmp(argv[i], "--dump") == 0 && i + 1 < argc && dump_dir == NULL) {
+            dump_dir = argv[++i];
+        } else if (strcmp(argv[i], "--dump-tick") == 0 && i + 1 < argc && !dump_tick_given) {
+            if (!parse_tick(argv[++i], &dump_tick))
+                return usage_error();
+            dump_tick_given = 1;
         } else {
             return usage_error();
         }
@@ -1019,14 +1061,22 @@ int main(int argc, char** argv) {
         return usage_error(); /* the reference runs headless, without the kit */
     if ((user_dir != NULL || assignment_count != 0) && !window)
         return usage_error(); /* only --window keeps the player's directories and settings */
-    if (replay != NULL && (goldens != NULL || measure || ac_diff_enabled() || ac_reference_enabled()))
+    if (replay != NULL && (goldens != NULL || ac_diff_enabled() || ac_reference_enabled()))
         return usage_error(); /* a replay runs on the kit, headless or in a window */
+    if (measure && replay != NULL && !ticks_given)
+        return usage_error(); /* the medians are sized for --ticks's frames */
     if (record != NULL && (!window || replay != NULL))
         return usage_error(); /* a recording is a window's, to the tick limit or the close */
     if ((input_script != NULL || date_given) && record == NULL)
         return usage_error(); /* a script's devices play, and --date starts the clock, only for a recording */
     if (unpaced && ((replay == NULL && record == NULL) || !window))
         return usage_error(); /* only a window's replay or recording is paced */
+    if ((state_hashes != NULL || dump_dir != NULL) && window && replay == NULL && record == NULL)
+        return usage_error(); /* the state hashes and dumps are a deterministic run's */
+    if ((dump_dir != NULL) != (dump_tick_given != 0))
+        return usage_error(); /* a dump's directory and its tick go together */
+    if (plant_given && state_hashes == NULL)
+        return usage_error(); /* the plant is the state hashes' test */
     if (replay != NULL) {
         int code;
         if (!ticks_given)
@@ -1138,6 +1188,29 @@ int main(int argc, char** argv) {
         if (result != SL_OK)
             return failed("sl_fs_mount", result);
     }
+    if (dump_dir != NULL) {
+        /* --dump's directory, created when missing, and its tick's dump, requested before the runtime starts. */
+        char path[64];
+        sl_mount_desc desc;
+        sl_dump_desc dump;
+        sl_mount mount;
+        memset(&desc, 0, sizeof desc);
+        desc.name = "dumps";
+        desc.host_path = dump_dir;
+        desc.flags = SL_MOUNT_WRITABLE | SL_MOUNT_CREATE;
+        result = sl_fs_mount(&desc, &mount);
+        if (result != SL_OK) {
+            fprintf(stderr, "ac_port: %s: %s\n", dump_dir, sl_result_string(result));
+            return 1;
+        }
+        snprintf(path, sizeof path, "dumps:tick%" PRIu64 ".sldump", dump_tick);
+        memset(&dump, 0, sizeof dump);
+        dump.path = path; /* copied */
+        dump.tick = dump_tick;
+        result = sl_dump_request(&dump);
+        if (result != SL_OK)
+            return failed("sl_dump_request", result);
+    }
     if (replay != NULL || window) {
         /* Input's four GameCube ports, before os, so a replay starts before it. Headless, each disconnected until the
            recording connects it, with no backend. --window, the GameCube profile with its default bindings: the
@@ -1242,6 +1315,8 @@ int main(int argc, char** argv) {
             return 1;
         }
     }
+    if (state_hashes != NULL && !ac_state_start(state_hashes, plant_given, plant_tick))
+        return 1; /* before the game thread, which starts the runtime */
     {
         /* Boot's main on a game thread of its own, at the attach's default priority. */
         sl_os_thread_desc desc;

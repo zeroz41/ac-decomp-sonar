@@ -147,6 +147,12 @@ class JUTConsole : JKRDisposer {
     bool _66;                     // _66
 }; // Size: 0x6C
 
+#ifdef SONAR_PORT /* sonarlib port: the manager's list links through mNode, at 48 on the host (port/NOTES.md) */
+#define JUTCONSOLE_NODE_OFS -48
+#else
+#define JUTCONSOLE_NODE_OFS -24
+#endif
+
 class JUTConsoleManager {
   public:
     JUTConsoleManager();
@@ -164,7 +170,7 @@ class JUTConsoleManager {
     static JUTConsoleManager* sManager;
 
   private:
-    JGadget::TLinkList<JUTConsole, -24> soLink_; // _00
+    JGadget::TLinkList<JUTConsole, JUTCONSOLE_NODE_OFS> soLink_; // _00
     JUTConsole* mActiveConsole;                  // _0C
     JUTConsole* mDirectConsole;                  // _10
 }; // Size: 0x14

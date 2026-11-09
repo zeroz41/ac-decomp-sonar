@@ -1,5 +1,5 @@
 # Records the title's input in a window from a device script and replays it (port/NOTES.md, Recording; sonarlib
-# docs/roadmap.md, M6 step 9f2b):
+# docs/roadmap.md, M6 steps 9f2b and 9f3b):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DSL_REPLAY=<sl-replay> -DSCRIPT=<title_input.txt>
 #         -DSET_SCRIPT=<title_input_set.txt> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
 #         -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P record_test.cmake
@@ -12,7 +12,9 @@
 # play line, the record line, the saves line and the window line, with card-a, which the run creates, in slot A.
 # sl-replay show must give the gamepad's connection at tick 0, Start down at 1000 and up at 1006, the calendar, the
 # package, os's settings, the port's data and no saves. The recording replays headless, then with --window --unpaced,
-# and each must print the record run's play line, its record line, named replay, and its saves line.
+# and each must print the record run's play line, its record line, named replay, and its saves line. The record run and
+# the headless replay write their state hashes, each a line for each tick boundary, ticks consecutive from 0: the
+# replay's 1200, one for each tick recorded, and its file must be a prefix of the record run's.
 #
 # SET_SCRIPT is recorded unpaced with --set sonar.system.progressive_scan=true. show must give progressive scan in its
 # settings, the clock offset changed at tick 300 and the first run's card, and its replays its record run's lines,
@@ -55,8 +57,10 @@ set(replay_user "${OUT_DIR}/replay_user")
 set(first "${OUT_DIR}/title_input.slir")
 set(second "${OUT_DIR}/title_input_set.slir")
 set(refused "${OUT_DIR}/refused.slir")
+set(record_hashes "${OUT_DIR}/record_hashes.txt")
+set(replay_hashes "${OUT_DIR}/replay_hashes.txt")
 file(REMOVE_RECURSE "${user}" "${replay_user}")
-file(REMOVE "${first}" "${second}" "${refused}")
+file(REMOVE "${first}" "${second}" "${refused}" "${record_hashes}" "${replay_hashes}")
 
 set(count "[0-9]+")
 set(line_pattern "ac_port: [a-z]+ tick ${count} retrace ${count} gx ${count} dvd ${count} ${count} hash [0-9a-f]+")
@@ -89,6 +93,41 @@ function(tail_of text out)
         string(SUBSTRING "${text}" ${from} -1 text)
     endif()
     set(${out} "${text}" PARENT_SCOPE)
+endfunction()
+
+# Fails unless the state hashes file holds a line for each tick boundary, the tick and the hash as 16 hex digits, its
+# ticks consecutive from 0, and sets out to its contents and lines_out to its lines' count.
+function(read_hashes name file out lines_out)
+    if(NOT EXISTS "${file}")
+        message(FATAL_ERROR "ac_port_record: ${name} wrote no state hashes")
+    endif()
+    file(STRINGS "${file}" hash_lines)
+    set(expected 0)
+    foreach(hash_line IN LISTS hash_lines)
+        set(tick "")
+        if(hash_line MATCHES "^([0-9]+) [0-9a-f]+$")
+            set(tick "${CMAKE_MATCH_1}")
+        endif()
+        if(NOT tick STREQUAL expected)
+            message(FATAL_ERROR "ac_port_record: ${name}'s state hashes have no line for tick ${expected}:\n"
+                                "${hash_line}")
+        endif()
+        string(LENGTH "${hash_line}" length)
+        string(LENGTH "${tick}" tick_length)
+        math(EXPR hash_length "${length} - ${tick_length} - 1")
+        if(NOT hash_length EQUAL 16)
+            message(FATAL_ERROR "ac_port_record: ${name}'s hash at tick ${expected} is not 16 hex digits:\n"
+                                "${hash_line}")
+        endif()
+        math(EXPR expected "${expected} + 1")
+    endforeach()
+    if(expected EQUAL 0)
+        message(FATAL_ERROR "ac_port_record: ${name}'s state hashes are empty")
+    endif()
+    message("${name}: ${expected} state hashes, ticks 0 to ${tick}")
+    file(READ "${file}" text)
+    set(${out} "${text}" PARENT_SCOPE)
+    set(${lines_out} ${expected} PARENT_SCOPE)
 endfunction()
 
 # Records `script` into `recording` with the further arguments given, and checks the run's lines, its saves line and
@@ -135,16 +174,31 @@ function(check_show name recording)
 endfunction()
 
 # Replays `recording` headless, then in a window, unpaced, and checks that each prints the lines in `name`_lines,
-# the record line named replay, and the saves line in `name`_saves.
+# the record line named replay, and the saves line in `name`_saves. Given the record run's state hashes file, the
+# headless replay writes its own to replay_hashes, a line for each tick recorded, which must begin the record run's.
 function(check_replays name recording)
     set(expected "${${name}_lines}")
     string(REPLACE "ac_port: record " "ac_port: replay " expected "${expected}")
-    run_port(--replay "${recording}")
+    set(hash_arguments "")
+    if(ARGC GREATER 2)
+        set(hash_arguments --state-hashes "${replay_hashes}")
+    endif()
+    run_port(--replay "${recording}" ${hash_arguments})
     message("${name} headless replay: exit ${result}, ${seconds} s:\n${lines}\n${saves_line}")
     if(NOT result EQUAL 0 OR NOT lines STREQUAL expected OR NOT saves_line STREQUAL "${${name}_saves}")
         tail_of("${errors}" errors)
         message(FATAL_ERROR "ac_port_record: the ${name} recording's headless replay did not print the record run's "
                             "lines and its saves line:\n${lines}\n${saves_line}\n${expected}\n${errors}")
+    endif()
+    if(ARGC GREATER 2)
+        read_hashes("the ${name} record run" "${ARGV2}" record_text record_count)
+        read_hashes("the ${name} headless replay" "${replay_hashes}" replay_text replay_count)
+        string(LENGTH "${replay_text}" length)
+        string(SUBSTRING "${record_text}" 0 ${length} start)
+        if(NOT replay_count EQUAL 1200 OR NOT start STREQUAL replay_text)
+            message(FATAL_ERROR "ac_port_record: the ${name} recording's headless replay did not write 1200 state "
+                                "hashes that begin the record run's")
+        endif()
     endif()
     run_port(--window --user-dir "${replay_user}" --unpaced --replay "${recording}")
     message("${name} window replay: exit ${result}, ${seconds} s:\n${lines}\n${saves_line}\n${window_line}")
@@ -174,12 +228,12 @@ set(common_lines "version 2" "ticks 1200 retraces 1200 events 3" "packages 1"
                  "event 2 tick 1006 retrace 1006 port 0 start up")
 
 # The title's input, paced.
-record(first "${first}" "${SCRIPT}")
+record(first "${first}" "${SCRIPT}" --state-hashes "${record_hashes}")
 if(seconds LESS 20)
     message(FATAL_ERROR "ac_port_record: the paced record run took ${seconds} s, less than its 20 s")
 endif()
 check_show(first "${first}" ${common_lines} "set sonar.system.progressive_scan=false" "saves 0")
-check_replays(first "${first}")
+check_replays(first "${first}" "${record_hashes}")
 
 # The same with progressive scan on from the start and the clock offset set at tick 300, unpaced.
 record(second "${second}" "${SET_SCRIPT}" --unpaced --set sonar.system.progressive_scan=true)
