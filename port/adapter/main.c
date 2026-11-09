@@ -1,6 +1,7 @@
 /* ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--reference]
            [--window [--user-dir <dir>] [--set <key>=<value>]...
-                     [--replay <recording> [--unpaced] | --record <recording> [--input-script <script>] [--unpaced]]
+                     [--replay <recording> [--unpaced]
+                      | --record <recording> [--input-script <script>] [--date <date>] [--unpaced]]
             | --goldens <scenes> <dir> | --measure [--present-hz <n>] | --replay <recording>] [--qrand-seed <hex>]:
    Animal Crossing on sonarlib
    (port/NOTES.md, The program). The process's main thread starts the library and the render module, makes the emu64
@@ -18,17 +19,19 @@
    --user-dir's directory, keeps the settings in config:settings.toml with each --set over them for the run, keeps the
    memory cards in the save store at user:saves, the card in each slot by its setting, card-a in slot A unless the
    settings name another, and shows sonarlib's overlay on F1 (port/NOTES.md, The window; README.md, Saves). Every
-   other run mounts no user directory, reads no settings file and puts no card in either slot, and only a replay
-   registers a setting, os's. With --replay, the window plays the recording from its start, as headless does,
-   deterministic and paced by the host, so frame for frame as headless at the game's speed, or as fast as it can with
-   --unpaced, with no save store and no card in either slot. The replay's end prints the replay line and ends the loop
+   other run mounts no user directory and reads no settings file, and only a replay registers a setting, os's, and
+   the cards' when its recording carries saves. With --replay, the window plays the recording from its start, as
+   headless does, deterministic and paced by the host, so frame for frame as headless at the game's speed, or as fast
+   as it can with --unpaced, never on the player's saves. The replay's end prints the replay line and ends the loop
    (port/NOTES.md, Replays).
 
-   --record, with --window and --ticks: the window records its input to the file from tick 0, deterministic and paced
-   by the host, or as fast as it can with --unpaced, at the host's calendar, with os's settings bound as play binds
-   them, no save store and no card in either slot. --input-script loads a device script (sonar/input.h) for the
-   devices, in place of the host's. At the limit the recording ends, the record line is printed, named record, and
-   the loop ends: exit 0, or 1 when the recording failed (port/NOTES.md, Recording).
+   --record, with --window: the window records its input to the file from tick 0, deterministic and paced by the
+   host, or as fast as it can with --unpaced, at the host's calendar or --date's, with os's settings and the cards'
+   bound as play binds them, on the player's save store, whose saves at the start the recording carries.
+   --input-script loads a device script (sonar/input.h) for the devices, in place of the host's. The recording ends
+   at --ticks's limit when it is given, and at the window's close: the record line is printed, named record, then the
+   saves line, and the loop ends: exit 0, or 1 when the recording failed or did not end within 5 s of the close
+   (port/NOTES.md, Recording).
 
    --goldens: headless and deterministic, but on the GPU sink with no window, writing the frames the scenes file names
    into the directory (sonar/goldens.h, port/NOTES.md, Goldens). The GX glue's frame begin hands each frame's keys to
@@ -47,15 +50,18 @@
    --replay: headless and deterministic, the pads read from an input recording (sonar/input.h; --record makes one,
    and sonarlib's sl-replay builds one from a script), which the main thread starts before os, so it plays from tick
    0, with os's settings bound and given the recorded ones, os at the recorded calendar, else at the headless one, and
-   the recorded seed. Play's first frame prints the play line and ends no run, and when the replay ends, at the tick
-   after its last, the run prints the report, named replay, and ends, exit 0. Each line names the scene. No tick limit
-   applies unless --ticks gives one (port/NOTES.md, Replays). With --window, above. */
+   the recorded seed. A recording that carries saves plays on a memory store seeded from them, with the cards'
+   settings bound and given the recorded slots; one that carries none has no card in either slot. Play's first frame
+   prints the play line and ends no run, and when the replay ends, at the tick after its last, the run prints the
+   report, named replay, then the saves line when it has a store, and ends, exit 0. Each line names the scene. No tick
+   limit applies unless --ticks gives one (port/NOTES.md, Replays). With --window, above. */
 #include "ac_port.h"
 
 #include <port/emu64_glue.h>
 #include <port/goldens.h>
 
 #include <sonar/audio.h>
+#include <sonar/base/hash.h>
 #include <sonar/card/memcard.h>
 #include <sonar/emu64/emu64.h>
 #include <sonar/fs.h>
@@ -79,13 +85,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 int ac_boot_main(int argc, const char** argv); /* src/static/boot.c's main */
 
 static const char usage[] = "usage: ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--reference]\n"
                             "               [--window [--user-dir <dir>] [--set <key>=<value>]...\n"
                             "                         [--replay <recording> [--unpaced]\n"
-                            "                          | --record <recording> [--input-script <script>] [--unpaced]]\n"
+                            "                          | --record <recording> [--input-script <script>] [--date <date>]\n"
+                            "                                     [--unpaced]]\n"
                             "                | --goldens <scenes> <dir> | --measure [--present-hz <n>]\n"
                             "                | --replay <recording>]\n"
                             "               [--qrand-seed <hex>]\n";
@@ -109,10 +117,14 @@ static sl_input_replay_info replay_info; /* and what it says about its start */
 static const char* record;               /* --record's recording */
 static FILE* record_file;                /* opened before the game thread starts; closed at the recording's end */
 static int record_stopping;              /* sl_input_record_stop was called, at the retrace before the record line's */
-static sl_result record_result;          /* how the recording ended, set before run_ended */
+static sl_result run_result;             /* how a window replay or recording ended, set before run_ended */
 static const char* input_script;         /* --input-script's script */
+static atomic_int record_closed;         /* the window closed during a recording, which ends it (stop_at_limit) */
+static int date_given;                   /* --date */
+static sl_os_calendar date_start;        /* and its date and time, a recording's start calendar */
 static int unpaced;                      /* --unpaced: a window replay or recording as fast as it can */
 static atomic_int run_ended;             /* a window replay's or recording's end, which ends the present loop */
+static sl_save_store card_store;         /* the cards' store: the player's (start_saves) or a replay's (seed_saves) */
 
 /* --window's settings. */
 static const char* user_dir;        /* --user-dir */
@@ -196,15 +208,82 @@ static void presents_report(void) {
     printf("\n");
 }
 
+/* The saves line's names, from sl_save_list, whose callback may not call into the store. */
+typedef char save_name[SL_SAVE_MAX_NAME + 1];
+static save_name* save_names;
+static uint32_t save_name_count;
+static uint32_t save_name_capacity;
+
+static int list_save(void* user, const char* name) {
+    if (save_name_count == save_name_capacity) {
+        const uint32_t capacity = save_name_capacity != 0 ? save_name_capacity * 2 : 16;
+        save_name* grown = realloc(save_names, capacity * sizeof *save_names); /* never freed: free is the game's */
+        if (grown == NULL) {
+            *(int*)user = 1;
+            return 1;
+        }
+        save_names = grown;
+        save_name_capacity = capacity;
+    }
+    snprintf(save_names[save_name_count++], sizeof *save_names, "%s", name);
+    return 0;
+}
+
+/* The saves line, after a record or replay line, for a run with a store: the store's saves, then sl_hash64 over each
+   one's name, with its terminating zero, and its sl_save_export bytes, in sl_save_list's order, each seeded with the
+   hash before. On the game thread at a retrace, where no card call runs. SL_OK with no store. */
+static sl_result saves_report(void) {
+    static unsigned char* bytes; /* never freed, as the names */
+    static size_t capacity;
+    uint64_t hash = 0;
+    int out_of_memory = 0;
+    uint32_t i;
+    sl_result result;
+    if (card_store.id == 0)
+        return SL_OK;
+    save_name_count = 0;
+    result = sl_save_list(card_store, list_save, &out_of_memory);
+    if (result == SL_OK && out_of_memory)
+        result = SL_ERROR_OUT_OF_MEMORY;
+    for (i = 0; result == SL_OK && i < save_name_count; i++) {
+        size_t size = 0;
+        result = sl_save_export(card_store, save_names[i], NULL, 0, &size);
+        if (result == SL_OK && size > capacity) {
+            unsigned char* grown = realloc(bytes, size);
+            if (grown == NULL) {
+                result = SL_ERROR_OUT_OF_MEMORY;
+            } else {
+                bytes = grown;
+                capacity = size;
+            }
+        }
+        if (result == SL_OK)
+            result = sl_save_export(card_store, save_names[i], bytes, capacity, &size);
+        if (result == SL_OK) {
+            hash = sl_hash64(save_names[i], strlen(save_names[i]) + 1, hash);
+            hash = sl_hash64(bytes, size, hash);
+        }
+    }
+    if (result != SL_OK) {
+        fprintf(stderr, "ac_port: the saves line: %s\n", sl_result_string(result));
+        fflush(stderr);
+        return result;
+    }
+    printf("ac_port: saves %" PRIu32 " hash %016" PRIx64 "\n", save_name_count, hash);
+    fflush(stdout);
+    return SL_OK;
+}
+
 /* Ends the run once the runtime has begun the limit's ticks without a frame of play; with --goldens, stops the
    captures, and the main thread ends the run. With --measure, once play was reached, stops the measured run and
    prints its two lines and the report, here on the game thread at a retrace, while no present runs: the game thread
    waits in sl_measure_frame for each frame's presents. With --replay, first ends the run once the replay has ended,
-   with the report, named replay. In a window, the only runs it is registered for are a replay's, for which it prints
-   the report once and tells the present loop, which ends the run, as it does at --ticks's limit, and a recording's:
-   at the retrace where the runtime has begun the limit's ticks it stops the recording, which ends at that tick's
-   boundary, after the retrace callbacks, and one retrace later, where a replay of it ends, it closes the file, prints
-   the report, named record, and tells the present loop. */
+   with the report, named replay, and the saves line. In a window, the only runs it is registered for are a replay's,
+   for which it prints the two lines once and tells the present loop, which ends the run, as it does at --ticks's
+   limit, and a recording's: at the retrace where the runtime has begun the limit's ticks, or the first after the
+   window closed, it stops the recording, which ends at that tick's boundary, after the retrace callbacks, and one
+   retrace later, where a replay of it ends, it closes the file, prints the report, named record, and the saves line,
+   and tells the present loop. */
 static void stop_at_limit(void* user, uint64_t retrace) {
     (void)user;
     (void)retrace;
@@ -212,25 +291,29 @@ static void stop_at_limit(void* user, uint64_t retrace) {
         if (window) {
             if (!atomic_load(&run_ended)) {
                 ac_port_report("replay");
+                run_result = saves_report();
                 atomic_store(&run_ended, 1);
             }
             return;
         }
         ac_port_report("replay");
-        _Exit(0);
+        _Exit(saves_report() == SL_OK ? 0 : 1);
     }
     if (record != NULL) {
         if (record_stopping && !atomic_load(&run_ended)) {
             sl_result result = sl_input_record_status();
+            sl_result saves;
             if (fclose(record_file) != 0 && result == SL_OK)
                 result = SL_ERROR_IO;
             record_file = NULL;
             ac_port_report("record");
+            saves = saves_report();
             if (result != SL_OK)
                 fprintf(stderr, "ac_port: %s: the recording failed: %s\n", record, sl_result_string(result));
-            record_result = result;
+            run_result = result != SL_OK ? result : saves;
             atomic_store(&run_ended, 1);
-        } else if (!record_stopping && sl_tick_count() >= tick_limit) {
+        } else if (!record_stopping &&
+                   ((ticks_given && sl_tick_count() >= tick_limit) || atomic_load(&record_closed))) {
             const sl_result result = sl_input_record_stop();
             if (result != SL_OK)
                 fprintf(stderr, "ac_port: %s: sl_input_record_stop: %s\n", record, sl_result_string(result));
@@ -295,6 +378,36 @@ static int parse_seed(const char* text, u32* value) {
         return 0;
     *value = (u32)parsed;
     return 1;
+}
+
+/* --date's local date and time, YYYY-MM-DDTHH:MM:SS, a date that is one, from 2000 on. */
+static int parse_date(const char* text, sl_os_calendar* out) {
+    static const char pattern[] = "dddd-dd-ddTdd:dd:dd";
+    int32_t fields[6] = { 0 };
+    int field = 0;
+    uint64_t ticks;
+    size_t i;
+    if (strlen(text) != sizeof pattern - 1)
+        return 0;
+    for (i = 0; i < sizeof pattern - 1; i++) {
+        if (pattern[i] != 'd') {
+            if (text[i] != pattern[i])
+                return 0;
+            field++;
+        } else if (text[i] >= '0' && text[i] <= '9') {
+            fields[field] = fields[field] * 10 + (text[i] - '0');
+        } else {
+            return 0;
+        }
+    }
+    memset(out, 0, sizeof *out);
+    out->year = fields[0];
+    out->month = fields[1];
+    out->day = fields[2];
+    out->hour = fields[3];
+    out->minute = fields[4];
+    out->second = fields[5];
+    return sl_os_calendar_to_ticks(out, &ticks) == SL_OK; /* refuses a field out of range and a year before 2000 */
 }
 
 /* The scenes the goldens wrote: scenes.tsv's lines. */
@@ -405,6 +518,7 @@ static void* game_main(void* arg) {
         desc.write = write_record;
         desc.port_data = data; /* copied at the start */
         desc.port_data_size = sizeof data;
+        desc.saves = card_store; /* the player's saves as they are now, before CARDInit */
         result = sl_input_record_start(&desc);
         if (result != SL_OK) {
             fprintf(stderr, "ac_port: %s: sl_input_record_start: %s\n", record, sl_result_string(result));
@@ -469,21 +583,20 @@ static sl_result start_fs(void) {
 }
 
 /* --window's memory cards, after sl_fs_init: a save store on user:saves, keeping two backups of each save, for
-   CARDInit to keep the cards in. The settings bind puts them in the slots (main). A replay and a recording have
-   neither. Returns 0, or main's exit code. */
+   CARDInit to keep the cards in, and a recording to carry. The settings bind puts them in the slots (main). A replay
+   never has the player's (seed_saves). Returns 0, or main's exit code. */
 static int start_saves(void) {
     sl_save_store_desc desc;
-    sl_save_store store;
     sl_result result = sl_fs_user_dir(SL_USER_DIR_SAVES, saves_path, sizeof saves_path, NULL);
     if (result != SL_OK)
         return failed("sl_fs_user_dir", result);
     memset(&desc, 0, sizeof desc);
     desc.path = NULL; /* user:saves */
     desc.backups = 2;
-    result = sl_save_store_open(&desc, &store);
+    result = sl_save_store_open(&desc, &card_store);
     if (result != SL_OK)
         return failed("sl_save_store_open", result);
-    ac_card_set_store(store);
+    ac_card_set_store(card_store);
     return 0;
 }
 
@@ -539,9 +652,9 @@ static int start_settings(void) {
 
 /* After the last bind, each --set must name a registered setting that holds its override: one naming a key nothing
    registers, or with a value its setting refused at registration (logged then), is a usage error naming the
-   assignment. A replay and a recording register no card's setting, so one naming them is too, and a replay takes
-   every setting that reaches the game, its TICK settings, from the recording, so one naming them is too. Returns 0,
-   or main's exit code. */
+   assignment. A replay of a recording without saves registers no card's setting, so one naming them is too, and a
+   replay takes every setting that reaches the game, its TICK settings, from the recording, so one naming them is
+   too. Returns 0, or main's exit code. */
 static int check_assignments(void) {
     int i;
     for (i = 0; i < assignment_count; i++) {
@@ -586,7 +699,8 @@ static int check_assignments(void) {
    Crossing page with the controls, as input's GameCube profile binds them by default, the files' host paths, and the
    card in each slot, which the page edits (the kit's settings; sonarlib's Settings page lists only sonar.* keys). A
    page's text is copied when it is added, so it cannot show that a slot was left empty for a name the kit refused.
-   A replay and a recording have no save store and no card, so their page says so. Returns 0, or main's exit code. */
+   A replay never has the player's save store, so its page says which cards it has instead. Returns 0, or main's
+   exit code. */
 static int start_overlay(void) {
     static char settings_line[sizeof settings_path + 32];
     static char user_line[sizeof user_path + 32];
@@ -618,18 +732,18 @@ static int start_overlay(void) {
     items[count++].text = settings_line;
     items[count].type = SL_UI_ITEM_TEXT;
     items[count++].text = user_line;
-    if (replay == NULL && record == NULL) {
+    if (replay == NULL) {
         items[count].type = SL_UI_ITEM_TEXT;
         items[count++].text = saves_line;
     }
     items[count].type = SL_UI_ITEM_SECTION;
     items[count++].text = "Memory cards";
-    if (replay != NULL) {
+    if (replay != NULL && card_store.id == 0) {
         items[count].type = SL_UI_ITEM_TEXT;
-        items[count++].text = "A replay runs with no card in either slot, as headless.";
-    } else if (record != NULL) {
+        items[count++].text = "The recording carries no saves, so the replay runs with no card in either slot.";
+    } else if (replay != NULL) {
         items[count].type = SL_UI_ITEM_TEXT;
-        items[count++].text = "A recording runs with no card in either slot.";
+        items[count++].text = "A replay runs on its recording's cards, in memory, never on the saves directory's.";
     } else {
         items[count].type = SL_UI_ITEM_SETTING; /* a change applies at the tick boundary, so its widget marks it */
         items[count++].text = "kit.card.slot_a";
@@ -649,17 +763,48 @@ static int start_overlay(void) {
     return 0;
 }
 
+/* A replay's cards, before os starts, so before CARDInit: for a recording that carries saves, even none, a memory
+   store, keeping two backups of each save, seeded from them, and the cards' settings bound, which the replay gives
+   the recorded slots. The player's saves are never read or changed. A recording without saves has no store and no
+   card in either slot. Returns 0, or main's exit code. */
+static int seed_saves(void) {
+    sl_save_store_desc desc;
+    sl_result result;
+    if (!replay_info.has_saves)
+        return 0;
+    memset(&desc, 0, sizeof desc);
+    desc.flags = SL_SAVE_STORE_MEMORY;
+    desc.backups = 2;
+    result = sl_save_store_open(&desc, &card_store);
+    if (result != SL_OK)
+        return failed("sl_save_store_open", result);
+    result = sl_input_replay_import_saves(replay_data, replay_size, card_store);
+    if (result != SL_OK) {
+        fprintf(stderr, "ac_port: %s: sl_input_replay_import_saves: %s\n", replay, sl_result_string(result));
+        return 1;
+    }
+    ac_card_set_store(card_store);
+    result = sl_memcard_settings_bind("card-a", NULL);
+    if (result != SL_OK)
+        return failed("sl_memcard_settings_bind", result);
+    return 0;
+}
+
 /* Every replay's start, headless and in a window, on the main thread after the mount and sl_input_init and before
-   os starts: binds os's settings headless, as --window's start_settings did, then starts the replay, which checks
-   the recorded packages against the one mounted and puts the recorded settings in effect at once, so os starts with
-   them and the replay holds every partition from tick 0. Returns 0, or main's exit code. */
+   os starts: binds os's settings headless, as --window's start_settings did, seeds the cards' store, then starts the
+   replay, which checks the recorded packages against the one mounted and puts the recorded settings in effect at
+   once, so os starts with them and the replay holds every partition from tick 0. Returns 0, or main's exit code. */
 static int start_replay(void) {
     sl_result result;
+    int code;
     if (!window) {
         result = sl_os_settings_bind();
         if (result != SL_OK)
             return failed("sl_os_settings_bind", result);
     }
+    code = seed_saves();
+    if (code != 0)
+        return code;
     result = sl_input_replay_start(replay_data, replay_size);
     if (result == SL_ERROR_VERSION_MISMATCH) {
         fprintf(stderr, "ac_port: %s was recorded with another package; import the disc it was recorded from\n",
@@ -706,11 +851,21 @@ static uint64_t whole_hz(sl_rate rate) {
     return sl_rate_is_valid(rate) ? ((uint64_t)rate.num + rate.den / 2) / rate.den : 0;
 }
 
+/* The host's wall clock in seconds, for a recording's end after the window's close. */
+static double host_seconds(void) {
+    struct timespec now;
+    if (timespec_get(&now, TIME_UTC) == 0)
+        return 0.0;
+    return (double)now.tv_sec + (double)now.tv_nsec * 1e-9;
+}
+
 /* --window's main loop: presents the latest submitted frame, at the clock's alpha for the image's presentation time
    (1 for a stale window), with the overlay over it, until the window is closed, with --ticks the runtime has begun
-   the limit's ticks, or a replay or a recording has ended. The pump updates input. The settings are saved when they
-   changed, while the overlay is hidden and at the end, before the window line. A recording's run exits 0 only when
-   the recording ended with every write done, so not when the window closed first. Never returns. */
+   the limit's ticks, or a replay or a recording has ended. The pump updates input. A recording's close, the player's
+   or a device script's, ends the recording (stop_at_limit) and the loop goes on presenting until it has ended; one
+   not ended 5 s after the close ends the run, exit 1. The settings are saved when they changed, while the overlay is
+   hidden and at the end, before the window line. A recording's run exits 0 only when the recording ended with every
+   write done. Never returns. */
 static void present(sl_window shown) {
     static const char* const pacings[] = { "vsync", "mailbox", "immediate", "limiter" };
     char cards[2][SL_MEMCARD_CARD_NAME_MAX + 1];
@@ -718,17 +873,30 @@ static void present(sl_window shown) {
     uint64_t frames = 0;
     uint64_t last = 0;
     int closed = 0;
+    double closed_at = 0.0;
     for (;;) {
         sl_window_info info;
         sl_resolved_frame resolved;
         sl_ui_frame_desc overlay;
         uint64_t now;
         float alpha;
+        int closing;
         sl_window_pump();
         memset(&info, 0, sizeof info);
-        if (sl_window_quit_requested() || (sl_window_get_info(shown, &info) == SL_OK && info.close_requested)) {
-            closed = 1;
-            break;
+        closing = sl_window_get_info(shown, &info) == SL_OK && info.close_requested;
+        if (sl_window_quit_requested() || closing) {
+            if (record == NULL) {
+                closed = 1;
+                break;
+            }
+            if (!atomic_load(&record_closed)) {
+                closed_at = host_seconds();
+                atomic_store(&record_closed, 1);
+            } else if (!atomic_load(&run_ended) && host_seconds() - closed_at >= 5.0) {
+                fprintf(stderr, "ac_port: %s: the recording did not end after the window closed\n", record);
+                fflush(stderr);
+                _Exit(1);
+            }
         }
         if ((ticks_given && record == NULL && sl_tick_count() >= tick_limit) || atomic_load(&run_ended))
             break; /* a recording's run ends at its end, after the limit (stop_at_limit) */
@@ -770,12 +938,9 @@ static void present(sl_window shown) {
            whole_hz(info.frame_limit), (double)sl_audio_output_gain(), render.pipelines, render.pipelines_warmed,
            render.pipeline_lists_written, cards[0], cards[1]);
     fflush(stdout);
-    if (record != NULL) {
-        if (!atomic_load(&run_ended))
-            fprintf(stderr, "ac_port: %s: the window closed before the recording's end\n", record);
-        _Exit(atomic_load(&run_ended) && record_result == SL_OK ? 0 : 1);
-    }
-    _Exit(closed || ac_play_reached() || atomic_load(&run_ended) ? 0 : 1);
+    if (record != NULL)
+        _Exit(atomic_load(&run_ended) && run_result == SL_OK ? 0 : 1);
+    _Exit((closed || ac_play_reached() || atomic_load(&run_ended)) && run_result == SL_OK ? 0 : 1);
 }
 
 int main(int argc, char** argv) {
@@ -825,6 +990,10 @@ int main(int argc, char** argv) {
             ac_replay_enable(); /* each line names the scene, as a replay's, whose line the record line is */
         } else if (strcmp(argv[i], "--input-script") == 0 && i + 1 < argc && input_script == NULL) {
             input_script = argv[++i];
+        } else if (strcmp(argv[i], "--date") == 0 && i + 1 < argc && !date_given) {
+            if (!parse_date(argv[++i], &date_start))
+                return usage_error();
+            date_given = 1;
         } else if (strcmp(argv[i], "--unpaced") == 0) {
             unpaced = 1;
         } else if (strcmp(argv[i], "--qrand-seed") == 0 && i + 1 < argc) {
@@ -847,10 +1016,10 @@ int main(int argc, char** argv) {
         return usage_error(); /* only --window keeps the player's directories and settings */
     if (replay != NULL && (goldens != NULL || measure || ac_diff_enabled() || ac_reference_enabled()))
         return usage_error(); /* a replay runs on the kit, headless or in a window */
-    if (record != NULL && (!window || !ticks_given || replay != NULL))
-        return usage_error(); /* a recording is a window's, to the tick limit */
-    if (input_script != NULL && record == NULL)
-        return usage_error(); /* a script's devices play only into a recording */
+    if (record != NULL && (!window || replay != NULL))
+        return usage_error(); /* a recording is a window's, to the tick limit or the close */
+    if ((input_script != NULL || date_given) && record == NULL)
+        return usage_error(); /* a script's devices play, and --date starts the clock, only for a recording */
     if (unpaced && ((replay == NULL && record == NULL) || !window))
         return usage_error(); /* only a window's replay or recording is paced */
     if (replay != NULL) {
@@ -879,7 +1048,7 @@ int main(int argc, char** argv) {
         result = start_fs();
         if (result != SL_OK)
             return failed("sl_fs_init", result);
-        code = replay != NULL || record != NULL ? 0 : start_saves(); /* no cards, as headless */
+        code = replay != NULL ? 0 : start_saves(); /* a replay's own (seed_saves) */
         if (code == 0)
             code = start_settings();
         if (code != 0)
@@ -969,8 +1138,12 @@ int main(int argc, char** argv) {
            recording connects it, with no backend. --window, the GameCube profile with its default bindings: the
            keyboard on port 0, each gamepad on the first free one, as the window's pump reports them, from the
            window's creation below; before the game's first PADRead. A replay holds the ports, and live input waits
-           behind it. */
-        result = sl_input_init(NULL);
+           behind it. A device script's steps are all queued at its load (sonar/input.h), so a run with one gets a
+           queue that holds the longest of port/tests' scripts. */
+        sl_input_desc input;
+        memset(&input, 0, sizeof input);
+        input.event_capacity = input_script != NULL ? 1u << 16 : 0;
+        result = sl_input_init(&input);
         if (result != SL_OK)
             return failed("sl_input_init", result);
     }
@@ -981,8 +1154,8 @@ int main(int argc, char** argv) {
     }
     {
         /* Headless: 2001-12-14 12:00:00.000, a Friday, the year's 348th day, deterministic. A replay: the recorded
-           calendar, else that one. --window: the host's clock, and a recording deterministic from the host's
-           calendar, which the recording holds. */
+           calendar, else that one. --window: the host's clock, and a recording deterministic from --date's calendar,
+           else the host's, which the recording holds. */
         sl_os_calendar start;
         sl_os_desc desc;
         memset(&start, 0, sizeof start);
@@ -996,6 +1169,8 @@ int main(int argc, char** argv) {
         desc.deterministic = !window || replay != NULL || record != NULL;
         if (replay != NULL && replay_info.has_calendar)
             desc.start_calendar = &replay_info.calendar;
+        else if (date_given)
+            desc.start_calendar = &date_start;
         else if (desc.deterministic && record == NULL)
             desc.start_calendar = &start;
         result = sl_os_start(&desc);
@@ -1039,8 +1214,8 @@ int main(int argc, char** argv) {
         if (result != SL_OK)
             return failed("sl_input_settings_bind", result);
         /* The card in each slot, which CARDInit puts in: card-a in slot A and none in B unless the settings or --set
-           name others. A replay and a recording bind none, so both slots stay empty. */
-        if (replay == NULL && record == NULL) {
+           name others. A replay binds them only when its recording carries saves (seed_saves). */
+        if (replay == NULL) {
             result = sl_memcard_settings_bind("card-a", NULL);
             if (result != SL_OK)
                 return failed("sl_memcard_settings_bind", result);

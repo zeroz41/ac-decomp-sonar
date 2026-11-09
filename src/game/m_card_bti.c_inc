@@ -29,7 +29,20 @@ static u8* mCD_set_bti_data(u8* data, int res_fileNo, int tlut_size, int count, 
         }
 
         pal_p = (u16*)((u8*)(buf) + buf->mPaletteOffset);
+#ifdef SONAR_PORT /* sonarlib port: the palette's own bytes and zeros to pal_size, as SetupResIcon does (famicom.cpp),
+                     not the bytes past a shorter palette, which on the host hold the next heap block's host pointer */
+        {
+            int own = buf->mPaletteEntryCount * (int)sizeof(u16);
+
+            if (own > pal_size) {
+                own = pal_size;
+            }
+            bcopy(pal_p, data, own);
+            bzero(data + own, pal_size - own);
+        }
+#else
         bcopy(pal_p, data, pal_size);
+#endif
         data += pal_size;
         zelda_free(buf);
     }

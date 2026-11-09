@@ -1,6 +1,7 @@
 /* Checks the port's card functions (adapter/dolphin_card.c) on a memory store: a card inserted before CARDInit, the
-   calls that return their result and those that complete in interrupt context, the status the game reads and
-   writes, a file kept across an eject, and the game's files through the views (ac_saves.c) with their time. */
+   calls that return their result and those that complete in interrupt context, a busy result polled on the game
+   thread, the status the game reads and writes, a file kept across an eject, and the game's files through the views
+   (ac_saves.c) with their time. */
 /* card.h takes the OS types from os.h. */
 #include "dolphin/os.h"
 #include "dolphin/card.h"
@@ -219,23 +220,32 @@ int main(void) {
     CHECK(CARDFreeBlocks(0, &bytes, NULL) == CARD_RESULT_READY);
     CHECK(bytes == 249 * 8192);
 
-    /* With Async the result waits for the interrupt, BUSY until then, with or without a callback. */
+    /* With Async the result waits for the interrupt, BUSY until then while interrupts are disabled, as on the
+       console. */
     memset(back, 0, sizeof back);
     CHECK(CARDReadAsync(&info, back, sizeof back, 0, card_done) == CARD_RESULT_READY);
-    CHECK(CARDGetResultCode(0) == CARD_RESULT_BUSY);
-    CHECK(CARDRead(&info, back, CARD_READ_SIZE, 0) == CARD_RESULT_BUSY);
-    CHECK(called_count == 0);
+    {
+        const int enabled = sl_os_irq_disable();
+        CHECK(CARDGetResultCode(0) == CARD_RESULT_BUSY);
+        CHECK(CARDRead(&info, back, CARD_READ_SIZE, 0) == CARD_RESULT_BUSY);
+        CHECK(called_count == 0);
+        sl_os_irq_restore(enabled);
+    }
     CHECK(sl_os_irq_dispatch() == SL_OK);
     CHECK(called_count == 1 && called_in_interrupt == 1);
     CHECK(called_chan == 0 && called_result == CARD_RESULT_READY);
     CHECK(memcmp(back, data, sizeof data) == 0);
     CHECK(CARDGetResultCode(0) == CARD_RESULT_READY);
+    /* Polled on the game thread, as mCD_LoadLand's loop does, a busy slot delivers the interrupt first (sonarlib's
+       memcard.h), with or without a callback. */
     data[0] ^= 0xFF;
     CHECK(CARDWriteAsync(&info, data, 8192, 0, NULL) == CARD_RESULT_READY);
-    CHECK(CARDGetResultCode(0) == CARD_RESULT_BUSY);
-    CHECK(sl_os_irq_dispatch() == SL_OK);
     CHECK(CARDGetResultCode(0) == CARD_RESULT_READY);
     CHECK(called_count == 1);
+    CHECK(CARDReadAsync(&info, back, CARD_READ_SIZE, 0, card_done) == CARD_RESULT_READY);
+    CHECK(CARDGetResultCode(0) == CARD_RESULT_READY);
+    CHECK(called_count == 2 && called_in_interrupt == 2 && called_result == CARD_RESULT_READY);
+    CHECK(memcmp(back, data, CARD_READ_SIZE) == 0);
 
     /* The status the game reads, and the graphics it sets. */
     memset(&stat, 0, sizeof stat);
@@ -250,7 +260,7 @@ int main(void) {
     stat.commentAddr = 0x1C00;
     CHECK(CARDSetStatusAsync(0, info.fileNo, &stat, card_done) == CARD_RESULT_READY);
     CHECK(sl_os_irq_dispatch() == SL_OK);
-    CHECK(called_count == 2 && called_result == CARD_RESULT_READY);
+    CHECK(called_count == 3 && called_result == CARD_RESULT_READY);
     memset(&stat, 0, sizeof stat);
     CHECK(CARDGetStatus(0, info.fileNo, &stat) == CARD_RESULT_READY);
     CHECK(stat.bannerFormat == CARD_STAT_BANNER_RGB5A3 && stat.iconAddr == 0 && stat.commentAddr == 0x1C00);
@@ -280,13 +290,13 @@ int main(void) {
     /* Pulled out while mounted: the detach callback, then no card. Put back, the file is there. */
     ac_card_eject(0);
     CHECK(sl_os_irq_dispatch() == SL_OK);
-    CHECK(called_count == 3 && called_chan == 0 && called_result == CARD_RESULT_NOCARD);
+    CHECK(called_count == 4 && called_chan == 0 && called_result == CARD_RESULT_NOCARD);
     CHECK(CARDGetResultCode(0) == CARD_RESULT_NOCARD);
     CHECK(ac_card_insert(0, "card-a"));
     CHECK(!ac_card_insert(0, "card-a"));
     CHECK(CARDMountAsync(0, work, card_done, card_done) == CARD_RESULT_READY);
     CHECK(sl_os_irq_dispatch() == SL_OK);
-    CHECK(called_count == 4 && called_result == CARD_RESULT_READY);
+    CHECK(called_count == 5 && called_result == CARD_RESULT_READY);
     CHECK(CARDFastOpen(0, 0, &info) == CARD_RESULT_READY);
     CHECK(CARDRead(&info, back, sizeof back, 0) == CARD_RESULT_READY);
     CHECK(memcmp(back, data, sizeof data) == 0);
@@ -297,7 +307,7 @@ int main(void) {
     CHECK(CARDOpen(0, "renamed", &info) == CARD_RESULT_READY);
     CHECK(CARDDeleteAsync(0, "renamed", card_done) == CARD_RESULT_READY);
     CHECK(sl_os_irq_dispatch() == SL_OK);
-    CHECK(called_count == 5 && called_result == CARD_RESULT_READY);
+    CHECK(called_count == 6 && called_result == CARD_RESULT_READY);
     CHECK(CARDOpen(0, "renamed", &info) == CARD_RESULT_NOFILE);
     CHECK(CARDCreate(0, save_name, 8192, &info) == CARD_RESULT_READY);
     CHECK(CARDFastDelete(0, info.fileNo) == CARD_RESULT_READY);
@@ -306,8 +316,6 @@ int main(void) {
     /* Format, polled as the game does. */
     CHECK(CARDCreate(0, save_name, 8192, &info) == CARD_RESULT_READY);
     CHECK(CARDFormatAsync(0, NULL) == CARD_RESULT_READY);
-    CHECK(CARDGetResultCode(0) == CARD_RESULT_BUSY);
-    CHECK(sl_os_irq_dispatch() == SL_OK);
     CHECK(CARDGetResultCode(0) == CARD_RESULT_READY);
     CHECK(CARDOpen(0, save_name, &info) == CARD_RESULT_NOFILE);
 

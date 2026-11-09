@@ -26,6 +26,9 @@
 #include "nintendo_hi_0.h"
 #include "m_nmibuf.h"
 // #include "JSystem/J2D/J2DGrafContext.h" // needed for ~J2DOrthoGraph
+#ifdef SONAR_PORT
+#include <sonar/base/endian.h>
+#endif
 
 /* For some reason, there are a bunch of unused implicit one-byte 4-byte-aligned bss variables */
 #ifdef MUST_MATCH
@@ -595,6 +598,24 @@ static size_t getIconSizeFromFormat(u16 format) {
 static int SetupResBanner(const ResTIMG*, u8*, size_t, size_t*, u8*);
 static int SetupResIcon(const ResTIMG*, u8*, size_t, size_t*, u16*, u16*);
 
+#ifdef SONAR_PORT /* sonarlib port: famicom.arc's .bti.szs members keep the console's byte order, which the importer
+                     leaves as it is (port/NOTES.md, famicom.arc). Each fetch expands a fresh copy, so each site
+                     converts the header it fetched, once, to the host's order. */
+static ResTIMG* HostResTIMG(void* res) {
+    ResTIMG* img = (ResTIMG*)res;
+
+    if (img != nullptr) {
+        img->mSizeX = sl_bswap16(img->mSizeX);
+        img->mSizeY = sl_bswap16(img->mSizeY);
+        img->mPaletteEntryCount = sl_bswap16(img->mPaletteEntryCount);
+        img->mPaletteOffset = sl_bswap32(img->mPaletteOffset);
+        img->mLODBias = (s16)sl_bswap16((u16)img->mLODBias);
+        img->mImageDataOffset = sl_bswap32(img->mImageDataOffset);
+    }
+    return img;
+}
+#endif
+
 static void SetupExternCommentImage(u8* embedded_save_comment_img, u8* dst, u8* rom_file_comment_img) {
     size_t size;
 
@@ -635,7 +656,11 @@ static void SetupExternCommentImage(u8* embedded_save_comment_img, u8* dst, u8* 
             break;
         case MEMCARD_BANNER_TYPE_DEFAULT: {
             void* banner = JKRFileLoader::getGlbResource("/FAMICOM/newdisk_system.bti.szs");
+#ifdef SONAR_PORT /* sonarlib port: the header in the host's byte order (HostResTIMG) */
+            ResTIMG* banner_data = HostResTIMG(banner);
+#else
             ResTIMG* banner_data = (ResTIMG*)banner;
+#endif
             if (banner_data != nullptr) {
                 u8 banner_fmt;
                 SetupResBanner(banner_data, dst, 0x1800, &size, &banner_fmt);
@@ -667,7 +692,11 @@ static void SetupExternCommentImage(u8* embedded_save_comment_img, u8* dst, u8* 
             break;
         case MEMCARD_ICON_TYPE_DEFAULT: {
             void* icon = JKRFileLoader::getGlbResource("/FAMICOM/newdisk.bti.szs");
+#ifdef SONAR_PORT /* sonarlib port: the header in the host's byte order (HostResTIMG) */
+            ResTIMG* icon_data = HostResTIMG(icon);
+#else
             ResTIMG* icon_data = (ResTIMG*)icon;
+#endif
             if (icon_data != nullptr) {
                 u16 icon_fmts;
                 u16 icon_flags;
@@ -709,7 +738,11 @@ static void SetupInternalCommentImage(u8* data) {
 
     // Setup icon
     void* icon = JKRFileLoader::getGlbResource("/FAMICOM/famikon.bti.szs");
+#ifdef SONAR_PORT /* sonarlib port: the header in the host's byte order (HostResTIMG) */
+    ResTIMG* icon_res = HostResTIMG(icon);
+#else
     ResTIMG* icon_res = (ResTIMG*)icon;
+#endif
     if (icon_res != nullptr) {
         u16 icon_fmts;
         u16 icon_flags;
