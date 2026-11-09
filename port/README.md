@@ -86,13 +86,14 @@ Options:
 | `--window` | shows the game in a window, plays its sound, and reads the keyboard and gamepads; each image it shows blends the game's last two frames at the clock's alpha for the time it is shown |
 | `--user-dir <dir>` | with `--window`: keeps every user directory under `dir` instead of your own, the settings file at `dir/config/settings.toml`, the memory cards in `dir/saves` and the pipeline list in `dir/cache`, for a portable install |
 | `--set <key>=<value>` | with `--window`, any number of times: sets a setting for this run only, over the settings file, and never saves it, as in `--set sonar.audio.volume=30`. One that isn't `key=value`, names no setting the port has, or gives a value its setting doesn't take prints `ac_port: --set <key>=<value>: …` and exits with 2 before the game starts |
-| `--ticks <n>` | headless: gives up after `n` game frames if play hasn't started (3600 by default); with `--window` or `--measure`: quits after `n` game frames (no limit by default with `--window`) |
+| `--ticks <n>` | headless: gives up after `n` game frames if play hasn't started (3600 by default); with `--window`, `--measure` or `--replay`: quits after `n` game frames (no limit by default with `--window` or `--replay`) |
 | `--validate` | rechecks the game's display lists on every use |
 | `--diff` | draws each frame's 3D twice, once through sonarlib and once through the game's own renderer (emu64), and compares the two |
 | `--goldens <scenes> <dir>` | headless, on the GPU with no window: writes the frames a scenes file names into `dir`, for the goldens test |
 | `--measure` | headless, on the GPU with no window: runs to the tick limit, presenting each frame once unless `--present-hz` is given, and prints how long the game, the renderer's preparation and each present took from play's first frame on, and what the presents drew, then a presents line: the presents, those held, the display times passed late, the frames dropped, any present going backward, and the snaps by cause |
 | `--present-hz <n>` | with `--measure`, not with `--reference`: presents each frame at a display's rate of `n` Hz (1 to 1000) instead of once, at each of the display's times in the game frame it is handed over in, blended between frames as the clock says |
 | `--reference` | draws every frame with the game's own renderer (emu64) through the GX front end instead of sonarlib's kit, to measure the kit against; with `--measure` or `--goldens`, not with `--window`, `--diff` or `--validate` |
+| `--replay <recording>` | headless: plays the controllers from a recording, which sonarlib's `sl-replay` (built at `port/build/sonarlib/tools/sl-replay`) builds from a script of presses and moves, such as the town replay test's `port/tests/town_replay.txt`. It runs past the first frame of play until the recording ends, prints an `ac_port: replay …` line and exits with 0; each line it prints ends with the scene the game is in. Not with `--window`, `--goldens`, `--measure`, `--diff` or `--reference` |
 | `--qrand-seed <hex>` | seeds the game's random numbers with this value instead of the clock, as the goldens test does with Dolphin's |
 
 To run the tests:

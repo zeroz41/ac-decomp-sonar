@@ -43,7 +43,7 @@ Converted files are converted in place, at their offsets and sizes.
 
 ## The program
 
-`ac_port` (`adapter/main.c`) runs the game on sonarlib. By default it runs headless, in deterministic mode, from boot to play's first frame (sonarlib's `docs/roadmap.md`, M6 steps 6f, 6g and 6h); with `--window` it shows the game in a window in real time (step 6k) and plays its sound (step 6l). `--goldens` and `--measure` run headless on the GPU sink with no window (steps 6n and 7b). Each frame runs from `JW_BeginFrame` to `JW_EndFrame`: the GX the game writes is recorded into it by sonarlib's GX front end and emu64's tasks by sonarlib's `kits/emu64`, and it is submitted to the render module. Headless that is the null sink, and the run opens no window and reads no device; the game's sound is mixed on sonarlib's null audio sink, counted and not heard.
+`ac_port` (`adapter/main.c`) runs the game on sonarlib. By default it runs headless, in deterministic mode, from boot to play's first frame (sonarlib's `docs/roadmap.md`, M6 steps 6f, 6g and 6h); with `--window` it shows the game in a window in real time (step 6k) and plays its sound (step 6l). `--goldens` and `--measure` run headless on the GPU sink with no window (steps 6n and 7b), and `--replay` plays the game's controllers from an input recording, headless (step 9f1). Each frame runs from `JW_BeginFrame` to `JW_EndFrame`: the GX the game writes is recorded into it by sonarlib's GX front end and emu64's tasks by sonarlib's `kits/emu64`, and it is submitted to the render module. Headless that is the null sink, and the run opens no window and reads no device; the game's sound is mixed on sonarlib's null audio sink, counted and not heard.
 
 ### The threads
 
@@ -69,6 +69,44 @@ ac_port: play tick 557 retrace 557 gx 546409 dvd 486 15148254 hash 7a808f02087f4
 ```
 
 With the game's sound running (step 6l), play's first frame comes at tick 557, not step 6k's 712, so the ticks, GX bytes, DVD reads (`audiorom.img`'s among them), frame hash, compiles and list holes changed; the instances and the other counts did not. With the boot jingle (step 6m), only `loud` (0 before) and the sound hash changed, and `dsp` is new. With step 6n's edits the frame hash changed (`ad41ee3261159765` before), as the fader's quad now has its color in the console's order (`TColor.h`), and `unowned` is 6, not 5, as the NPCs now made, in buffers of the executable's, are outside main memory; nothing else changed. With sonarlib's step 9b, its part markers and the static actors' owners, the frame hash changed (`3331f638d12a9e75` before) and `unowned` is 0, not 6, as the NPCs' buffers and the structures' are now tables of static actors; `strays` is new, and nothing else changed.
+
+### Replays
+
+`--replay <recording>` plays the game's controllers from an input recording, headless (sonarlib's `docs/roadmap.md`, M6 step 9f1). sonarlib's `sl-replay`, built with the port at `port/build/sonarlib/tools/sl-replay`, builds a recording from a script, a text file of a controller's connections, presses and moves, each at a retrace (sonarlib's `docs/platform.md`, Replay scripts):
+
+```sh
+port/build/sonarlib/tools/sl-replay build port/tests/town_replay.txt town.slir
+port/build/ac_port --package ac.pkg --replay town.slir
+```
+
+The run is a plain one ([The run](#the-run)), deterministic from the same calendar, but:
+
+- `main` reads the recording whole before the game thread starts, and starts sonarlib's input module with no backend (`sl_input_init(NULL)`): four GameCube ports, each disconnected until the recording connects it. The game thread starts the replay (`sl_input_replay_start`) before the runtime, so the recording holds every partition from tick 0. The game reads the retrace view: `padmgr` reads the pads at each retrace (`PADRead`, on sonarlib's `kits/pad`), and the game takes them at its next frame, so Start at retrace 1000 reaches it at 1002.
+- Play's first frame prints the play line and the run goes on. When the replay has ended, at the tick after the recording's last, the retrace callback that checks the tick limit prints the same fields as `ac_port: replay …` and exits 0. The line's tick counts the ticks begun, so it is the recording's ticks + 1. Each line ends ` scene <n>`, the scene the game is in (`Save_Get(scene_no)`); other runs' lines name none.
+- No tick limit applies unless `--ticks` gives one, and then the `limit` line ends the run at it with exit 1, as in a plain run.
+- A recording that cannot be read, is not one, or has other than four ports exits 1 with a message. `--replay` given twice, or with `--window`, `--goldens`, `--measure`, `--diff` or `--reference`, exits 2 with the usage. `--validate`, `--ticks` and `--qrand-seed` go with it.
+
+The town replay, `tests/town_replay.txt`, is a new game from the title's Start into the town: 24000 ticks at one retrace each, a GameCube pad in port 0 from retrace 0, Start at the title and at each name keyboard's end, A every 80 retraces or so, the stick down at the save choice, whose cursor moves on the main stick or C-down and not the D-pad (`m_choice_main_normal.c_inc`), and a walk out of the station. It plays at the headless calendar; its date is step 9f4's. Its comments name what the game shows on the way, as the step's prototype found it:
+
+| Tick | What the game shows |
+|---|---|
+| 557 | play's first frame, the title's demo, scene 33 |
+| 1060 | scene 28, after Start |
+| 1900 | the save choice |
+| 2478 | scene 19 |
+| 6198 | scene 15, the train |
+| 8735 | the name keyboard |
+| 10535 | the town-name keyboard |
+| 17194 | scene 7, the town's station |
+| 18769 | Nook |
+| about 23100 | the player free in front of the houses |
+
+The test `ac_port_replay` imports the disc, builds the script with `sl-replay`, and runs `ac_port` once without a replay, then with `--replay` twice and once with `--validate`. Each replay must exit 0 with a play line and a replay line at tick 24001, the same in the three runs. The replay line's scene must be 7, its frame must hold instances and a hash, with nothing refused, stray, unowned, invalid or overflowed and the GX glue's five counts 0, and audio and `dsp` must be above 0. The play line must be the run's without a replay but for its scene: port 0 connected from retrace 0 changes nothing before Start. Each replay takes about 11 seconds. On `GAFE01_00` the three print:
+
+```
+ac_port: play tick 557 retrace 557 gx 546409 dvd 486 15148254 hash 7a808f02087f4c1c instances 48 compiles 1091 holes 3/1003 cpu 3 refused 0 views 0 invalid 0 problems 0 overflows 0 unowned 0 strays 0 gx-errors 0 unmapped 0 outside 0 nested 0 refused-frames 0 audio 296800 loud 187636 dsp 355 sound 4c7e56f94e94c11e scene 33
+ac_port: replay tick 24001 retrace 24001 gx 34278174 dvd 486 15148254 hash a76b6a2c0c2453ee instances 106 compiles 3249707 holes 252888/3249275 cpu 252888 refused 0 views 0 invalid 0 problems 0 overflows 0 unowned 0 strays 0 gx-errors 0 unmapped 0 outside 0 nested 0 refused-frames 0 audio 12824000 loud 10908759 dsp 361 sound a4fef736dd57b5ec scene 7
+```
 
 ### The window
 
@@ -527,7 +565,7 @@ Each is a Portability edit, under `SONAR_PORT` with the original kept, unless it
 
 - **Sound:** headless the mix goes to the null sink, unheard.
 - **Drawing** (headless): emu64's frames go to the render module's null sink, which hashes them and draws nothing, so there is no picture.
-- **Input** (headless): no input module runs, so every pad channel reads no controller.
+- **Input** (headless): no input module runs but under `--replay` ([Replays](#replays)), so every pad channel reads no controller.
 - **The Famicom emulator** declines to start.
 
 ### Open items

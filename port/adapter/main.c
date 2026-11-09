@@ -1,9 +1,9 @@
 /* ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--reference]
            [--window [--user-dir <dir>] [--set <key>=<value>]... | --goldens <scenes> <dir>
-            | --measure [--present-hz <n>]] [--qrand-seed <hex>]: Animal Crossing on sonarlib (port/NOTES.md, The
-   program). The process's main thread starts the library and the render module, makes the emu64 the glue records
-   each task with, mounts the package as game:, starts the CPU model, and creates the game thread "main", which starts
-   the runtime and calls boot's main, which never returns.
+            | --measure [--present-hz <n>] | --replay <recording>] [--qrand-seed <hex>]: Animal Crossing on sonarlib
+   (port/NOTES.md, The program). The process's main thread starts the library and the render module, makes the emu64
+   the glue records each task with, mounts the package as game:, starts the CPU model, and creates the game thread
+   "main", which starts the runtime and calls boot's main, which never returns.
 
    Headless, the default: deterministic, on the null sinks, the game's sound mixed and counted but not heard. The main
    thread joins "main", and the run ends at the submit of the frame that holds play's first task (emu64_glue.c, from
@@ -30,7 +30,13 @@
    measure line, the presents line and the report, named measured, and the run ends, exit 0.
 
    --reference: the kit is not made, and the console's emu64 draws every task through the GX front end into the
-   game's own frame (emu64_glue.c), headless, with --goldens or with --measure at no present rate. */
+   game's own frame (emu64_glue.c), headless, with --goldens or with --measure at no present rate.
+
+   --replay: headless and deterministic, the pads read from an input recording (sonar/input.h; sonarlib's sl-replay
+   builds one from a script), which the game thread starts before the runtime, so it plays from tick 0. Play's first
+   frame prints the play line and ends no run, and when the replay ends, at the tick after its last, the run prints
+   the report, named replay, and ends, exit 0. Each line names the scene. No tick limit applies unless --ticks gives
+   one (port/NOTES.md, Replays). */
 #include "ac_port.h"
 
 #include <port/emu64_glue.h>
@@ -65,7 +71,8 @@ int ac_boot_main(int argc, const char** argv); /* src/static/boot.c's main */
 
 static const char usage[] = "usage: ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--reference]\n"
                             "               [--window [--user-dir <dir>] [--set <key>=<value>]...\n"
-                            "                | --goldens <scenes> <dir> | --measure [--present-hz <n>]]\n"
+                            "                | --goldens <scenes> <dir> | --measure [--present-hz <n>]\n"
+                            "                | --replay <recording>]\n"
                             "               [--qrand-seed <hex>]\n";
 
 static uint64_t tick_limit = 3600;
@@ -80,6 +87,9 @@ static uint64_t measured_last;   /* and of the latest */
 static uint32_t present_hz;      /* --present-hz: the measured run's display rate; 0, each frame presented once */
 static int seed_given;           /* --qrand-seed */
 static u32 seed;
+static const char* replay; /* --replay's recording */
+static void* replay_data;  /* and its bytes, read whole before the game thread starts */
+static size_t replay_size;
 
 /* --window's settings. */
 static const char* user_dir;        /* --user-dir */
@@ -166,10 +176,15 @@ static void presents_report(void) {
 /* Ends the run once the runtime has begun the limit's ticks without a frame of play; with --goldens, stops the
    captures, and the main thread ends the run. With --measure, once play was reached, stops the measured run and
    prints its two lines and the report, here on the game thread at a retrace, while no present runs: the game thread
-   waits in sl_measure_frame for each frame's presents. */
+   waits in sl_measure_frame for each frame's presents. With --replay, first ends the run once the replay has ended,
+   with the report, named replay. */
 static void stop_at_limit(void* user, uint64_t retrace) {
     (void)user;
     (void)retrace;
+    if (replay != NULL && !sl_input_replay_active()) {
+        ac_port_report("replay");
+        _Exit(0);
+    }
     if (sl_tick_count() >= tick_limit) {
         if (goldens != NULL) {
             sl_goldens_stop();
@@ -243,6 +258,30 @@ static uint64_t scenes_written(void) {
     return lines;
 }
 
+/* Reads --replay's recording whole into replay_data; on failure prints why. */
+static int read_replay(void) {
+    FILE* file = fopen(replay, "rb");
+    long size;
+    if (file == NULL) {
+        fprintf(stderr, "ac_port: %s: %s\n", replay, strerror(errno));
+        return 0;
+    }
+    if (fseek(file, 0, SEEK_END) != 0 || (size = ftell(file)) < 0 || fseek(file, 0, SEEK_SET) != 0) {
+        fprintf(stderr, "ac_port: %s: %s\n", replay, strerror(errno));
+        fclose(file);
+        return 0;
+    }
+    replay_size = (size_t)size;
+    replay_data = calloc(replay_size != 0 ? replay_size : 1, 1); /* malloc is the game's (names.h) */
+    if (replay_data == NULL || fread(replay_data, 1, replay_size, file) != replay_size) {
+        fprintf(stderr, "ac_port: %s: cannot be read\n", replay);
+        fclose(file);
+        return 0;
+    }
+    fclose(file);
+    return 1;
+}
+
 /* --goldens's main loop: serves the captures until every scene is written, then prints the goldens line, or until the
    tick limit stops them. Never returns. */
 static void serve(void) {
@@ -264,6 +303,14 @@ static void* game_main(void* arg) {
     static const char* const boot_argv[] = { "ac_port", NULL };
     sl_result result;
     (void)arg;
+    if (replay != NULL) {
+        /* Before the runtime begins tick 0, so the replay holds every partition from it. */
+        result = sl_input_replay_start(replay_data, replay_size);
+        if (result != SL_OK) {
+            fprintf(stderr, "ac_port: %s: sl_input_replay_start: %s\n", replay, sl_result_string(result));
+            _Exit(1);
+        }
+    }
     {
         /* Fixed ticks at the video rate, NTSC: the rates' zeros. Headless runs are deterministic. */
         sl_runtime_desc desc;
@@ -588,6 +635,9 @@ int main(int argc, char** argv) {
             goldens = argv[++i];
             goldens_dir = argv[++i];
             ac_goldens_enable(); /* play's first frame ends no run */
+        } else if (strcmp(argv[i], "--replay") == 0 && i + 1 < argc && replay == NULL) {
+            replay = argv[++i];
+            ac_replay_enable(); /* play's first frame ends no run */
         } else if (strcmp(argv[i], "--qrand-seed") == 0 && i + 1 < argc) {
             if (!parse_seed(argv[++i], &seed))
                 return usage_error();
@@ -606,6 +656,14 @@ int main(int argc, char** argv) {
         return usage_error(); /* the reference runs headless, without the kit */
     if ((user_dir != NULL || assignment_count != 0) && !window)
         return usage_error(); /* only --window keeps the player's directories and settings */
+    if (replay != NULL && (window || goldens != NULL || measure || ac_diff_enabled() || ac_reference_enabled()))
+        return usage_error(); /* a replay runs headless, on the kit, with nothing presented */
+    if (replay != NULL) {
+        if (!ticks_given)
+            tick_limit = UINT64_MAX; /* the replay's end ends the run */
+        if (!read_replay())
+            return 1;
+    }
 
     {
         sl_init_desc desc;
@@ -736,6 +794,12 @@ int main(int argc, char** argv) {
         result = ac_audio_init(&desc);
         if (result != SL_OK)
             return failed("ac_audio_init", result);
+    }
+    if (replay != NULL) {
+        /* Input's four GameCube ports, each disconnected until the recording connects it; no backend. */
+        result = sl_input_init(NULL);
+        if (result != SL_OK)
+            return failed("sl_input_init", result);
     }
     if (window) {
         /* Input's GameCube profile with its default bindings: the keyboard on port 0, each gamepad on the first free

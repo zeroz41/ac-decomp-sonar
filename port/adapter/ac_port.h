@@ -85,6 +85,10 @@ u64 ac_goldens_frames(void);
 
 /* --measure: play's first frame prints the play line and ends no run (emu64_glue.c). main.c's, before boot. */
 void ac_measure_enable(void);
+
+/* --replay: play's first frame prints the play line and ends no run, and each line ac_port_report prints ends with
+   " scene <n>", Save_Get(scene_no) (emu64_glue.c). main.c's, before boot. */
+void ac_replay_enable(void);
 /* The GX glue's frame end, after its submit and ac_emu64_frame_submitted, for a frame submitted: from play's first
    frame on, with the measured run on, calls sl_measure_frame, which waits until the main thread has presented it, and
    keeps the tick; a failure stops the run with a message (main.c). Game thread. */
@@ -96,7 +100,8 @@ void ac_measure_frame(void);
    dsp <n> sound <h>", to stdout and flushes it (emu64_glue.c): the run's counts, the hash of the frame submitted last,
    the kit's counts with its last task's instances, the render module's, the GX glue's (ac_gx_get_counts), the audio
    mix's (sl_audio_get_mix_stats) and the DSP's sounding frames (ac_dsp_sounding_frames). Under --reference the kit's
-   counts are 0 and the line ends with " palette-overflows <n>", emu64's palettes refused past its buffer. */
+   counts are 0 and the line ends with " palette-overflows <n>", emu64's palettes refused past its buffer. Under
+   --replay it ends with " scene <n>", the scene the game is in. */
 void ac_port_report(const char* what);
 
 #ifdef __cplusplus

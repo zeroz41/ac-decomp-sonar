@@ -10,6 +10,7 @@
 #include "game.h"
 #include "graph.h"
 #include "m_actor.h"
+#include "m_common_data.h"
 #include "m_play.h"
 #include "libforest/emu64.h"
 #include "libforest/emu64/emu64_wrapper.h"
@@ -59,6 +60,7 @@ static BOOL play_task; /* play's first task was recorded */
 static BOOL window;    /* --window: the run goes on after play's first frame */
 static BOOL goldens;   /* --goldens: so does it, and each frame goes to the goldens */
 static BOOL measure;   /* --measure: so does it */
+static BOOL replay;    /* --replay: so does it, and each line names the scene */
 static atomic_uint_fast64_t goldens_frames;
 static atomic_int play_reached; /* play's first frame was submitted; the presenter reads it */
 
@@ -398,6 +400,8 @@ void ac_port_report(const char* what) {
            (uint64_t)ac_dsp_sounding_frames(), audio.hash);
     if (reference)
         printf(" palette-overflows %" PRIu32, (uint32_t)emu64_ref_palette_overflows());
+    if (replay)
+        printf(" scene %d", Save_Get(scene_no));
     printf("\n");
     fflush(stdout);
     fflush(stderr);
@@ -574,6 +578,10 @@ void ac_measure_enable(void) {
     measure = TRUE;
 }
 
+void ac_replay_enable(void) {
+    replay = TRUE;
+}
+
 /* The keys Dolphin reads at the decomp's symbols (port/NOTES.md, Goldens), and the part of the frame buffer the VI
    shows: from VIConfigure's, the whole of it, the EFB's 640 x 480 before. */
 void ac_goldens_frame(void) {
@@ -625,7 +633,7 @@ void ac_emu64_frame_submitted(void) {
                    (uint64_t)diff_tasks, (uint64_t)diff_equal, (uint64_t)diff_different, (uint64_t)diff_refused,
                    (uint64_t)diff_triangles, (uint64_t)diff_skipped[0], (uint64_t)diff_skipped[1]);
         ac_port_report(reference ? "reference" : "play");
-        if (!window && !goldens && !measure)
+        if (!window && !goldens && !measure && !replay)
             _Exit(0);
         atomic_store(&play_reached, 1);
     }

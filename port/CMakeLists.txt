@@ -238,8 +238,9 @@ add_executable(ac_port adapter/main.c $<TARGET_OBJECTS:ac_game> $<TARGET_OBJECTS
 set_target_properties(ac_port PROPERTIES C_STANDARD 11 C_EXTENSIONS ON LINKER_LANGUAGE CXX)
 target_link_libraries(ac_port PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
                       sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend sonar::fmt_card)
-# sonarlib's sl-card, which moves the cards' saves to and from Dolphin (README.md, Saves), is built with the program.
-add_dependencies(ac_port sl-card)
+# sonarlib's sl-card, which moves the cards' saves to and from Dolphin (README.md, Saves), and sl-replay, which builds
+# the recordings --replay plays (NOTES.md, Replays), are built with the program.
+add_dependencies(ac_port sl-card sl-replay)
 
 # The importer (NOTES.md, The package): ac-import writes the package the game reads from boot to Town's first frame
 # from the player's disc, converting the structures the game reads in place (sonarlib docs/roadmap.md, M6 step 6c).
@@ -423,6 +424,16 @@ add_test(NAME ac_port_play
                  "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/play"
                  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/play_test.cmake")
 set_tests_properties(ac_port_play PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_play: skipped, AC_DISC is not set")
+
+# The town replay (NOTES.md, Replays): sonarlib's sl-replay builds tests/town_replay.txt, and ac_port --replay runs it
+# from boot into the town, twice and once with --validate, against a run without a replay to play's first frame, on a
+# package ac-import writes from the player's disc; skipped without one, when the script says so.
+add_test(NAME ac_port_replay
+         COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
+                 "-DSL_REPLAY=$<TARGET_FILE:sl-replay>" "-DSCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/town_replay.txt"
+                 "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/replay"
+                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/replay_test.cmake")
+set_tests_properties(ac_port_replay PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_replay: skipped, AC_DISC is not set")
 
 # ac_port --diff, each emu64 task drawn by the kit and by the console's emu64 and the two compared, on its own package
 # from the player's disc; skipped without one, when the script says so.
