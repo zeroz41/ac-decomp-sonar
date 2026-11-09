@@ -83,7 +83,7 @@ Options:
 
 | Option | What it does |
 |---|---|
-| `--window` | shows the game in a window, plays its sound, and reads the keyboard and gamepads; each image it shows blends the game's last two frames at the clock's alpha for the time it is shown |
+| `--window` | shows the game in a window, plays its sound, and reads the keyboard and gamepads; each image it shows blends the game's last two frames at the clock's alpha for the time it is shown, unless `sonar.video.interpolation` is off |
 | `--user-dir <dir>` | with `--window`: keeps every user directory under `dir` instead of your own, the settings file at `dir/config/settings.toml`, the memory cards in `dir/saves` and the pipeline list in `dir/cache`, for a portable install |
 | `--set <key>=<value>` | with `--window`, any number of times: sets a setting for this run only, over the settings file, and never saves it, as in `--set sonar.audio.volume=30`. One that isn't `key=value`, names no setting the port has, or gives a value its setting doesn't take prints `ac_port: --set <key>=<value>: …` and exits with 2 before the game starts |
 | `--ticks <n>` | headless: gives up after `n` game frames if play hasn't started (3600 by default); with `--window`, `--measure` or `--replay`: quits after `n` game frames (no limit by default with `--window` or `--replay`); with `--record`: records `n` game frames (until you close the window by default) |
@@ -123,6 +123,7 @@ Change settings on the overlay's Settings page, or edit the file while the game 
 | `sonar.video.mode` | `windowed` (the default), `borderless` or `exclusive` fullscreen, on the display the window is on. F11 and Alt+Enter set it. If the display refuses a mode, the window stays as it was and the setting keeps your choice, to try again next run; F11 then switches between a window and the last fullscreen the display took, borderless if it took none |
 | `sonar.video.pacing` | `vsync` (the default), one frame per refresh; `mailbox`, VSync with less latency; `immediate`, with no waiting and tearing allowed; or `limiter`, at `frame_limit`'s rate |
 | `sonar.video.frame_limit` | the limiter's rate in Hz, 0 to 1000; 0 (the default) is the display's refresh rate |
+| `sonar.video.interpolation` | `true` (the default) blends the game's last two frames at each refresh, so motion is smooth at any refresh rate; `false` shows each frame once, as the game drew it, as the console did, with less work for the computer |
 | `sonar.audio.volume` | 0 to 100, 100 by default |
 | `sonar.input.rumble` | the rumble's strength, 0 to 100, 100 by default |
 | `sonar.system.sound_mode` | `mono`, `stereo` or `surround`: the game's options set it, and it lasts, as the console kept it |

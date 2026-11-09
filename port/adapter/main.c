@@ -14,7 +14,7 @@
    the two are compared (emu64_glue.c).
 
    --window: in real time, on the GPU sink, in a window, with the game's pads on the keyboard and gamepads and its
-   sound on the audio device. The main thread presents at the clock's alpha for each image's time until the window
+   sound on the audio device. The main thread presents at the window's alpha for each image's time until the window
    is closed, or until --ticks's limit when it is given. It mounts the player's user directories, or every one under
    --user-dir's directory, keeps the settings in config:settings.toml with each --set over them for the run, keeps the
    memory cards in the save store at user:saves, the card in each slot by its setting, card-a in slot A unless the
@@ -859,18 +859,20 @@ static double host_seconds(void) {
     return (double)now.tv_sec + (double)now.tv_nsec * 1e-9;
 }
 
-/* --window's main loop: presents the latest submitted frame, at the clock's alpha for the image's presentation time
-   (1 for a stale window), with the overlay over it, until the window is closed, with --ticks the runtime has begun
-   the limit's ticks, or a replay or a recording has ended. The pump updates input. A recording's close, the player's
-   or a device script's, ends the recording (stop_at_limit) and the loop goes on presenting until it has ended; one
-   not ended 5 s after the close ends the run, exit 1. The settings are saved when they changed, while the overlay is
-   hidden and at the end, before the window line. A recording's run exits 0 only when the recording ended with every
-   write done. Never returns. */
+/* --window's main loop: presents the latest submitted frame, at the window's alpha for the image's presentation time
+   (sl_window_alpha: the clock's, or 1 with sonar.video.interpolation off or for a stale window), with the overlay
+   over it, until the window is closed, with --ticks the runtime has begun the limit's ticks, or a replay or a
+   recording has ended, and counts the presents and those blended, at an alpha below 1. The pump updates input. A
+   recording's close, the player's or a device script's, ends the recording (stop_at_limit) and the loop goes on
+   presenting until it has ended; one not ended 5 s after the close ends the run, exit 1. The settings are saved when
+   they changed, while the overlay is hidden and at the end, before the window line. A recording's run exits 0 only
+   when the recording ended with every write done. Never returns. */
 static void present(sl_window shown) {
     static const char* const pacings[] = { "vsync", "mailbox", "immediate", "limiter" };
     char cards[2][SL_MEMCARD_CARD_NAME_MAX + 1];
     int slot;
     uint64_t frames = 0;
+    uint64_t blended = 0;
     uint64_t last = 0;
     int closed = 0;
     double closed_at = 0.0;
@@ -901,7 +903,7 @@ static void present(sl_window shown) {
         if ((ticks_given && record == NULL && sl_tick_count() >= tick_limit) || atomic_load(&run_ended))
             break; /* a recording's run ends at its end, after the limit (stop_at_limit) */
         now = sl_window_frame_begin(shown);
-        alpha = now != 0 ? (float)sl_clock_alpha(now) : 1.0f;
+        alpha = sl_window_alpha(shown, now);
         memset(&overlay, 0, sizeof overlay);
         /* SL_ERROR_NOT_FOUND until the game submits its first frame */
         if (sl_render_present(alpha, &resolved) == SL_OK)
@@ -913,8 +915,11 @@ static void present(sl_window shown) {
         overlay.window = shown;
         (void)sl_ui_frame(&overlay);
         last = now;
-        if (sl_window_present(shown, alpha) == SL_OK)
+        if (sl_window_present(shown, alpha) == SL_OK) {
             frames++;
+            if (alpha < 1.0f)
+                blended++;
+        }
         if (!sl_ui_is_visible())
             save_settings();
     }
@@ -930,10 +935,10 @@ static void present(sl_window shown) {
         if (sl_memcard_get_card((uint32_t)slot, cards[slot]) != SL_MEMCARD_READY)
             strcpy(cards[slot], "-"); /* no card */
     }
-    printf("ac_port: window ticks %" PRIu64 " frames %" PRIu64 " audio %" PRIu64 " loud %" PRIu64 " dsp %" PRIu64
-           " pacing %s limit %" PRIu64 " gain %.3f pipelines %" PRIu32 " warmed %" PRIu32 " lists %" PRIu32
-           " cards %s %s\n",
-           sl_tick_count(), frames, audio.frames, audio.loud_frames, (uint64_t)ac_dsp_sounding_frames(),
+    printf("ac_port: window ticks %" PRIu64 " frames %" PRIu64 " blended %" PRIu64 " audio %" PRIu64 " loud %" PRIu64
+           " dsp %" PRIu64 " pacing %s limit %" PRIu64 " gain %.3f pipelines %" PRIu32 " warmed %" PRIu32
+           " lists %" PRIu32 " cards %s %s\n",
+           sl_tick_count(), frames, blended, audio.frames, audio.loud_frames, (uint64_t)ac_dsp_sounding_frames(),
            (uint32_t)info.pacing < sizeof pacings / sizeof pacings[0] ? pacings[info.pacing] : "unknown",
            whole_hz(info.frame_limit), (double)sl_audio_output_gain(), render.pipelines, render.pipelines_warmed,
            render.pipeline_lists_written, cards[0], cards[1]);

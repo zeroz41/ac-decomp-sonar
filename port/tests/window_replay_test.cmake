@@ -1,5 +1,5 @@
-# Runs the town and title replays headless and in a window (port/NOTES.md, Replays; sonarlib docs/roadmap.md, M6 step
-# 9f2a):
+# Runs the town and title replays headless and in a window (port/NOTES.md, Replays; sonarlib docs/roadmap.md, M6 steps
+# 9f2a and 9f3a):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DSL_REPLAY=<sl-replay> -DTOWN_SCRIPT=<town_replay.txt>
 #         -DTITLE_SCRIPT=<title_replay.txt> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
 #         -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P window_replay_test.cmake
@@ -13,7 +13,13 @@
 # slot.
 #
 # The title replay runs headless, then with --window, paced. The window run must exit 0, its replay line must be the
-# headless run's, in scene 28, and it must take no less than 20 s: 1200 ticks at 60000/1001 Hz.
+# headless run's, in scene 28, it must take no less than 20 s: 1200 ticks at 60000/1001 Hz, and its window line must
+# count presents blended, as the window interpolates by default.
+#
+# Interpolation off: the paced title replay runs again with --set sonar.video.interpolation=false. It must exit 0 with
+# the headless run's lines, and its window line must count no present blended and no more frames than ticks, as the
+# window presents each frame once. The settings file afterward must hold no interpolation, as the --set lasted for its
+# run.
 #
 # Usage errors: --unpaced without --replay, --unpaced without --window, and a window replay with --set naming one of
 # os's settings, which a replay takes from its recording, must each exit 2.
@@ -149,6 +155,37 @@ if(NOT lines STREQUAL headless)
 endif()
 if(seconds LESS 20)
     message(FATAL_ERROR "ac_port_window_replay: the paced title replay took ${seconds} s, less than its 20 s")
+endif()
+if(NOT window_line MATCHES " blended [1-9][0-9]* ")
+    message(FATAL_ERROR "ac_port_window_replay: the paced title replay blended no present:\n${window_line}")
+endif()
+
+# The title replay in a window, paced, with interpolation off.
+run_port(--window --user-dir "${user}" --replay "${title}" --set sonar.video.interpolation=false)
+string(REGEX MATCH "ac_port: window ticks ([0-9]+) frames ([0-9]+) blended ([0-9]+) [^\n]*" window_line "${output}")
+set(ticks "${CMAKE_MATCH_1}")
+set(frames "${CMAKE_MATCH_2}")
+set(blended "${CMAKE_MATCH_3}")
+message("title window, interpolation off: exit ${result}, ${seconds} s:\n${lines}\n${window_line}")
+if(NOT result EQUAL 0 OR window_line STREQUAL "")
+    tail_of("${errors}" errors)
+    message(FATAL_ERROR "ac_port_window_replay: the title replay with interpolation off did not end with the window "
+                        "line:\n${errors}")
+endif()
+if(NOT lines STREQUAL headless)
+    message(FATAL_ERROR "ac_port_window_replay: the title replay's lines with interpolation off are not the headless "
+                        "run's:\n${lines}\n${headless}")
+endif()
+if(NOT blended EQUAL 0 OR frames GREATER ticks)
+    message(FATAL_ERROR "ac_port_window_replay: with interpolation off the window blended ${blended} presents or "
+                        "presented more frames than ticks:\n${window_line}")
+endif()
+set(settings_file "${user}/config/settings.toml")
+if(EXISTS "${settings_file}")
+    file(READ "${settings_file}" settings)
+    if(settings MATCHES "interpolation")
+        message(FATAL_ERROR "ac_port_window_replay: the settings file kept the --set's interpolation:\n${settings}")
+    endif()
 endif()
 
 # Usage errors.
