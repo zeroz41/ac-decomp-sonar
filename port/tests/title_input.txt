@@ -1,0 +1,7 @@
+# The title's input as a device script (port/NOTES.md, Recording; sonarlib docs/roadmap.md, M6 step 9f2b): a gamepad
+# added at retrace 0, and Start pressed at retrace 1000 and released at 1006, the title replay's inputs, which reach
+# the game through the window's devices, bindings and profile. ac_port_record records it under --window --ticks 1200
+# and replays the recording headless and in a window.
+0 0 add gamepad
+1000 0 press start
+1006 0 release start

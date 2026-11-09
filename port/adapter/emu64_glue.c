@@ -60,7 +60,7 @@ static BOOL play_task; /* play's first task was recorded */
 static BOOL window;    /* --window: the run goes on after play's first frame */
 static BOOL goldens;   /* --goldens: so does it, and each frame goes to the goldens */
 static BOOL measure;   /* --measure: so does it */
-static BOOL replay;    /* --replay: so does it, and each line names the scene */
+static BOOL replay;    /* --replay and --record: so does it, and each line names the scene */
 static atomic_uint_fast64_t goldens_frames;
 static atomic_int play_reached; /* play's first frame was submitted; the presenter reads it */
 

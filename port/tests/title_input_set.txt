@@ -1,0 +1,7 @@
+# title_input.txt with the clock offset set at retrace 300 to 12 hours, in ticks of the GameCube's time base, 40.5 MHz
+# (port/NOTES.md, Recording). ac_port_record records it with --set sonar.system.progressive_scan=true, so the
+# recording holds a setting from its start and one changed at a tick.
+0 0 add gamepad
+300 set sonar.system.clock_offset=1749600000000
+1000 0 press start
+1006 0 release start

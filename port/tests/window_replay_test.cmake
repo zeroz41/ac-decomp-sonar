@@ -16,7 +16,7 @@
 # headless run's, in scene 28, and it must take no less than 20 s: 1200 ticks at 60000/1001 Hz.
 #
 # Usage errors: --unpaced without --replay, --unpaced without --window, and a window replay with --set naming one of
-# os's settings, which a replay leaves unregistered, must each exit 2.
+# os's settings, which a replay takes from its recording, must each exit 2.
 #
 # It prints every line it checks. When AC_DISC names no disc or there is no lavapipe it prints the line the test's
 # SKIP_REGULAR_EXPRESSION matches and returns.

@@ -469,6 +469,18 @@ add_test(NAME ac_port_window_replay
                  "-DAC_LAVAPIPE_ICD=${AC_LAVAPIPE_ICD}" -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/window_replay_test.cmake")
 set_tests_properties(ac_port_window_replay PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_window_replay: skipped, ")
 
+# Recording (NOTES.md, Recording): ac_port records tests/title_input.txt in a window, paced, and
+# tests/title_input_set.txt unpaced with --set, each from its device script, sonarlib's sl-replay shows each recording,
+# and ac_port replays each headless and with --window --unpaced, whose lines must be the record run's, and five usage
+# errors, offscreen as ac_port_window; skipped without the disc or lavapipe, when the script says so.
+add_test(NAME ac_port_record
+         COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
+                 "-DSL_REPLAY=$<TARGET_FILE:sl-replay>" "-DSCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/title_input.txt"
+                 "-DSET_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/title_input_set.txt" "-DAC_DISC=${AC_DISC}"
+                 "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/record"
+                 "-DAC_LAVAPIPE_ICD=${AC_LAVAPIPE_ICD}" -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/record_test.cmake")
+set_tests_properties(ac_port_record PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_record: skipped, ")
+
 # ac_port --reference to play's first frame, and --measure --ticks 1200 with the kit and with --reference twice each,
 # then with the kit at --present-hz 144 and 360 once each, and the kit's --measure --ticks 7200 once, on the GPU sink
 # with no window through SDL's offscreen video driver and lavapipe's Vulkan; skipped without the disc or lavapipe, when
