@@ -1,0 +1,10 @@
+# The title replay (port/NOTES.md, Replays; sonarlib docs/roadmap.md, M6 step 9f2a): the title's Start, to tick
+# 1200, on a GameCube pad in port 0. ac_port_window_replay builds it with sonarlib's sl-replay and runs it headless,
+# then in a window paced by the host, which takes 1200 ticks at 60000/1001 Hz, 20 s. It is the town replay's start.
+
+ticks 1200
+
+0 0 connect
+
+# The title's demo begins at tick 557. Start at 1000 reaches the game at 1002; scene 28 follows at 1060.
+1000 0 press start 6
