@@ -1,5 +1,5 @@
 # Runs ac_port --window with its user directories under OUT_DIR/user, twice to play, then with bad assignments and
-# twice with the memory cards (sonarlib docs/roadmap.md, M6 steps 6k, 6l, 6m, 11a and 11c):
+# twice with the memory cards (sonarlib docs/roadmap.md, M6 steps 6k, 6l, 6m, 11a, 11c and 9c1):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
 #         -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P window_test.cmake
 # ac-import writes the package from the player's disc into OUT_DIR. Each run shows the game in real time in a window
@@ -12,7 +12,9 @@
 # to 90 Hz for the session with --set. It must exit 0 with one play line and a window line with at least the limit's
 # ticks (the main loop checks the limit once a presented frame) and frames presented; the game's sound must have mixed
 # loud frames, the title's music, and the DSP rendered sounding frames, the boot jingle; and the window line must read
-# the limiter at the override's 90 Hz and the gain of a volume of 50, 0.250.
+# the limiter at the override's 90 Hz and the gain of a volume of 50, 0.250, and end with the target the 1280x960
+# window gives at the default render scale, the automatic one: 1280x960, twice the game's 640x480. The later runs
+# that draw take --set sonar.video.render_scale=1, so lavapipe draws the game's own size.
 #
 # Unchanged settings: the round trip changes no setting, as an override is for the session and never a change, so
 # afterwards the file must be byte for byte as written, its comment too: the limiter's 120, the volume's 50, and the
@@ -24,12 +26,16 @@
 # pipelines warmed.
 #
 # A broken file: config/settings.toml is replaced by a line that does not parse, then a run of --ticks 120. Its stderr
-# must name the file at line 1, its window line must read the default volume's gain, 1.000, and the file must be byte
-# for byte as written. Its exit status is not checked: 120 ticks reach no play.
+# must name the file at line 1, its window line must read the default volume's gain, 1.000, and the target of render
+# scale 1, 640x480, and the file must be byte for byte as written. Its exit status is not checked: 120 ticks reach no
+# play.
 #
 # Bad assignments: with no settings file, a run of --ticks 60 with --set sonar.audio.volum=30, a key nothing
 # registers, and one with --set sonar.audio.volume=500, a value its setting refuses, must each exit 2 with stderr naming
-# the assignment; and --set and --user-dir without --window must each exit 2 with the usage.
+# the assignment; and --set, --user-dir and --resize without --window must each exit 2 with the usage.
+#
+# Bad resizes: --resize with the sizes 640, 640x, 0x480 and 640x480x2, a second at the first's tick, and a ninth must
+# each exit 2 with the usage.
 #
 # The memory cards: with the user directories empty again, so no settings file, a run of --ticks 900, past play's
 # first frame and so past CARDInit, must put card-a in slot A and none in B, its window line reading "cards card-a -",
@@ -83,7 +89,7 @@ macro(run_window)
     # CMake keeps nine groups, so only the fields read below are captured.
     string(CONCAT window_line "ac_port: window ticks ([0-9]+) frames ([0-9]+) blended [0-9]+ audio [0-9]+ "
            "loud ([0-9]+) dsp ([0-9]+) pacing [a-z]+ limit [0-9]+ gain [0-9.]+ pipelines [0-9]+ "
-           "warmed ([0-9]+) lists ([0-9]+) cards ([^ \n]+) ([^ \n]+)")
+           "warmed ([0-9]+) lists ([0-9]+) cards ([^ \n]+) ([^ \n]+) target ([0-9]+x[0-9]+)")
     string(REGEX MATCH "${window_line}" line "${output}")
     set(ticks "${CMAKE_MATCH_1}")
     set(frames "${CMAKE_MATCH_2}")
@@ -92,6 +98,7 @@ macro(run_window)
     set(warmed "${CMAKE_MATCH_5}")
     set(lists "${CMAKE_MATCH_6}")
     set(cards "${CMAKE_MATCH_7} ${CMAKE_MATCH_8}")
+    set(target "${CMAKE_MATCH_9}")
     list(LENGTH plays count)
 endmacro()
 
@@ -135,6 +142,10 @@ string(FIND "${line}" " pacing limiter limit 90 gain 0.250" at)
 if(at EQUAL -1)
     message(FATAL_ERROR "ac_port_window: the window line does not read the limiter at 90 Hz and a gain of 0.250:\n${line}")
 endif()
+if(NOT target STREQUAL "1280x960")
+    message(FATAL_ERROR "ac_port_window: the window line does not end with the automatic scale's target, 1280x960:\n"
+                        "${line}")
+endif()
 string(FIND "${errors}" "ac_port: cannot save settings" at)
 if(NOT at EQUAL -1)
     tail_of("${errors}" errors)
@@ -165,7 +176,7 @@ set(limit 120)
 set(broken "sonar.audio.volume = fifty\n")
 file(WRITE "${settings}" "${broken}")
 file(SHA256 "${settings}" before)
-run_window(--ticks ${limit})
+run_window(--ticks ${limit} --set sonar.video.render_scale=1)
 string(REGEX MATCHALL "ac_port: [^\n]*; it is left as it is" reported "${errors}")
 message("broken file: exit ${result}, ${seconds} s:\n${settings_line}\n${reported}\n${line}")
 string(FIND "${errors}" "ac_port: ${settings}:1:" at)
@@ -177,6 +188,9 @@ string(FIND "${line}" " gain 1.000" at)
 if(line STREQUAL "" OR at EQUAL -1)
     tail_of("${errors}" errors)
     message(FATAL_ERROR "ac_port_window: the window line does not read a gain of 1.000:\n${line}\n${errors}")
+endif()
+if(NOT target STREQUAL "640x480")
+    message(FATAL_ERROR "ac_port_window: the window line does not end with render scale 1's target, 640x480:\n${line}")
 endif()
 message("pipeline list: warmed ${warmed}")
 if(NOT warmed GREATER 0)
@@ -200,7 +214,7 @@ foreach(assignment IN ITEMS sonar.audio.volum=30 sonar.audio.volume=500)
         message(FATAL_ERROR "ac_port_window: --set ${assignment} did not exit 2 naming it:\n${errors}")
     endif()
 endforeach()
-foreach(option IN ITEMS "--set;sonar.audio.volume=30" "--user-dir;${user}")
+foreach(option IN ITEMS "--set;sonar.audio.volume=30" "--user-dir;${user}" "--resize;10;640x480")
     execute_process(COMMAND "${CMAKE_COMMAND}" -E env SDL_VIDEO_DRIVER=offscreen SDL_AUDIO_DRIVER=dummy
                             "VK_DRIVER_FILES=${AC_LAVAPIPE_ICD}" "${AC_PORT}" --package "${package}" --ticks 60
                             ${option}
@@ -213,15 +227,31 @@ foreach(option IN ITEMS "--set;sonar.audio.volume=30" "--user-dir;${user}")
     endif()
 endforeach()
 
+# Bad resizes.
+set(ninth "")
+foreach(tick RANGE 1 9)
+    list(APPEND ninth --resize ${tick} 640x480)
+endforeach()
+foreach(arguments IN ITEMS "--resize;10;640" "--resize;10;640x" "--resize;10;0x480" "--resize;10;640x480x2"
+                           "--resize;20;640x480;--resize;20;800x600" "${ninth}")
+    run_window(--ticks 60 ${arguments})
+    string(FIND "${errors}" "usage: ac_port" at)
+    message("bad resize: exit ${result}: ${arguments}")
+    if(NOT result EQUAL 2 OR at EQUAL -1)
+        tail_of("${errors}" errors)
+        message(FATAL_ERROR "ac_port_window: ${arguments} did not exit 2 with the usage:\n${errors}")
+    endif()
+endforeach()
+
 # The memory cards.
 file(REMOVE_RECURSE "${user}")
 set(saves "${user}/saves")
 foreach(run IN ITEMS "card-a -" "card-a card-b")
     if(run STREQUAL "card-a -")
-        run_window(--ticks 900)
+        run_window(--ticks 900 --set sonar.video.render_scale=1)
         set(card "card-a")
     else()
-        run_window(--ticks 900 --set kit.card.slot_b=card-b)
+        run_window(--ticks 900 --set sonar.video.render_scale=1 --set kit.card.slot_b=card-b)
         set(card "card-b")
     endif()
     file(GLOB held RELATIVE "${saves}" "${saves}/*.slsave")

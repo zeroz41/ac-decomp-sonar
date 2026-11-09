@@ -86,6 +86,7 @@ Options:
 | `--window` | shows the game in a window, plays its sound, and reads the keyboard and gamepads; each image it shows blends the game's last two frames at the clock's alpha for the time it is shown, unless `sonar.video.interpolation` is off |
 | `--user-dir <dir>` | with `--window`: keeps every user directory under `dir` instead of your own, the settings file at `dir/config/settings.toml`, the memory cards in `dir/saves` and the pipeline list in `dir/cache`, for a portable install |
 | `--set <key>=<value>` | with `--window`, any number of times: sets a setting for this run only, over the settings file, and never saves it, as in `--set sonar.audio.volume=30`. One that isn't `key=value`, names no setting the port has, or gives a value its setting doesn't take prints `ac_port: --set <key>=<value>: …` and exits with 2 before the game starts |
+| `--resize <tick> <width>x<height>` | with `--window`, up to 8 times with rising ticks: resizes the window to that size once game frame `tick` has begun and prints `ac_port: resize <tick> <width>x<height>: <result>`, as the state test does |
 | `--ticks <n>` | headless: gives up after `n` game frames if play hasn't started (3600 by default); with `--window`, `--measure` or `--replay`: quits after `n` game frames (no limit by default with `--window` or `--replay`); with `--record`: records `n` game frames (until you close the window by default) |
 | `--validate` | rechecks the game's display lists on every use |
 | `--diff` | draws each frame's 3D twice, once through sonarlib and once through the game's own renderer (emu64), and compares the two |
@@ -124,6 +125,8 @@ Change settings on the overlay's Settings page, or edit the file while the game 
 | `sonar.video.pacing` | `vsync` (the default), one frame per refresh; `mailbox`, VSync with less latency; `immediate`, with no waiting and tearing allowed; or `limiter`, at `frame_limit`'s rate |
 | `sonar.video.frame_limit` | the limiter's rate in Hz, 0 to 1000; 0 (the default) is the display's refresh rate |
 | `sonar.video.interpolation` | `true` (the default) blends the game's last two frames at each refresh, so motion is smooth at any refresh rate; `false` shows each frame once, as the game drew it, as the console did, with less work for the computer |
+| `sonar.video.widescreen` | `true` (the default) makes the picture as wide as the window, whatever its shape, and follows it as you resize it or go fullscreen; `false` keeps the console's 4:3, with bars at the sides of a wider window. For now the game still draws its 4:3 picture in the middle of a wider one; widening its views comes next |
+| `sonar.video.render_scale` | 0 to 16: how many times the console's 640x480 the game is drawn at. 0 (the default) picks the smallest that fills the window and follows it as its size changes; 1 is the console's own resolution, for the original look or a slower computer |
 | `sonar.audio.volume` | 0 to 100, 100 by default |
 | `sonar.input.rumble` | the rumble's strength, 0 to 100, 100 by default |
 | `sonar.system.sound_mode` | `mono`, `stereo` or `surround`: the game's options set it, and it lasts, as the console kept it |

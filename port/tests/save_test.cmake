@@ -6,12 +6,15 @@
 # ac-import writes the package from the player's disc into OUT_DIR. Each window run shows the game on SDL's offscreen
 # video driver, through lavapipe's Vulkan, with SDL's dummy audio driver, the record runs keeping their cards under
 # OUT_DIR/user and the window replay its settings under OUT_DIR/replay_user: nothing opens on the desktop, nothing
-# plays, no host device takes a port and no player's file is read or written.
+# plays, no host device takes a port and no player's file is read or written. Each takes --set
+# sonar.video.render_scale=1, so lavapipe draws the game's own 640x480 and not the 1280x960 the window's size asks for
+# by default (roadmap.md, M6 step 9c1).
 #
 # SAVE_SCRIPT is recorded under --window --unpaced --date 2001-12-14T12:00:00 on an empty user directory, and its close
 # ends the run. The run must exit 0 and print the play line, the record line, the saves line with 2 saves, and the
-# window line with card-a in slot A, and sl-replay show must give saves 0. sl-card extract of the town file must give
-# zeros at its data's 0xDE0 to 0xE40 and 0x1320 to 0x1440, past the winter banner's 208 entries and the icon's 112.
+# window line with card-a in slot A and the target of render scale 1, 640x480, and sl-replay show must give saves 0.
+# sl-card extract of the town file must give zeros at its data's 0xDE0 to 0xE40 and 0x1320 to 0x1440, past the winter
+# banner's 208 entries and the icon's 112.
 #
 # LOAD_SCRIPT is recorded the same way on the same directory. Its record line must end at scene 7, the town, and its
 # saves line differ from the save's, and show must give saves 2, with card-a and card-a-f000.
@@ -96,7 +99,8 @@ endfunction()
 # window line, with card-a in slot A, setting `name`_lines to its play and record lines and `name`_saves to its saves
 # line.
 macro(record name recording script)
-    run_port(--window --user-dir "${user}" --unpaced --date "${date}" --record "${recording}" --input-script "${script}")
+    run_port(--window --user-dir "${user}" --unpaced --date "${date}" --record "${recording}" --input-script "${script}"
+             --set sonar.video.render_scale=1)
     message("${name} record: exit ${result}, ${seconds} s:\n${lines}\n${saves_line}\n${window_line}")
     list(LENGTH lines found)
     if(NOT result EQUAL 0 OR NOT found EQUAL 2 OR window_line STREQUAL "" OR NOT EXISTS "${recording}")
@@ -115,9 +119,9 @@ macro(record name recording script)
     string(FIND "${output}" "${record_line}" record_at)
     string(FIND "${output}" "${saves_line}" saves_at)
     string(FIND "${output}" "${window_line}" window_at)
-    if(saves_at LESS record_at OR window_at LESS saves_at OR NOT window_line MATCHES " cards card-a -$")
+    if(saves_at LESS record_at OR window_at LESS saves_at OR NOT window_line MATCHES " cards card-a - target 640x480$")
         message(FATAL_ERROR "ac_port_save: the ${name} record run's saves line and window line do not follow the "
-                            "record line, with card-a in slot A:\n${output}")
+                            "record line, with card-a in slot A and the target at scale 1:\n${output}")
     endif()
     set(${name}_lines "${lines}")
     set(${name}_saves "${saves_line}")
@@ -212,7 +216,7 @@ check_replayed(save "headless replay")
 run_port(--replay "${load}")
 message("load headless replay: exit ${result}, ${seconds} s:\n${lines}\n${saves_line}")
 check_replayed(load "headless replay")
-run_port(--window --user-dir "${replay_user}" --unpaced --replay "${load}")
+run_port(--window --user-dir "${replay_user}" --unpaced --replay "${load}" --set sonar.video.render_scale=1)
 message("load window replay: exit ${result}, ${seconds} s:\n${lines}\n${saves_line}\n${window_line}")
 if(window_line STREQUAL "")
     message(FATAL_ERROR "ac_port_save: the load's window replay printed no window line")

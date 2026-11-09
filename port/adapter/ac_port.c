@@ -1,5 +1,5 @@
 /* ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--reference]
-           [--window [--user-dir <dir>] [--set <key>=<value>]...
+           [--window [--user-dir <dir>] [--set <key>=<value>]... [--resize <tick> <width>x<height>]...
                      [--replay <recording> [--unpaced]
                       | --record <recording> [--input-script <script>] [--date <date>] [--unpaced]]
             | --goldens <scenes> <dir> | --measure [--present-hz <n>] [--replay <recording>] | --replay <recording>]
@@ -24,7 +24,10 @@
    the cards' when its recording carries saves. With --replay, the window plays the recording from its start, as
    headless does, deterministic and paced by the host, so frame for frame as headless at the game's speed, or as fast
    as it can with --unpaced, never on the player's saves. The replay's end prints the replay line and ends the loop
-   (port/NOTES.md, Replays).
+   (port/NOTES.md, Replays). The picture follows the window: its shape, unless sonar.video.widescreen is off, and
+   its size, unless sonar.video.render_scale fixes a scale (sonar/window.h, sl_window_settings_bind). --resize, up to
+   8 with their ticks increasing, asks for each size once its tick has begun and reports the result on stderr, for
+   the tests (port/NOTES.md, The window).
 
    --record, with --window: the window records its input to the file from tick 0, deterministic and paced by the
    host, or as fast as it can with --unpaced, at the host's calendar or --date's, with os's settings and the cards'
@@ -103,6 +106,7 @@ int ac_boot_main(int argc, const char** argv); /* src/static/boot.c's main */
 static const char usage[] =
     "usage: ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--reference]\n"
     "               [--window [--user-dir <dir>] [--set <key>=<value>]...\n"
+    "                         [--resize <tick> <width>x<height>]...\n"
     "                         [--replay <recording> [--unpaced]\n"
     "                          | --record <recording> [--input-script <script>] [--date <date>]\n"
     "                                     [--unpaced]]\n"
@@ -114,6 +118,12 @@ static const char usage[] =
 static uint64_t tick_limit = 3600;
 static int ticks_given;          /* --ticks */
 static int window;               /* --window */
+enum { RESIZE_MAX = 8 };
+static struct {
+    uint64_t tick;
+    uint32_t width, height;
+} resizes[RESIZE_MAX];           /* --resize: the window's sizes and the ticks they are asked for at, increasing */
+static int resize_count;
 static const char* goldens;      /* --goldens's scenes file */
 static const char* goldens_dir;  /* and its output directory */
 static int measure;              /* --measure */
@@ -381,6 +391,25 @@ static int parse_tick(const char* text, uint64_t* tick) {
 /* --ticks's count: a tick, not 0. */
 static int parse_ticks(const char* text, uint64_t* ticks) {
     return parse_tick(text, ticks) && *ticks != 0;
+}
+
+/* --resize's size: <width>x<height>, each a whole number from 1 that 32 bits hold. */
+static int parse_size(const char* text, uint32_t* width, uint32_t* height) {
+    uint32_t* const sides[2] = { width, height };
+    int side;
+    for (side = 0; side < 2; side++) {
+        char* end = NULL;
+        unsigned long long value;
+        if (text[0] < '0' || text[0] > '9')
+            return 0;
+        errno = 0;
+        value = strtoull(text, &end, 10);
+        if (errno != 0 || value < 1 || value > UINT32_MAX || *end != (side == 0 ? 'x' : '\0'))
+            return 0;
+        *sides[side] = (uint32_t)value;
+        text = end + 1;
+    }
+    return 1;
 }
 
 /* --present-hz's rate: a whole number from 1 to 1000. */
@@ -895,7 +924,9 @@ static double host_seconds(void) {
    recording has ended, and counts the presents and those blended, at an alpha below 1. The pump updates input. A
    recording's close, the player's or a device script's, ends the recording (stop_at_limit) and the loop goes on
    presenting until it has ended; one not ended 5 s after the close ends the run, exit 1. The settings are saved when
-   they changed, while the overlay is hidden and at the end, before the window line. A recording's run exits 0 only
+   they changed, while the overlay is hidden and at the end, before the window line, which ends with the main
+   target's size after the last present. Each --resize is asked of the window at the first pass after its tick has
+   begun, before the pass's frame begins, and reported on stderr with its result. A recording's run exits 0 only
    when the recording ended with every write done. Never returns. */
 static void present(sl_window shown) {
     static const char* const pacings[] = { "vsync", "mailbox", "immediate", "limiter" };
@@ -904,6 +935,9 @@ static void present(sl_window shown) {
     uint64_t frames = 0;
     uint64_t blended = 0;
     uint64_t last = 0;
+    uint32_t target_width = 0;
+    uint32_t target_height = 0;
+    int resized = 0;
     int closed = 0;
     double closed_at = 0.0;
     for (;;) {
@@ -932,6 +966,13 @@ static void present(sl_window shown) {
         }
         if ((ticks_given && record == NULL && sl_tick_count() >= tick_limit) || atomic_load(&run_ended))
             break; /* a recording's run ends at its end, after the limit (stop_at_limit) */
+        while (resized < resize_count && sl_tick_count() > resizes[resized].tick) {
+            const sl_result asked = sl_window_set_size(shown, resizes[resized].width, resizes[resized].height);
+            fprintf(stderr, "ac_port: resize %" PRIu64 " %" PRIu32 "x%" PRIu32 ": %s\n", resizes[resized].tick,
+                    resizes[resized].width, resizes[resized].height, sl_result_string(asked));
+            fflush(stderr);
+            resized++;
+        }
         now = sl_window_frame_begin(shown);
         alpha = sl_window_alpha(shown, now);
         memset(&overlay, 0, sizeof overlay);
@@ -961,17 +1002,18 @@ static void present(sl_window shown) {
     memset(&info, 0, sizeof info);
     (void)sl_window_get_info(shown, &info);
     sl_render_get_stats(&render);
+    (void)sl_render_get_target_size(&target_width, &target_height);
     for (slot = 0; slot < 2; slot++) {
         if (sl_memcard_get_card((uint32_t)slot, cards[slot]) != SL_MEMCARD_READY)
             strcpy(cards[slot], "-"); /* no card */
     }
     printf("ac_port: window ticks %" PRIu64 " frames %" PRIu64 " blended %" PRIu64 " audio %" PRIu64 " loud %" PRIu64
            " dsp %" PRIu64 " pacing %s limit %" PRIu64 " gain %.3f pipelines %" PRIu32 " warmed %" PRIu32
-           " lists %" PRIu32 " cards %s %s\n",
+           " lists %" PRIu32 " cards %s %s target %" PRIu32 "x%" PRIu32 "\n",
            sl_tick_count(), frames, blended, audio.frames, audio.loud_frames, (uint64_t)ac_dsp_sounding_frames(),
            (uint32_t)info.pacing < sizeof pacings / sizeof pacings[0] ? pacings[info.pacing] : "unknown",
            whole_hz(info.frame_limit), (double)sl_audio_output_gain(), render.pipelines, render.pipelines_warmed,
-           render.pipeline_lists_written, cards[0], cards[1]);
+           render.pipeline_lists_written, cards[0], cards[1], target_width, target_height);
     fflush(stdout);
     if (record != NULL)
         _Exit(atomic_load(&run_ended) && run_result == SL_OK ? 0 : 1);
@@ -1013,6 +1055,12 @@ int main(int argc, char** argv) {
             user_dir = argv[++i];
         } else if (strcmp(argv[i], "--set") == 0 && i + 1 < argc) {
             assignments[assignment_count++] = argv[++i]; /* applied after the settings file, which needs fs */
+        } else if (strcmp(argv[i], "--resize") == 0 && i + 2 < argc && resize_count < RESIZE_MAX) {
+            if (!parse_tick(argv[++i], &resizes[resize_count].tick) ||
+                (resize_count != 0 && resizes[resize_count].tick <= resizes[resize_count - 1].tick) ||
+                !parse_size(argv[++i], &resizes[resize_count].width, &resizes[resize_count].height))
+                return usage_error();
+            resize_count++;
         } else if (strcmp(argv[i], "--goldens") == 0 && i + 2 < argc && goldens == NULL && !window) {
             goldens = argv[++i];
             goldens_dir = argv[++i];
@@ -1061,6 +1109,8 @@ int main(int argc, char** argv) {
         return usage_error(); /* the reference runs headless, without the kit */
     if ((user_dir != NULL || assignment_count != 0) && !window)
         return usage_error(); /* only --window keeps the player's directories and settings */
+    if (resize_count != 0 && !window)
+        return usage_error(); /* and only it has a window to resize */
     if (replay != NULL && (goldens != NULL || ac_diff_enabled() || ac_reference_enabled()))
         return usage_error(); /* a replay runs on the kit, headless or in a window */
     if (measure && replay != NULL && !ticks_given)

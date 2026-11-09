@@ -6,11 +6,12 @@
 # ac-import writes the package from the player's disc into OUT_DIR, and sl-replay builds the two scripts into
 # recordings there. Each window run shows the game on SDL's offscreen video driver, through lavapipe's Vulkan, with
 # SDL's dummy audio driver, and keeps its settings under OUT_DIR/user: nothing opens on the desktop, nothing plays and
-# no player's file is read or written.
+# no player's file is read or written. Each takes --set sonar.video.render_scale=1, so lavapipe draws the game's own
+# 640x480 and not the 1280x960 the window's size asks for by default (roadmap.md, M6 step 9c1).
 #
 # The town replay runs headless, then with --window --unpaced. The window run must exit 0, its play line and its one
 # replay line must be the headless run's, byte for byte, and its window line must follow them, with no card in either
-# slot.
+# slot and the target of render scale 1, 640x480.
 #
 # The title replay runs headless, then with --window, paced. The window run must exit 0, its replay line must be the
 # headless run's, in scene 28, it must take no less than 20 s: 1200 ticks at 60000/1001 Hz, and its window line must
@@ -107,7 +108,7 @@ if(NOT result EQUAL 0 OR NOT found EQUAL 2)
     message(FATAL_ERROR "ac_port_window_replay: the headless town replay did not print a play and a replay line:\n"
                         "${errors}")
 endif()
-run_port(--window --user-dir "${user}" --unpaced --replay "${town}")
+run_port(--window --user-dir "${user}" --unpaced --replay "${town}" --set sonar.video.render_scale=1)
 string(REGEX MATCH "ac_port: window [^\n]*" window_line "${output}")
 message("town window: exit ${result}, ${seconds} s:\n${lines}\n${window_line}")
 if(NOT result EQUAL 0 OR window_line STREQUAL "")
@@ -124,8 +125,9 @@ string(FIND "${output}" "${window_line}" window_at)
 if(window_at LESS replay_at)
     message(FATAL_ERROR "ac_port_window_replay: the window line does not follow the replay line:\n${output}")
 endif()
-if(NOT window_line MATCHES " cards - -$")
-    message(FATAL_ERROR "ac_port_window_replay: the window's town replay has a card in a slot:\n${window_line}")
+if(NOT window_line MATCHES " cards - - target 640x480$")
+    message(FATAL_ERROR "ac_port_window_replay: the window's town replay has a card in a slot, or a target that is "
+                        "not the logical size at scale 1:\n${window_line}")
 endif()
 
 # The title replay, headless, then in a window, paced.
@@ -142,7 +144,7 @@ list(GET headless 1 headless_replay)
 if(NOT headless_replay MATCHES " scene 28$")
     message(FATAL_ERROR "ac_port_window_replay: the title replay did not end in scene 28:\n${headless_replay}")
 endif()
-run_port(--window --user-dir "${user}" --replay "${title}")
+run_port(--window --user-dir "${user}" --replay "${title}" --set sonar.video.render_scale=1)
 string(REGEX MATCH "ac_port: window [^\n]*" window_line "${output}")
 message("title window: exit ${result}, ${seconds} s:\n${lines}\n${window_line}")
 if(NOT result EQUAL 0 OR window_line STREQUAL "")
@@ -161,7 +163,8 @@ if(NOT window_line MATCHES " blended [1-9][0-9]* ")
 endif()
 
 # The title replay in a window, paced, with interpolation off.
-run_port(--window --user-dir "${user}" --replay "${title}" --set sonar.video.interpolation=false)
+run_port(--window --user-dir "${user}" --replay "${title}" --set sonar.video.interpolation=false
+         --set sonar.video.render_scale=1)
 string(REGEX MATCH "ac_port: window ticks ([0-9]+) frames ([0-9]+) blended ([0-9]+) [^\n]*" window_line "${output}")
 set(ticks "${CMAKE_MATCH_1}")
 set(frames "${CMAKE_MATCH_2}")

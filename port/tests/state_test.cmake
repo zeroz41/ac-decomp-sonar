@@ -1,4 +1,5 @@
-# The town replay's state hashes and dumps (port/NOTES.md, State hashes; sonarlib docs/roadmap.md, M6 step 9f3b):
+# The town replay's state hashes and dumps (port/NOTES.md, State hashes; sonarlib docs/roadmap.md, M6 steps 9f3b and
+# 9c1):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DSL_REPLAY=<sl-replay> -DSL_DUMP_COMPARE=<sl-dump-compare>
 #         -DSYMBOLS=<ac_port.slsym> -DTOWN_SCRIPT=<town_replay.txt> -DTITLE_SCRIPT=<title_replay.txt> -DAC_DISC=<disc>
 #         -DAC_VERSION=<version> -DOUT_DIR=<dir> -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P state_test.cmake
@@ -13,8 +14,11 @@
 # dumps must exit 0 with no variable and no arena differing.
 #
 # The town replay then runs with --window --unpaced twice, uncapped with --set sonar.video.pacing=immediate and with
-# interpolation off with --set sonar.video.interpolation=false, each with --state-hashes. Each must exit 0 with the
-# headless run's lines and the window line, and the headless file must be a prefix of each run's file.
+# interpolation off with --set sonar.video.interpolation=false, each with --state-hashes, at render scale 1 and with
+# its window resized to 1280x720 at tick 6000, 960x720 at 12000 and 1680x720 at 18000: 16:9, 4:3 and 21:9. Each must
+# exit 0 with the headless run's lines and the window line, which must end with the target of the last size,
+# 1120x480; its stderr must report each resize taken; and the headless file must be a prefix of each run's file, as
+# the picture's size is no part of the game's state.
 #
 # The plant: the town replay headless with --state-hashes, --plant 19999, --dump and --dump-tick 20000. It must exit 0
 # with the clean runs' lines, its hashes must equal theirs to tick 19999 and differ from each one's from tick 20000 on,
@@ -207,11 +211,18 @@ if(NOT result EQUAL 0
     message(FATAL_ERROR "ac_port_state: the headless runs' dumps differ, or compared no variable or no arena")
 endif()
 
-# The town replay in a window, unpaced: uncapped, then with interpolation off.
+# The town replay in a window, unpaced: uncapped, then with interpolation off, each resized as it runs.
+set(resizes "6000 1280x720" "12000 960x720" "18000 1680x720")
+set(resize_arguments "")
+foreach(resize IN LISTS resizes)
+    string(REPLACE " " ";" resize_argument "${resize}")
+    list(APPEND resize_arguments --resize ${resize_argument})
+endforeach()
 foreach(setting IN ITEMS sonar.video.pacing=immediate sonar.video.interpolation=false)
     set(hashes "${OUT_DIR}/hashes_window.txt")
     file(REMOVE "${hashes}")
-    run_port(--window --user-dir "${user}" --unpaced --replay "${town}" --state-hashes "${hashes}" --set "${setting}")
+    run_port(--window --user-dir "${user}" --unpaced --replay "${town}" --state-hashes "${hashes}" --set "${setting}"
+             --set sonar.video.render_scale=1 ${resize_arguments})
     message("town window, ${setting}: exit ${result}, ${seconds} s:\n${lines}\n${window_line}")
     if(NOT result EQUAL 0 OR window_line STREQUAL "")
         tail_of("${errors}" errors)
@@ -221,6 +232,18 @@ foreach(setting IN ITEMS sonar.video.pacing=immediate sonar.video.interpolation=
     if(NOT lines STREQUAL headless)
         message(FATAL_ERROR "ac_port_state: the window's lines with ${setting} are not the headless run's:\n"
                             "${lines}\n${headless}")
+    endif()
+    string(REGEX MATCHALL "ac_port: resize [^\n]*" resized "${errors}")
+    message("${resized}")
+    foreach(resize IN LISTS resizes)
+        if(NOT "ac_port: resize ${resize}: ok" IN_LIST resized)
+            tail_of("${errors}" errors)
+            message(FATAL_ERROR "ac_port_state: the window run with ${setting} did not resize at ${resize}:\n${errors}")
+        endif()
+    endforeach()
+    if(NOT window_line MATCHES " target 1120x480$")
+        message(FATAL_ERROR "ac_port_state: the window run with ${setting} did not end with the 21:9 window's "
+                            "target, 1120x480:\n${window_line}")
     endif()
     read_hashes("the window run with ${setting}" "${hashes}" window_hashes)
     check_prefix("the window run's with ${setting}" "${hashes_1}" "${window_hashes}")

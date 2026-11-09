@@ -6,10 +6,13 @@
 # ac-import writes the package from the player's disc into OUT_DIR. Each window run shows the game on SDL's offscreen
 # video driver, through lavapipe's Vulkan, with SDL's dummy audio driver, the record runs keeping their settings under
 # OUT_DIR/user and the window replays theirs under OUT_DIR/replay_user: nothing opens on the desktop, nothing plays, no
-# host device takes a port and no player's file is read or written.
+# host device takes a port and no player's file is read or written. Each takes --set sonar.video.render_scale=1, so
+# lavapipe draws the game's own 640x480 and not the 1280x960 the window's size asks for by default (roadmap.md, M6
+# step 9c1).
 #
 # SCRIPT is recorded under --window --ticks 1200, paced. The run must exit 0, take no less than 20 s, and print the
-# play line, the record line, the saves line and the window line, with card-a, which the run creates, in slot A.
+# play line, the record line, the saves line and the window line, with card-a, which the run creates, in slot A, and
+# the target of render scale 1, 640x480.
 # sl-replay show must give the gamepad's connection at tick 0, Start down at 1000 and up at 1006, the calendar, the
 # package, os's settings, the port's data and no saves. The recording replays headless, then with --window --unpaced,
 # and each must print the record run's play line, its record line, named replay, and its saves line. The record run and
@@ -133,7 +136,8 @@ endfunction()
 # Records `script` into `recording` with the further arguments given, and checks the run's lines, its saves line and
 # its window line, setting `name`_lines to its play and record lines and `name`_saves to its saves line.
 macro(record name recording script)
-    run_port(--window --user-dir "${user}" --ticks 1200 --record "${recording}" --input-script "${script}" ${ARGN})
+    run_port(--window --user-dir "${user}" --ticks 1200 --record "${recording}" --input-script "${script}"
+             --set sonar.video.render_scale=1 ${ARGN})
     message("${name} record: exit ${result}, ${seconds} s:\n${lines}\n${saves_line}\n${window_line}")
     list(LENGTH lines found)
     if(NOT result EQUAL 0 OR NOT found EQUAL 2 OR saves_line STREQUAL "" OR window_line STREQUAL ""
@@ -150,9 +154,9 @@ macro(record name recording script)
     string(FIND "${output}" "${record_line}" record_at)
     string(FIND "${output}" "${saves_line}" saves_at)
     string(FIND "${output}" "${window_line}" window_at)
-    if(saves_at LESS record_at OR window_at LESS saves_at OR NOT window_line MATCHES " cards card-a -$")
+    if(saves_at LESS record_at OR window_at LESS saves_at OR NOT window_line MATCHES " cards card-a - target 640x480$")
         message(FATAL_ERROR "ac_port_record: the ${name} record run's saves line and window line do not follow the "
-                            "record line, with card-a in slot A:\n${output}")
+                            "record line, with card-a in slot A and the target at scale 1:\n${output}")
     endif()
     set(${name}_lines "${lines}")
     set(${name}_saves "${saves_line}")
@@ -200,7 +204,7 @@ function(check_replays name recording)
                                 "hashes that begin the record run's")
         endif()
     endif()
-    run_port(--window --user-dir "${replay_user}" --unpaced --replay "${recording}")
+    run_port(--window --user-dir "${replay_user}" --unpaced --replay "${recording}" --set sonar.video.render_scale=1)
     message("${name} window replay: exit ${result}, ${seconds} s:\n${lines}\n${saves_line}\n${window_line}")
     if(NOT result EQUAL 0 OR window_line STREQUAL "" OR NOT lines STREQUAL expected
        OR NOT saves_line STREQUAL "${${name}_saves}")
