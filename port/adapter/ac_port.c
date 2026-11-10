@@ -164,6 +164,7 @@ static uint64_t plant_tick;              /* and its tick */
 static const char* dump_dir;             /* --dump's directory */
 static int dump_tick_given;              /* --dump-tick */
 static uint64_t dump_tick;               /* and its tick */
+static int diff_from_given;              /* --diff-from */
 
 /* --window's settings, and the overrides of --goldens's display. */
 static const char* user_dir;        /* --user-dir */
@@ -346,6 +347,7 @@ static void stop_at_limit(void* user, uint64_t retrace) {
             measure_report();
             presents_report();
         }
+        ac_reference_submitted(); /* under --diff, its line before the replay's */
         ac_port_report("replay");
         _Exit(saves_report() == SL_OK ? 0 : 1);
     }
@@ -1068,6 +1070,11 @@ int main(int argc, char** argv) {
             /* the differential test, before boot: OSInit takes the reference's buffers; ac_port has no reference */
             if (!ac_diff_enable())
                 return usage_error();
+        } else if (strcmp(argv[i], "--diff-from") == 0 && i + 1 < argc && !diff_from_given) {
+            uint64_t from;
+            if (!parse_tick(argv[++i], &from) || !ac_diff_from(from))
+                return usage_error();
+            diff_from_given = 1;
         } else if (strcmp(argv[i], "--reference") == 0) {
             if (!ac_reference_enable()) /* before boot, as --diff */
                 return usage_error();
@@ -1150,8 +1157,10 @@ int main(int argc, char** argv) {
         return usage_error(); /* and only it and the goldens' display bind a setting a --set can name */
     if (resize_count != 0 && !window)
         return usage_error(); /* and only it has a window to resize */
-    if (replay != NULL && (goldens != NULL || ac_diff_enabled() || ac_reference_enabled()))
-        return usage_error(); /* a replay runs on the kit, headless or in a window */
+    if (diff_from_given && !ac_diff_enabled())
+        return usage_error(); /* --diff-from is the differential test's */
+    if (replay != NULL && (goldens != NULL || ac_reference_enabled() || (window && ac_diff_enabled())))
+        return usage_error(); /* a replay runs on the kit, headless or in a window, and under --diff headless */
     if (measure && replay != NULL && !ticks_given)
         return usage_error(); /* the medians are sized for --ticks's frames */
     if (record != NULL && (!window || replay != NULL))
@@ -1262,6 +1271,7 @@ int main(int argc, char** argv) {
         sl_emu64* emu = sl_emu64_create(emu64_flags);
         if (emu == NULL)
             return failed("sl_emu64_create", SL_ERROR_OUT_OF_MEMORY);
+        sl_emu64_set_memory(emu, ac_gx_memory, NULL); /* the GX lists the game builds, m_play.c's copy */
         count = sl_mem_image_data(ranges, 16);
         for (n = 0; n < count && n < 16; n++)
             sl_emu64_static_range(emu, ranges[n].begin, ranges[n].end);

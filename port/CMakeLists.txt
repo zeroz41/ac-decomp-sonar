@@ -516,11 +516,13 @@ add_test(NAME ac_port_replay
                  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/replay_test.cmake")
 set_tests_properties(ac_port_replay PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_replay: skipped, AC_DISC is not set")
 
-# ac_port_reference --diff, each emu64 task drawn by the kit and by the console's emu64 and the two compared, on its
-# own package from the player's disc; skipped without one, when the script says so.
+# ac_port_reference --diff, each emu64 task drawn by the kit and by the console's emu64 and the two compared, to play's
+# first frame and over the town replay cut at tick 8800, which sonarlib's sl-replay builds, on its own package from
+# the player's disc; skipped without one, when the script says so.
 add_test(NAME ac_port_diff
          COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>"
-                 "-DAC_PORT_REFERENCE=$<TARGET_FILE:ac_port_reference>"
+                 "-DAC_PORT_REFERENCE=$<TARGET_FILE:ac_port_reference>" "-DSL_REPLAY=$<TARGET_FILE:sl-replay>"
+                 "-DTOWN_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/town_replay.txt"
                  "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/diff"
                  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/diff_test.cmake")
 set_tests_properties(ac_port_diff PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_diff: skipped, AC_DISC is not set")

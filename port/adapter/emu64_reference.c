@@ -28,14 +28,15 @@
 #include <string.h>
 
 const char ac_program_name[] = "ac_port_reference";
-const char ac_reference_options[] = " [--diff] [--reference]";
+const char ac_reference_options[] = " [--diff [--diff-from <tick>]] [--reference]";
 
 /* ---- The reference (--diff, --reference): the calls it runs inside the switch, kept until the next task */
 
 static BOOL diff;
-static BOOL reference; /* --reference: no kit; the reference draws each task into the game's frame */
-static BOOL ref_init;        /* emu64_init was called since the last task */
-static BOOL ref_ucode_info;  /* emu64_set_ucode_info was, with these arguments */
+static u64 diff_from;       /* --diff-from: the first tick whose tasks are counted and printed */
+static BOOL reference;      /* --reference: no kit; the reference draws each task into the game's frame */
+static BOOL ref_init;       /* emu64_init was called since the last task */
+static BOOL ref_ucode_info; /* emu64_set_ucode_info was, with these arguments */
 static int ref_ucode_count;
 static ucode_info* ref_ucode_infos;
 static BOOL ref_first_ucode; /* emu64_set_first_ucode was, with this argument */
@@ -48,6 +49,11 @@ BOOL ac_diff_enable(void) {
 
 BOOL ac_diff_enabled(void) {
     return diff;
+}
+
+BOOL ac_diff_from(uint64_t tick) {
+    diff_from = tick;
+    return TRUE;
 }
 
 BOOL ac_reference_enable(void) {
@@ -122,18 +128,19 @@ static u64 diff_equal;
 static u64 diff_different;
 static u64 diff_refused;
 static u64 diff_triangles;  /* over both captures of the equal tasks */
+static u64 diff_copies;     /* the kit's, in the equal tasks */
 static u64 diff_skipped[2]; /* the kit's and the reference's, over the tasks compared */
 static u32 diff_lines;
 
 /* GRAPH's lists' field names less _thaga, in ac_emu64_list's order. */
 static const char* const list_names[AC_EMU64_LISTS] = {
-    "work",  "line_opaque", "line_translucent", "overlay",   "polygon_opaque", "polygon_translucent",
-    "font",  "shadow",      "light",            "bg_opaque", "bg_translucent",
+    "work",   "line_opaque", "line_translucent", "overlay",        "polygon_opaque", "polygon_translucent", "font",
+    "shadow", "light",       "bg_opaque",        "bg_translucent",
 };
 
 /* sl_capture_field's names, in lower case, by value. */
 static const char* const field_names[] = {
-    "same",    "count",   "primitive", "view",   "material", "params",  "draw_color",
+    "same",    "count",   "primitive", "view",   "material", "params",   "draw_color",
     "texture", "sampler", "position",  "normal", "color",    "texcoord",
 };
 
@@ -178,6 +185,16 @@ static void diff_report(const sl_capture* kit, const sl_capture_difference* d) {
     fflush(stdout);
 }
 
+/* A task whose captures compare but hold other counts of copies. */
+static void copies_report(const sl_capture* kit, const sl_capture* ref) {
+    if (diff_lines >= AC_DIFF_LINES)
+        return;
+    diff_lines++;
+    printf("ac_port: diff tick %" PRIu64 " copies kit %" PRIu32 " reference %" PRIu32 "\n", sl_tick_count(),
+           kit->copies, ref->copies);
+    fflush(stdout);
+}
+
 /* A frame of its own, submitted, and its capture; NULL when the frame was refused or gave no capture. */
 static sl_capture* frame_capture(sl_frame* frame) {
     if (frame == NULL || sl_frame_submit(frame) != SL_OK)
@@ -210,10 +227,11 @@ static void diff_task(sl_emu64* emu, Gfx* gfx) {
     sl_capture_difference d;
     u32 overflows;
     BOOL refused;
+    const BOOL counted = sl_tick_count() >= diff_from; /* before --diff-from's tick, compared but not counted */
     ac_gx_get_counts(&before);
     if (!ac_frame_task(&frame)) {
         ac_gx_get_counts(&after);
-        if (after.outside == before.outside) { /* the game's frame was refused: neither draws, as without --diff */
+        if (counted && after.outside == before.outside) { /* the game's frame was refused: neither draws */
             diff_tasks++;
             diff_refused++;
         }
@@ -234,19 +252,25 @@ static void diff_task(sl_emu64* emu, Gfx* gfx) {
     ref = frame_capture(ref_frame);
     refused = kit == NULL || ref == NULL || emu64_ref_palette_overflows() != overflows;
 
-    diff_tasks++;
-    if (refused) {
-        diff_refused++;
-    } else if (sl_capture_compare(kit, ref, NULL, &d)) {
-        diff_equal++;
-        diff_triangles += (u64)kit->triangle_count + ref->triangle_count;
-    } else {
-        diff_different++;
-        diff_report(kit, &d);
-    }
-    if (kit != NULL && ref != NULL) {
-        diff_skipped[0] += kit->skipped;
-        diff_skipped[1] += ref->skipped;
+    if (counted) {
+        diff_tasks++;
+        if (refused) {
+            diff_refused++;
+        } else if (!sl_capture_compare(kit, ref, NULL, &d)) {
+            diff_different++;
+            diff_report(kit, &d);
+        } else if (kit->copies != ref->copies) { /* the copies are not captured, only counted */
+            diff_different++;
+            copies_report(kit, ref);
+        } else {
+            diff_equal++;
+            diff_triangles += (u64)kit->triangle_count + ref->triangle_count;
+            diff_copies += kit->copies;
+        }
+        if (kit != NULL && ref != NULL) {
+            diff_skipped[0] += kit->skipped;
+            diff_skipped[1] += ref->skipped;
+        }
     }
     sl_capture_free(kit);
     sl_capture_free(ref);
@@ -272,7 +296,7 @@ BOOL ac_reference_task(sl_emu64* kit, Gfx* gfx) {
 void ac_reference_submitted(void) {
     if (diff)
         printf("ac_port: diff tasks %" PRIu64 " equal %" PRIu64 " different %" PRIu64 " refused %" PRIu64
-               " triangles %" PRIu64 " skipped %" PRIu64 " %" PRIu64 "\n",
+               " triangles %" PRIu64 " skipped %" PRIu64 " %" PRIu64 " copies %" PRIu64 "\n",
                (uint64_t)diff_tasks, (uint64_t)diff_equal, (uint64_t)diff_different, (uint64_t)diff_refused,
-               (uint64_t)diff_triangles, (uint64_t)diff_skipped[0], (uint64_t)diff_skipped[1]);
+               (uint64_t)diff_triangles, (uint64_t)diff_skipped[0], (uint64_t)diff_skipped[1], (uint64_t)diff_copies);
 }

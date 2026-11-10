@@ -13,6 +13,7 @@
 #endif
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,7 +23,7 @@ struct sl_emu64;
 struct ucode_info_s;
 
 /* The program's name, ac_port or ac_port_reference, and the options its usage adds after --validate: none, or
-   " [--diff] [--reference]". */
+   " [--diff [--diff-from <tick>]] [--reference]". */
 extern const char ac_program_name[];
 extern const char ac_reference_options[];
 
@@ -33,6 +34,10 @@ BOOL ac_reference_enable(void);
 /* Whether the run took --diff, or --reference; FALSE in ac_port. Any game thread. */
 BOOL ac_diff_enabled(void);
 BOOL ac_reference_enabled(void);
+/* --diff-from's tick, ac_port.c's, before boot, which needs --diff: before it each task is still drawn by both and
+   compared, so the reference's state follows the console's, but nothing is counted or printed. TRUE in
+   ac_port_reference; FALSE in ac_port, which gives the usage. */
+BOOL ac_diff_from(uint64_t tick);
 
 /* OSInit's, once main memory exists: under either flag, the reference's buffers from the bottom of the arena. */
 void ac_reference_boot(void);
@@ -56,7 +61,9 @@ BOOL ac_reference_task(struct sl_emu64* kit, Gfx* gfx);
 
 /* ac_port_report's, before its scene: " palette-overflows <n>" under --reference. */
 void ac_reference_report(void);
-/* ac_emu64_frame_submitted's, before the proof's line: the differential test's line under --diff. */
+/* ac_emu64_frame_submitted's, before the proof's line, and at a replay's end, before the replay's: the differential
+   test's line under --diff. A task counts as equal only when its captures compare and hold as many copies; the line's
+   copies are the kit's in the equal tasks. */
 void ac_reference_submitted(void);
 
 /* The GX glue's hand-over (dolphin_gx.c), once the main front end exists, with the bytes written outside display

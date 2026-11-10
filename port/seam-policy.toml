@@ -1,10 +1,11 @@
-# The port's seam policy (sonarlib docs/porting-model.md, Seam audit; docs/roadmap.md, M6 steps 6h and 10a). The test
-# ac_seam_audit runs sl-seam-audit over the build's compile_commands.json with this policy: every file the build
+# The port's seam policy (sonarlib docs/porting-model.md, Seam audit; docs/roadmap.md, M6 steps 6h, 10a and 10b). The
+# test ac_seam_audit runs sl-seam-audit over the build's compile_commands.json with this policy: every file the build
 # compiles that uses GX is listed here. The SDK's GX units are sdk and the port's glue is glue. emu64, which only
-# ac_port_reference links, is reference; a file that names GX's types or data or includes its headers and calls
-# nothing is types, and fails the audit at its first call; the NES emulator, which the port builds and never starts,
-# is unsupported. Each other file is transitional, with what it does with GX. A file that starts using GX fails the
-# audit until it is listed, and a converted file fails until its entry goes. The seam is complete at transitional 0.
+# ac_port_reference links, is reference; a file that names GX's types or data or includes its headers and calls nothing
+# is types, and fails the audit at its first call; the NES emulator, which the port builds and never starts, is
+# unsupported. m_play.c, whose GX calls build the display list the emu64 kit decodes, is list. Each other file is
+# transitional, with what it does with GX. A file that starts using GX fails the audit until it is listed, and a
+# converted file fails until its entry goes. The seam is complete at transitional 0.
 
 [category.GX]
 names = "GX"
@@ -61,8 +62,8 @@ note = "GXInit and the graphics FIFO's base and pointers"
 [file.m_play]
 path = "src/game/m_play.c"
 category = "GX"
-kind = "transitional"
-note = "copy_efb_to_texture's EFB copy, built into a GX display list that emu64's list calls (step 10b)"
+kind = "list"
+note = "copy_efb_to_texture's EFB copy, built into a GX display list that emu64's list calls, which the emu64 kit decodes and records as core's copy (step 10b)"
 
 [file.shutdown]
 path = "src/static/libultra/shutdown.c"

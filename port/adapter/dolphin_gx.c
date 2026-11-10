@@ -249,8 +249,7 @@ u64 ac_gx_unmapped(void) {
     return unmapped;
 }
 
-/* The front end's memory: the host bytes at [address, address + size) when they lie in one region. */
-static const void* gx_memory(void* user, uint32_t address, size_t size) {
+const void* ac_gx_memory(void* user, uint32_t address, size_t size) {
     const gx_region* const r = region_of(address, size);
     (void)user;
     return r != NULL ? r->host + (address - r->address) : NULL;
@@ -271,7 +270,7 @@ static u64 refused_records;
 sl_gxf* ac_gx_create_front_end(void) {
     sl_gxf_desc desc;
     memset(&desc, 0, sizeof desc);
-    desc.memory = gx_memory;
+    desc.memory = ac_gx_memory;
     desc.max_vertices = 0;
     return sl_gxf_create(&desc);
 }
@@ -447,11 +446,14 @@ void GXSaveCPUFifo(GXFifoObj* fifo) {
     __GXSaveCPUFifoAux((struct __GXFifoObj*)fifo);
 }
 
-/* The console flushed the write gather pipe and read the write pointer back from the PI. The sink writes through
-   at once, so the object already holds it: a display list's count is the bytes written into it, and the linked
-   FIFO, whose bytes the sink hands to the GX front end, holds none. */
+/* The console flushed the write gather pipe, GXFlush's 32 zero bytes after what was written, and read the write
+   pointer back from the PI, which moves by the pipe's 32-byte bursts. The sink writes through at once, so a display
+   list's pointer is past the flush's bytes: its count is the bytes written into it, the flush's among them, down to
+   a burst, as the console's. The linked FIFO, whose bytes the sink hands to the GX front end, holds none. */
 void __GXSaveCPUFifoAux(struct __GXFifoObj* realFifo) {
+    GXFlush();
     if (realFifo != gp_fifo) {
+        realFifo->wrPtr = realFifo->base + (((u8*)realFifo->wrPtr - realFifo->base) & ~(ptrdiff_t)31);
         realFifo->count = (s32)((u8*)realFifo->wrPtr - (u8*)realFifo->rdPtr);
         if (realFifo->count < 0)
             realFifo->count += realFifo->size;

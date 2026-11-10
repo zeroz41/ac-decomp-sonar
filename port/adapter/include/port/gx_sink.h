@@ -13,6 +13,9 @@
 
 #include <sonar/base/result.h>
 
+#include <stddef.h>
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -44,6 +47,9 @@ BOOL ac_gx_find_address(const void* pointer, u32* address);
 u32 ac_gx_tlut_address(const void* pointer);
 /* A GX address back to its pointer; NULL for 0 or an address in no region. Any thread. */
 void* ac_gx_pointer(u32 address);
+/* GX's memory for the front end and the emu64 kit's lists (sl_emu64_set_memory): the host bytes at [address,
+   address + size) when they lie in one region, and NULL otherwise. user is unused. Any thread. */
+const void* ac_gx_memory(void* user, uint32_t address, size_t size);
 
 /* The bytes written outside display lists since start-up. */
 u64 ac_gx_bytes(void);

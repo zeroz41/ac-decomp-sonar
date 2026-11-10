@@ -1,5 +1,5 @@
 /* The reference's hooks in ac_port, the player's program, which links no reference (port/reference.h; sonarlib
-   docs/steps/m6-10a.md): --diff and --reference are refused, and each hook does nothing. */
+   docs/steps/m6-10a.md): --diff, --diff-from and --reference are refused, and each hook does nothing. */
 #include <port/reference.h>
 
 const char ac_program_name[] = "ac_port";
@@ -18,6 +18,11 @@ BOOL ac_reference_enable(void) {
 }
 
 BOOL ac_reference_enabled(void) {
+    return FALSE;
+}
+
+BOOL ac_diff_from(uint64_t tick) {
+    (void)tick;
     return FALSE;
 }
 
