@@ -5,6 +5,10 @@
 #include "libultra/gu.h"
 #include "libultra/libultra.h"
 #include "m_rcp.h"
+#ifdef SONAR_PORT /* sonarlib port: the wipe's model covers a wider display (adapter/emu64_glue.c) */
+#include <port/emu64_glue.h>
+#include <sonar/render.h>
+#endif
 
 void fbdemo_triforce_startup(fbdemo_triforce* this) {
   this->finished = 0;
@@ -68,6 +72,9 @@ void fbdemo_triforce_draw(fbdemo_triforce* this, Gfx** gfxP) {
 
   gSPMatrix(gfx++, t, G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
 
+#ifdef SONAR_PORT /* sonarlib port: the model stretches across a wider display, as it covered the frame */
+  ac_emu64_anchor_at(&gfx, SL_ANCHOR_STRETCH);
+#endif
   switch (this->textureno) {
     case 0:
       gSPDisplayList(gfx++, ef_wipe1_modelT);
@@ -79,6 +86,9 @@ void fbdemo_triforce_draw(fbdemo_triforce* this, Gfx** gfxP) {
       gSPDisplayList(gfx++, ef_wipe3_modelT);
       break;
   }
+#ifdef SONAR_PORT
+  ac_emu64_anchor_at(&gfx, SL_ANCHOR_CENTER);
+#endif
   gDPPipeSync(gfx++);
   *gfxP = gfx;
 }

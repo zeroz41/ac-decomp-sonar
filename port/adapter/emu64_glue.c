@@ -229,6 +229,12 @@ static void part_marker(Gfx* at, u32 part) {
     at->words.w1 = part;
 }
 
+/* One G_NOOP of tag SL_EMU64_TAG_ANCHOR at at: the task's draws after it take the anchor, an sl_anchor. */
+static void anchor_marker(Gfx* at, u32 anchor) {
+    at->words.w0 = (u32)0x00 << 24 | (u32)SL_EMU64_TAG_ANCHOR << 16;
+    at->words.w1 = anchor;
+}
+
 /* The owner marker at the list's head. */
 static Gfx* write_marker(THA_GA* list, uint64_t owner) {
     Gfx* const at = list->thaGfx.head_p;
@@ -303,6 +309,14 @@ Gfx* ac_emu64_part_open_at(Gfx** gfx_pp, u32 part) {
     part_marker(at, part);
     *gfx_pp = at + 1;
     return at;
+}
+
+void ac_emu64_anchor_at(Gfx** gfx_pp, u32 anchor) {
+    Gfx* const at = *gfx_pp;
+    if (emu == NULL)
+        return;
+    anchor_marker(at, anchor);
+    *gfx_pp = at + 1;
 }
 
 void ac_emu64_part_close_at(Gfx** gfx_pp, Gfx* mark) {

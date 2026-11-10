@@ -2,7 +2,8 @@
            [--window [--user-dir <dir>] [--set <key>=<value>]... [--resize <tick> <width>x<height>]...
                      [--replay <recording> [--unpaced]
                       | --record <recording> [--input-script <script>] [--date <date>] [--unpaced]]
-            | --goldens <scenes> <dir> | --measure [--present-hz <n>] [--replay <recording>] | --replay <recording>]
+            | --goldens <scenes> <dir> [--display <width>x<height> [--set <key>=<value>]...]
+            | --measure [--present-hz <n>] [--replay <recording>] | --replay <recording>]
            [--qrand-seed <hex>] [--state-hashes <file> [--plant <n>]] [--dump <dir> --dump-tick <n>]:
    Animal Crossing on sonarlib
    (port/NOTES.md, The program). The process's main thread starts the library and the render module, makes the emu64
@@ -21,13 +22,13 @@
    memory cards in the save store at user:saves, the card in each slot by its setting, card-a in slot A unless the
    settings name another, and shows sonarlib's overlay on F1 (port/NOTES.md, The window; README.md, Saves). Every
    other run mounts no user directory and reads no settings file, and only a replay registers a setting, os's, and
-   the cards' when its recording carries saves. With --replay, the window plays the recording from its start, as
-   headless does, deterministic and paced by the host, so frame for frame as headless at the game's speed, or as fast
-   as it can with --unpaced, never on the player's saves. The replay's end prints the replay line and ends the loop
-   (port/NOTES.md, Replays). The picture follows the window: its shape, unless sonar.video.widescreen is off, and
-   its size, unless sonar.video.render_scale fixes a scale (sonar/window.h, sl_window_settings_bind). --resize, up to
-   8 with their ticks increasing, asks for each size once its tick has begun and reports the result on stderr, for
-   the tests (port/NOTES.md, The window).
+   the cards' when its recording carries saves, and --goldens's display, the video settings. With --replay, the
+   window plays the recording from its start, as headless does, deterministic and paced by the host, so frame for
+   frame as headless at the game's speed, or as fast as it can with --unpaced, never on the player's saves. The
+   replay's end prints the replay line and ends the loop (port/NOTES.md, Replays). The picture follows the window:
+   its shape, unless sonar.video.widescreen is off, and its size, unless sonar.video.render_scale fixes a scale
+   (sonar/window.h, sl_window_settings_bind). --resize, up to 8 with their ticks increasing, asks for each size once
+   its tick has begun and reports the result on stderr, for the tests (port/NOTES.md, The window).
 
    --record, with --window: the window records its input to the file from tick 0, deterministic and paced by the
    host, or as fast as it can with --unpaced, at the host's calendar or --date's, with os's settings and the cards'
@@ -40,7 +41,11 @@
    --goldens: headless and deterministic, but on the GPU sink with no window, writing the frames the scenes file names
    into the directory (sonar/goldens.h, port/NOTES.md, Goldens). The GX glue's frame begin hands each frame's keys to
    the goldens (emu64_glue.c), play's first frame ends no run, and the main thread serves the captures until every
-   scene is written, or until the tick limit stops them. --qrand-seed gives init_rnd's seed (sys_math.c).
+   scene is written, or until the tick limit stops them. --qrand-seed gives init_rnd's seed (sys_math.c). --display
+   gives the run a display of that size in pixels, a virtual window the goldens make and bind to the video settings
+   (sl_goldens_display), so the frames are those a player's window of that shape shows, with the columns a wider
+   display adds beside each scene's rectangle; it opens nothing on the desktop. Each --set is then an override of a
+   video setting for the run, with no settings file and no user directory.
 
    --measure: headless and deterministic, on the GPU sink with no window, timing each frame from play's first to the
    tick limit (sonar/measure.h, port/NOTES.md, Measured runs). The GX glue's frame end hands each frame to the
@@ -110,8 +115,8 @@ static const char usage[] =
     "                         [--replay <recording> [--unpaced]\n"
     "                          | --record <recording> [--input-script <script>] [--date <date>]\n"
     "                                     [--unpaced]]\n"
-    "                | --goldens <scenes> <dir> | --measure [--present-hz <n>] [--replay <recording>]\n"
-    "                | --replay <recording>]\n"
+    "                | --goldens <scenes> <dir> [--display <width>x<height> [--set <key>=<value>]...]\n"
+    "                | --measure [--present-hz <n>] [--replay <recording>] | --replay <recording>]\n"
     "               [--qrand-seed <hex>] [--state-hashes <file> [--plant <n>]]\n"
     "               [--dump <dir> --dump-tick <n>]\n";
 
@@ -126,6 +131,9 @@ static struct {
 static int resize_count;
 static const char* goldens;      /* --goldens's scenes file */
 static const char* goldens_dir;  /* and its output directory */
+static int display_given;        /* --display: the goldens' display */
+static uint32_t display_width;   /* and its size in pixels */
+static uint32_t display_height;
 static int measure;              /* --measure */
 static uint64_t measured;        /* frames handed to the measured run */
 static uint64_t measured_first;  /* the tick of the first */
@@ -155,7 +163,7 @@ static const char* dump_dir;             /* --dump's directory */
 static int dump_tick_given;              /* --dump-tick */
 static uint64_t dump_tick;               /* and its tick */
 
-/* --window's settings. */
+/* --window's settings, and the overrides of --goldens's display. */
 static const char* user_dir;        /* --user-dir */
 static const char** assignments;    /* each --set's key=value, in order */
 static int assignment_count;        /* and how many */
@@ -659,6 +667,23 @@ static int start_saves(void) {
     return 0;
 }
 
+/* Takes each --set as an override for the run, before the binds that register the settings, which take it as they
+   register. A malformed one is a usage error; a key or value no setting takes is found after the binds
+   (check_assignments). Returns 0, or main's exit code. */
+static int override_assignments(void) {
+    int i;
+    for (i = 0; i < assignment_count; i++) {
+        const sl_result result = sl_settings_override(assignments[i]);
+        if (result == SL_ERROR_INVALID_ARGUMENT) {
+            fprintf(stderr, "ac_port: --set %s: malformed\n", assignments[i]);
+            return usage_error();
+        }
+        if (result != SL_OK)
+            return failed("sl_settings_override", result);
+    }
+    return 0;
+}
+
 /* --window's settings, after sl_fs_init: prints the file's host path, loads config:settings.toml, takes each --set
    over it for the run, watches the settings to save them, and binds os's system settings before os starts, so the
    game boots with the stored ones, and a recording holds them; a replay's recorded ones are in effect instead while
@@ -669,7 +694,7 @@ static int start_settings(void) {
     sl_settings_error error;
     size_t length = 0;
     sl_result result;
-    int i;
+    int code;
     result = sl_fs_user_dir(SL_USER_DIR_CONFIG, settings_path, sizeof settings_path - (sizeof file - 1), &length);
     if (result != SL_OK)
         return failed("sl_fs_user_dir", result);
@@ -690,16 +715,9 @@ static int start_settings(void) {
         else
             fprintf(stderr, "ac_port: %s: %s; it is left as it is\n", settings_path, message);
     }
-    for (i = 0; i < assignment_count; i++) {
-        result = sl_settings_override(assignments[i]);
-        if (result == SL_ERROR_INVALID_ARGUMENT) {
-            /* malformed; a key or value no setting takes is found after the binds (check_assignments) */
-            fprintf(stderr, "ac_port: --set %s: malformed\n", assignments[i]);
-            return usage_error();
-        }
-        if (result != SL_OK)
-            return failed("sl_settings_override", result);
-    }
+    code = override_assignments();
+    if (code != 0)
+        return code;
     result = sl_settings_add_watch(settings_changed_watch, NULL);
     if (result != SL_OK)
         return failed("sl_settings_add_watch", result);
@@ -1054,7 +1072,7 @@ int main(int argc, char** argv) {
         } else if (strcmp(argv[i], "--user-dir") == 0 && i + 1 < argc && user_dir == NULL) {
             user_dir = argv[++i];
         } else if (strcmp(argv[i], "--set") == 0 && i + 1 < argc) {
-            assignments[assignment_count++] = argv[++i]; /* applied after the settings file, which needs fs */
+            assignments[assignment_count++] = argv[++i]; /* applied after --window's settings file, which needs fs */
         } else if (strcmp(argv[i], "--resize") == 0 && i + 2 < argc && resize_count < RESIZE_MAX) {
             if (!parse_tick(argv[++i], &resizes[resize_count].tick) ||
                 (resize_count != 0 && resizes[resize_count].tick <= resizes[resize_count - 1].tick) ||
@@ -1065,6 +1083,12 @@ int main(int argc, char** argv) {
             goldens = argv[++i];
             goldens_dir = argv[++i];
             ac_goldens_enable(); /* play's first frame ends no run */
+        } else if (strcmp(argv[i], "--display") == 0 && i + 1 < argc && !display_given) {
+            /* a side is at most a virtual window's 16384 (sonar/window.h) */
+            if (!parse_size(argv[++i], &display_width, &display_height) || display_width > 16384 ||
+                display_height > 16384)
+                return usage_error();
+            display_given = 1;
         } else if (strcmp(argv[i], "--replay") == 0 && i + 1 < argc && replay == NULL) {
             replay = argv[++i];
             ac_replay_enable(); /* play's first frame ends no run */
@@ -1107,8 +1131,12 @@ int main(int argc, char** argv) {
         return usage_error(); /* a display's rate is the measured run's, and the reference is measured at none */
     if (ac_reference_enabled() && (window || ac_diff_enabled() || (emu64_flags & SL_EMU64_VALIDATE) != 0))
         return usage_error(); /* the reference runs headless, without the kit */
-    if ((user_dir != NULL || assignment_count != 0) && !window)
-        return usage_error(); /* only --window keeps the player's directories and settings */
+    if (display_given && goldens == NULL)
+        return usage_error(); /* the display is the goldens' */
+    if (user_dir != NULL && !window)
+        return usage_error(); /* only --window keeps the player's directories and settings file */
+    if (assignment_count != 0 && !window && !display_given)
+        return usage_error(); /* and only it and the goldens' display bind a setting a --set can name */
     if (resize_count != 0 && !window)
         return usage_error(); /* and only it has a window to resize */
     if (replay != NULL && (goldens != NULL || ac_diff_enabled() || ac_reference_enabled()))
@@ -1159,9 +1187,9 @@ int main(int argc, char** argv) {
         if (code != 0)
             return code;
     }
-    if (window) {
+    if (window || display_given) {
         /* The window system before the render module, so the GPU sink's device shares its video driver: the
-           environment's choice, else the platform's. */
+           environment's choice, else the platform's. --display's window is virtual, and shows nowhere. */
         result = sl_window_init(NULL);
         if (result != SL_OK)
             return failed("sl_window_init", result);
@@ -1188,6 +1216,20 @@ int main(int argc, char** argv) {
         result = sl_goldens_open(goldens, goldens_dir);
         if (result != SL_OK)
             return failed("sl_goldens_open", result);
+    }
+    if (display_given) {
+        /* The goldens' display, whose bind registers the video settings: each --set overrides one for the run, and
+           the main target follows the display through them from the first capture, as it follows a player's window.
+           No settings file is read and none is written. */
+        int code = override_assignments();
+        if (code != 0)
+            return code;
+        result = sl_goldens_display(display_width, display_height);
+        if (result != SL_OK)
+            return failed("sl_goldens_display", result);
+        code = check_assignments(); /* every setting --set can name here is registered now */
+        if (code != 0)
+            return code;
     }
     if (measure) {
         /* A median from every frame: at most one a tick. --present-hz's rate, {n, 1}, else {0, 0}: each frame

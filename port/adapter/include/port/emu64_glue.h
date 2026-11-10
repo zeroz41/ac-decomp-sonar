@@ -62,6 +62,16 @@ Gfx* ac_emu64_part_open_at(Gfx** gfx_pp, u32 part);
 void ac_emu64_part_close_at(Gfx** gfx_pp, Gfx* mark);
 #endif
 
+/* The task's draws from *gfx_pp on take the anchor, an sl_anchor (sonar/render.h): an anchor marker at *gfx_pp,
+   stepped past (sonarlib kits/emu64 gfx.h, SL_EMU64_TAG_ANCHOR). It shows on a display wider than the game's, in a
+   view the kit stretches there, a perspective of the whole frame: a centered draw, as every task starts, is part of
+   the widened view's world, and a stretched one stretches across the display as the game drew it across the frame,
+   which is what a wipe's model needs to cover the display. The caller sets the anchor back after its draws. Under
+   --reference it writes nothing. */
+#ifdef _LANGUAGE_C
+void ac_emu64_anchor_at(Gfx** gfx_pp, u32 anchor);
+#endif
+
 /* The part of the actor's eleven owners is gone: forgotten, so what next takes its slot starts unmatched. */
 void ac_emu64_forget_part(const struct actor_s* actor, u32 part);
 /* The part of the actor's eleven owners jumped: it shows unblended in the next task's frame. */

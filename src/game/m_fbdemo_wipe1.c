@@ -4,6 +4,10 @@
 #include "libultra/libultra.h"
 #include "m_common_data.h"
 #include "m_rcp.h"
+#ifdef SONAR_PORT /* sonarlib port: the wipe's model covers a wider display (adapter/emu64_glue.c) */
+#include <port/emu64_glue.h>
+#include <sonar/render.h>
+#endif
 
 Vtx wipe1_v[] = {
 #include "assets/wipe1_v.inc"
@@ -95,7 +99,13 @@ void fbdemo_wipe1_draw(fbdemo_wipe1* this, Gfx** gfxP) {
   gSPMatrix(gfx++, &modelView[1], G_MTX_NOPUSH | G_MTX_MUL | G_MTX_MODELVIEW);
   gSPMatrix(gfx++, &modelView[2], G_MTX_NOPUSH | G_MTX_MUL | G_MTX_MODELVIEW);
 
+#ifdef SONAR_PORT /* sonarlib port: the model stretches across a wider display, as it covered the frame */
+  ac_emu64_anchor_at(&gfx, SL_ANCHOR_STRETCH);
+#endif
   gSPDisplayList(gfx++, wipe1_modelT);
+#ifdef SONAR_PORT
+  ac_emu64_anchor_at(&gfx, SL_ANCHOR_CENTER);
+#endif
   gDPPipeSync(gfx++);
   *gfxP = gfx;
 }

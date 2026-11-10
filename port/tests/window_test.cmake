@@ -1,5 +1,5 @@
 # Runs ac_port --window with its user directories under OUT_DIR/user, twice to play, then with bad assignments and
-# twice with the memory cards (sonarlib docs/roadmap.md, M6 steps 6k, 6l, 6m, 11a, 11c and 9c1):
+# twice with the memory cards (sonarlib docs/roadmap.md, M6 steps 6k, 6l, 6m, 11a, 11c, 9c1 and 9c2):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
 #         -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P window_test.cmake
 # ac-import writes the package from the player's disc into OUT_DIR. Each run shows the game in real time in a window
@@ -36,6 +36,11 @@
 #
 # Bad resizes: --resize with the sizes 640, 640x, 0x480 and 640x480x2, a second at the first's tick, and a ninth must
 # each exit 2 with the usage.
+#
+# A goldens display's arguments, with no --window: --display 854x480 without --goldens; --goldens with --display 854,
+# no size; --goldens with --set sonar.video.widescreen=false and no --display, which binds no setting; and --goldens
+# with --display 854x480 --set sonar.input.none=1, a key the display's video settings do not register, must each exit
+# 2 with the usage. The goldens' scenes file is one line this script writes into OUT_DIR, and no run reaches a frame.
 #
 # The memory cards: with the user directories empty again, so no settings file, a run of --ticks 900, past play's
 # first frame and so past CARDInit, must put card-a in slot A and none in B, its window line reading "cards card-a -",
@@ -240,6 +245,28 @@ foreach(arguments IN ITEMS "--resize;10;640" "--resize;10;640x" "--resize;10;0x4
     if(NOT result EQUAL 2 OR at EQUAL -1)
         tail_of("${errors}" errors)
         message(FATAL_ERROR "ac_port_window: ${arguments} did not exit 2 with the usage:\n${errors}")
+    endif()
+endforeach()
+
+# A goldens display's arguments.
+set(scenes "${OUT_DIR}/display.scenes")
+set(frames_dir "${OUT_DIR}/display")
+file(WRITE "${scenes}" "logo_held menu_frame=64 fader=1\n")
+file(REMOVE_RECURSE "${frames_dir}")
+file(MAKE_DIRECTORY "${frames_dir}")
+foreach(arguments IN ITEMS "--ticks;60;--display;854x480" "--goldens;${scenes};${frames_dir};--display;854"
+                           "--goldens;${scenes};${frames_dir};--set;sonar.video.widescreen=false"
+                           "--goldens;${scenes};${frames_dir};--display;854x480;--set;sonar.input.none=1")
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env SDL_VIDEO_DRIVER=offscreen SDL_AUDIO_DRIVER=dummy
+                            "VK_DRIVER_FILES=${AC_LAVAPIPE_ICD}" "${AC_PORT}" --package "${package}" ${arguments}
+                    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 60)
+    string(FIND "${errors}" "usage: ac_port" at)
+    string(REPLACE "${OUT_DIR}/" "" named "${arguments}")
+    string(REPLACE ";" " " named "${named}")
+    message("goldens display: exit ${result}: ${named}")
+    if(NOT result EQUAL 2 OR at EQUAL -1)
+        tail_of("${errors}" errors)
+        message(FATAL_ERROR "ac_port_window: ${named} did not exit 2 with the usage:\n${errors}")
     endif()
 endforeach()
 
