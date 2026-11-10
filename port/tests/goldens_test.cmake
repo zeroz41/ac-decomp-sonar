@@ -20,6 +20,9 @@
 # byte and the window pictures of the logo held and of each play scene must differ from port-16x9's. With
 # supersampling at 2 into port-16x9-ss2, each frame must be twice port-16x9's size and the same window pictures must
 # differ. Each of the two then runs again, and every frame and window picture must be the first run's byte for byte.
+# Then multisampling at 4 in the 16:9 display (M6 step 9e2) into port-16x9-msaa4, which changes the frames themselves:
+# they and the window pictures have port-16x9's sizes, each play scene's frame must differ from port-16x9's, and the
+# run again must write the first run's frames and window pictures byte for byte.
 # It prints every line. When AC_DISC names no disc,
 # AC_DOLPHIN no Dolphin, there is no lavapipe or no sl-capture, or the disc is another version than GAFE01_00, whose
 # addresses these are, it prints the line the test's SKIP_REGULAR_EXPRESSION matches and returns.
@@ -259,6 +262,26 @@ function(goldens_windows_differ name other)
             "from ${other}'s")
 endfunction()
 
+# A multisampled run against the same run at one sample, both checked by goldens_sizes: each play scene's frame
+# differs, as MSAA changes the main target itself, at the edges of the shapes it holds.
+function(goldens_resampled name other)
+    goldens_scenes(${name})
+    set(count 0)
+    foreach(scene IN LISTS scenes)
+        if(scene MATCHES "^play_")
+            goldens_same_frame(${name} ${other} ${scene})
+            if(same)
+                message(FATAL_ERROR "ac_port_goldens: ${name}/${scene}.ppm is ${other}'s: the samples did not reach it")
+            endif()
+            math(EXPR count "${count} + 1")
+        endif()
+    endforeach()
+    if(count LESS 1)
+        message(FATAL_ERROR "ac_port_goldens: the ${name} run wrote no play scene")
+    endif()
+    message("ac_port_goldens: ${name}: each play scene, ${count} frames, differs from ${other}'s")
+endfunction()
+
 # A run a second time, into <name>-again: its scenes, and every frame and window picture, are the first run's, byte for
 # byte.
 function(goldens_again name port_options)
@@ -326,3 +349,13 @@ goldens_sizes(port-16x9-ss2 "1624 928" "1708 960")
 goldens_window_sizes(port-16x9-ss2 "854 480")
 goldens_windows_differ(port-16x9-ss2 port-16x9)
 goldens_again(port-16x9-ss2 "${supersampled}")
+
+# Multisampling at 4 (M6 step 9e2). The port starts its sink at one sample, so the run changes the count at its first
+# present, with the pipelines made by then. MSAA is the main target's: the frames keep the 16:9 run's sizes and each
+# play scene's differs from that run's, where a filter changes the window pictures alone. No Dolphin frame shows it.
+set(multisampled "--display;854x480;--set;sonar.video.msaa=4x")
+goldens_write(port-16x9-msaa4 "${multisampled}")
+goldens_sizes(port-16x9-msaa4 "812 464" "854 480")
+goldens_window_sizes(port-16x9-msaa4 "854 480")
+goldens_resampled(port-16x9-msaa4 port-16x9)
+goldens_again(port-16x9-msaa4 "${multisampled}")

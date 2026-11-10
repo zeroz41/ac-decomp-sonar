@@ -28,12 +28,12 @@
 # and sl-dump-compare on its dump and a clean one must exit 1, naming common_data at +0x1c, the save's pad_1C[0], as
 # the first difference, with one variable differing.
 #
-# The picture's settings (M6 step 9e1): the title replay headless with --state-hashes, which must exit 0 with the
-# replay line at tick 1201 in scene 28, then with --window --unpaced, interpolation off, --resize 1 640x480 and --set
-# for SMAA, FSR 1, RCAS and supersampling at 2. It must exit 0 with the window line, which must end with the target
-# 1280x960, twice the window's size a side; its play and replay lines must be the headless run's, whole, as a 4:3
-# window draws what a headless run draws; and the headless file must be a prefix of its file, as no setting of the
-# picture is part of the game's state.
+# The picture's settings (M6 steps 9e1 and 9e2): the title replay headless with --state-hashes, which must exit 0 with
+# the replay line at tick 1201 in scene 28, then with --window --unpaced, interpolation off, --resize 1 640x480 and
+# --set for SMAA, FSR 1, RCAS, supersampling at 2 and multisampling at 4, the count changed at the run's first present.
+# It must exit 0 with the window line, which must end with the target 1280x960, twice the window's size a side; its
+# play and replay lines must be the headless run's, whole, as a 4:3 window draws what a headless run draws; and the
+# headless file must be a prefix of its file, as no setting of the picture is part of the game's state.
 #
 # The title replay measured past its end, --measure --replay with --ticks 1500: it must exit 0 with the play line, the
 # measure line, the presents line and the replay line at tick 1201 in scene 28, and no measured line.
@@ -341,7 +341,8 @@ if(NOT result EQUAL 1 OR NOT compared MATCHES "\nfirst difference: common_data a
     message(FATAL_ERROR "ac_port_state: the planted dump's compare did not name common_data at +0x1c, alone")
 endif()
 
-# The picture's settings: the title replay headless, then in a 4:3 window with the post chain and supersampling at 2.
+# The picture's settings: the title replay headless, then in a 4:3 window with the post chain, supersampling at 2 and
+# multisampling at 4.
 set(hashes "${OUT_DIR}/hashes_title.txt")
 file(REMOVE "${hashes}")
 run_port(--replay "${title}" --state-hashes "${hashes}")
@@ -361,7 +362,8 @@ set(hashes "${OUT_DIR}/hashes_title_window.txt")
 file(REMOVE "${hashes}")
 run_port(--window --user-dir "${user}" --unpaced --replay "${title}" --state-hashes "${hashes}"
          --set sonar.video.interpolation=false --set sonar.video.antialiasing=smaa --set sonar.video.upscale=fsr1
-         --set sonar.video.sharpen=rcas --set sonar.video.supersampling=2 --resize 1 640x480)
+         --set sonar.video.sharpen=rcas --set sonar.video.supersampling=2 --set sonar.video.msaa=4x
+         --resize 1 640x480)
 message("title window, the picture's settings: exit ${result}, ${seconds} s:\n${lines}\n${window_line}")
 if(NOT result EQUAL 0 OR window_line STREQUAL "")
     tail_of("${errors}" errors)
