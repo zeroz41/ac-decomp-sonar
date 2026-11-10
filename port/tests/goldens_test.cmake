@@ -23,6 +23,9 @@
 # Then multisampling at 4 in the 16:9 display (M6 step 9e2) into port-16x9-msaa4, which changes the frames themselves:
 # they and the window pictures have port-16x9's sizes, each play scene's frame must differ from port-16x9's, and the
 # run again must write the first run's frames and window pictures byte for byte.
+# Every run above draws each classic material with sonarlib's specialized shader for it, waited for (M6 step 12a).
+# Last, in the 16:9 display with sonar.video.specialized_shaders off into port-16x9-general, the general shader draws
+# them all, and every frame and window picture must be port-16x9's byte for byte.
 # It prints every line. When AC_DISC names no disc,
 # AC_DOLPHIN no Dolphin, there is no lavapipe or no sl-capture, or the disc is another version than GAFE01_00, whose
 # addresses these are, it prints the line the test's SKIP_REGULAR_EXPRESSION matches and returns.
@@ -262,6 +265,19 @@ function(goldens_windows_differ name other)
             "from ${other}'s")
 endfunction()
 
+# Every window picture of a run is another run's in the same display, byte for byte.
+function(goldens_windows_same name other)
+    goldens_scenes(${name})
+    foreach(scene IN LISTS scenes)
+        goldens_same_file(${name} ${other} "${scene}.window.ppm")
+        if(NOT same)
+            message(FATAL_ERROR "ac_port_goldens: ${name}/${scene}.window.ppm is not ${other}'s, byte for byte")
+        endif()
+    endforeach()
+    list(LENGTH scenes count)
+    message("ac_port_goldens: ${name}: ${count} window pictures, each ${other}'s byte for byte")
+endfunction()
+
 # A multisampled run against the same run at one sample, both checked by goldens_sizes: each play scene's frame
 # differs, as MSAA changes the main target itself, at the edges of the shapes it holds.
 function(goldens_resampled name other)
@@ -359,3 +375,12 @@ goldens_sizes(port-16x9-msaa4 "812 464" "854 480")
 goldens_window_sizes(port-16x9-msaa4 "854 480")
 goldens_resampled(port-16x9-msaa4 port-16x9)
 goldens_again(port-16x9-msaa4 "${multisampled}")
+
+# The specialized shaders' off switch (M6 step 12a). A goldens run draws each classic material with the shader
+# sonarlib makes for it and waits for it, so every run above is the specialized shaders' picture, the frames compared
+# with Dolphin's among them. With the switch off the general shader draws them all: the 16:9 run's frames and window
+# pictures, byte for byte.
+goldens_write(port-16x9-general "--display;854x480;--set;sonar.video.specialized_shaders=false")
+goldens_window_sizes(port-16x9-general "854 480")
+goldens_same(port-16x9-general port-16x9)
+goldens_windows_same(port-16x9-general port-16x9)
