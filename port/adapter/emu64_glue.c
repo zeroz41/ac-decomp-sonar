@@ -42,6 +42,7 @@ _Static_assert(sizeof(Gfx) == sizeof(sl_emu64_gfx), "the port's Gfx is the kit's
 _Static_assert(offsetof(Gfx, words.w0) == offsetof(sl_emu64_gfx, w0), "a command's first word");
 _Static_assert(offsetof(Gfx, words.w1) == offsetof(sl_emu64_gfx, w1), "a command's second word");
 _Static_assert(sizeof(Mtx) == 0x40, "an N64 matrix is 16 words of s15.16");
+_Static_assert(AC_EMU64_ANCHOR_FRAME == SL_EMU64_ANCHOR_FRAME, "the port's name for the kit's bit");
 
 /* emu64.hpp's AFLAGS_MAX: emu64 keeps its debug flags only in its debug build. */
 #ifdef EMU64_DEBUG
@@ -229,7 +230,8 @@ static void part_marker(Gfx* at, u32 part) {
     at->words.w1 = part;
 }
 
-/* One G_NOOP of tag SL_EMU64_TAG_ANCHOR at at: the task's draws after it take the anchor, an sl_anchor. */
+/* One G_NOOP of tag SL_EMU64_TAG_ANCHOR at at: the task's mark from there, an sl_anchor with or without the kit's
+   bit. */
 static void anchor_marker(Gfx* at, u32 anchor) {
     at->words.w0 = (u32)0x00 << 24 | (u32)SL_EMU64_TAG_ANCHOR << 16;
     at->words.w1 = anchor;

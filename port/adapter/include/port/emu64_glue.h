@@ -62,15 +62,24 @@ Gfx* ac_emu64_part_open_at(Gfx** gfx_pp, u32 part);
 void ac_emu64_part_close_at(Gfx** gfx_pp, Gfx* mark);
 #endif
 
-/* The task's draws from *gfx_pp on take the anchor, an sl_anchor (sonar/render.h): an anchor marker at *gfx_pp,
-   stepped past (sonarlib kits/emu64 gfx.h, SL_EMU64_TAG_ANCHOR). It shows on a display wider than the game's, in a
-   view the kit stretches there, a perspective of the whole frame: a centered draw, as every task starts, is part of
-   the widened view's world, and a stretched one stretches across the display as the game drew it across the frame,
-   which is what a wipe's model needs to cover the display. The caller sets the anchor back after its draws. Under
-   --reference it writes nothing. */
+/* The task's mark from *gfx_pp on: an anchor marker at *gfx_pp, stepped past (sonarlib kits/emu64 gfx.h,
+   SL_EMU64_TAG_ANCHOR). The word is an sl_anchor (sonar/render.h), a column and at most one row, with or without
+   AC_EMU64_ANCHOR_FRAME. It shows on a display wider than the game's and at a UI scale, and says where an element
+   belongs that only the game knows:
+   - In the scene's view, a perspective of the whole frame, which the kit stretches, the draws after it take the
+     anchor. A centered draw, as every task starts, is part of the widened view's world, and a stretched one
+     stretches across the display as the game drew it across the frame, which is what a wipe's model needs to cover
+     the display.
+   - The game's 2D after it, every other view, is laid out against the anchor's edge of the display's safe area and
+     scaled about it by the UI scale: the clock's bottom corner, the dialogue's bottom. With no mark it is centered.
+   The caller sets the mark back to SL_ANCHOR_CENTER after its element. Under --reference it writes nothing. */
 #ifdef _LANGUAGE_C
 void ac_emu64_anchor_at(Gfx** gfx_pp, u32 anchor);
 #endif
+/* Beside the anchor in ac_emu64_anchor_at's word: the 2D after it keeps the frame's size at its anchor's place
+   whatever the UI scale, for an element the game places from a point of its world, as the item-name bubble. It is
+   the kit's SL_EMU64_ANCHOR_FRAME under the port's name, as game code includes no kit header. */
+#define AC_EMU64_ANCHOR_FRAME 0x100u
 
 /* The part of the actor's eleven owners is gone: forgotten, so what next takes its slot starts unmatched. */
 void ac_emu64_forget_part(const struct actor_s* actor, u32 part);

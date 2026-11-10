@@ -9,6 +9,10 @@
 #include "m_bgm.h"
 #include "libforest/emu64/emu64_wrapper.h"
 #include "sys_matrix.h"
+#ifdef SONAR_PORT /* sonarlib port: the dialogue keeps to the middle of a display's bottom (adapter/emu64_glue.c) */
+#include <port/emu64_glue.h>
+#include <sonar/render.h>
+#endif
 
 static u32 Msg_table_rom_start = 0;
 static u32 Msg_rom_start = 0;
@@ -78,6 +82,9 @@ static void mMsg_Main_Window(mMsg_Window_c* msg_p, GAME* game) {
 
 static void mMsg_Draw_Window(mMsg_Window_c* msg_p, GAME* game) {
     if (msg_p->draw_flag && msg_p->data_loaded) {
+#ifdef SONAR_PORT /* sonarlib port: the window, its text and its choices belong to the middle of the bottom */
+        ac_emu64_anchor_at(&NOW_DISP(&game->graph->font_thaga), SL_ANCHOR_CENTER | SL_ANCHOR_BOTTOM);
+#endif
         mFont_SetMatrix(game->graph, mFont_MODE_FONT);
         mMsg_SetMatrix(msg_p, game, mFont_MODE_FONT);
         mMsg_DrawWindowBody(msg_p, game, mFont_MODE_FONT);
@@ -89,6 +96,9 @@ static void mMsg_Draw_Window(mMsg_Window_c* msg_p, GAME* game) {
         }
 
         mChoice_Draw(&msg_p->choice_window, game, mFont_MODE_FONT);
+#ifdef SONAR_PORT
+        ac_emu64_anchor_at(&NOW_DISP(&game->graph->font_thaga), SL_ANCHOR_CENTER);
+#endif
     }
 }
 

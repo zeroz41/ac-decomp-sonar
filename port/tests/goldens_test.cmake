@@ -11,9 +11,12 @@
 # (M6 step 7b), into port-reference. Then the kit's frames three times more on a display wider than the game's (M6
 # step 9c2), a virtual window --display makes: at 16:9 into port-16x9 and at 21:9 into port-21x9, where each frame is
 # wider by the columns the display adds and its middle is compared with Dolphin's frame, and at 16:9 with widescreen
-# off into port-16x9-off, where each frame must be the first run's byte for byte. It prints every line. When AC_DISC
-# names no disc, AC_DOLPHIN no Dolphin, there is no lavapipe or no sl-capture, or the disc is another version than
-# GAFE01_00, whose addresses these are, it prints the line the test's SKIP_REGULAR_EXPRESSION matches and returns.
+# off into port-16x9-off, where each frame must be the first run's byte for byte. Then at 21:9 with the UI scale at 50
+# (M6 step 9d2) into port-21x9-ui50, compared with no Dolphin frame, which shows no scaled 2D: its frames have
+# port-21x9's sizes, and the logo held and each play scene must differ from port-21x9's, as each holds 2D the
+# setting reaches. It prints every line. When AC_DISC names no disc,
+# AC_DOLPHIN no Dolphin, there is no lavapipe or no sl-capture, or the disc is another version than GAFE01_00, whose
+# addresses these are, it prints the line the test's SKIP_REGULAR_EXPRESSION matches and returns.
 cmake_minimum_required(VERSION 3.25)
 
 if("${AC_DISC}" STREQUAL "")
@@ -85,9 +88,8 @@ if(NOT result EQUAL 0)
     message(FATAL_ERROR "ac_port_goldens: ac-import failed (${result}):\n${output}${errors}")
 endif()
 
-# One run: ac_port --goldens with the options into OUT_DIR/<name>, and sl-capture compare of its frames with Dolphin's,
-# with the compare's options.
-function(goldens_run name port_options compare_options)
+# One run's frames: ac_port --goldens with the options into OUT_DIR/<name>.
+function(goldens_write name port_options)
     file(REMOVE_RECURSE "${OUT_DIR}/${name}")
     file(MAKE_DIRECTORY "${OUT_DIR}/${name}")
     execute_process(COMMAND "${CMAKE_COMMAND}" -E env SDL_VIDEO_DRIVER=offscreen "VK_DRIVER_FILES=${AC_LAVAPIPE_ICD}"
@@ -105,7 +107,11 @@ function(goldens_run name port_options compare_options)
         endif()
         message(FATAL_ERROR "ac_port_goldens: the ${name} run did not write every scene:\n${output}${errors}")
     endif()
+endfunction()
 
+# One run: its frames, and sl-capture compare of them with Dolphin's, with the compare's options.
+function(goldens_run name port_options compare_options)
+    goldens_write("${name}" "${port_options}")
     execute_process(COMMAND "${SL_CAPTURE}" compare --reference "${reference}" --port "${OUT_DIR}/${name}"
                             --scenes "${SCENES}" ${compare_options}
                     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors)
@@ -151,19 +157,51 @@ function(goldens_sizes name play logo)
     message("ac_port_goldens: ${name}: ${count} frames, play ${play}, logo ${logo}")
 endfunction()
 
+# Whether a scene's frame in a run is another run's, byte for byte, into the caller's `same`.
+function(goldens_same_frame name other scene)
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E compare_files "${OUT_DIR}/${name}/${scene}.ppm"
+                            "${OUT_DIR}/${other}/${scene}.ppm"
+                    RESULT_VARIABLE result OUTPUT_QUIET ERROR_QUIET)
+    if(result EQUAL 0)
+        set(same TRUE PARENT_SCOPE)
+    else()
+        set(same FALSE PARENT_SCOPE)
+    endif()
+endfunction()
+
 # Every frame of a run is another run's, byte for byte.
 function(goldens_same name other)
     goldens_scenes(${name})
     foreach(scene IN LISTS scenes)
-        execute_process(COMMAND "${CMAKE_COMMAND}" -E compare_files "${OUT_DIR}/${name}/${scene}.ppm"
-                                "${OUT_DIR}/${other}/${scene}.ppm"
-                        RESULT_VARIABLE result OUTPUT_QUIET ERROR_QUIET)
-        if(NOT result EQUAL 0)
+        goldens_same_frame(${name} ${other} ${scene})
+        if(NOT same)
             message(FATAL_ERROR "ac_port_goldens: ${name}/${scene}.ppm is not ${other}'s, byte for byte")
         endif()
     endforeach()
     list(LENGTH scenes count)
     message("ac_port_goldens: ${name}: ${count} frames, each ${other}'s byte for byte")
+endfunction()
+
+# A run at a UI scale against the same run at the game's size: the logo held and each play scene differ, as each holds
+# 2D. No scene here is of the world alone: the play scenes are of the title's demo, where the title's letters wait at
+# the frame's right edge (port/NOTES.md, What a wider window shows).
+function(goldens_scaled name other)
+    goldens_scenes(${name})
+    set(count 0)
+    foreach(scene IN LISTS scenes)
+        if(scene MATCHES "^play_" OR scene STREQUAL "logo_held")
+            goldens_same_frame(${name} ${other} ${scene})
+            if(same)
+                message(FATAL_ERROR
+                        "ac_port_goldens: ${name}/${scene}.ppm is ${other}'s: the UI scale did not reach it")
+            endif()
+            math(EXPR count "${count} + 1")
+        endif()
+    endforeach()
+    if(count LESS 2 OR NOT "logo_held" IN_LIST scenes)
+        message(FATAL_ERROR "ac_port_goldens: the ${name} run wrote no play scene or no logo_held")
+    endif()
+    message("ac_port_goldens: ${name}: the logo held and each play scene, ${count} frames, differ from ${other}'s")
 endfunction()
 
 # The kit's frames into port, and the reference's, drawn by the console's emu64, into port-reference.
@@ -183,3 +221,9 @@ goldens_sizes(port-21x9 "1078 464" "1120 480")
 goldens_run(port-16x9-off "--display;854x480;--set;sonar.video.widescreen=false" "")
 goldens_sizes(port-16x9-off "598 464" "640 480")
 goldens_same(port-16x9-off port)
+
+# The UI scale at 50 in the 21:9 display (M6 step 9d2). No Dolphin frame shows a scaled 2D, so the run is compared
+# with the 21:9 run alone: its frames keep that run's sizes, and the setting reaches their 2D.
+goldens_write(port-21x9-ui50 "--display;1120x480;--set;sonar.video.ui_scale=50")
+goldens_sizes(port-21x9-ui50 "1078 464" "1120 480")
+goldens_scaled(port-21x9-ui50 port-21x9)

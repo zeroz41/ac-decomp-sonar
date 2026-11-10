@@ -7,6 +7,10 @@
 #include "sys_matrix.h"
 #include "m_font.h"
 #include "m_common_data.h"
+#ifdef SONAR_PORT /* sonarlib port: the clock keeps to a bottom corner of a wider display (adapter/emu64_glue.c) */
+#include <port/emu64_glue.h>
+#include <sonar/render.h>
+#endif
 
 static Banti_c banti;
 
@@ -580,6 +584,9 @@ extern void banti_draw(GAME_PLAY* play) {
             }
 
             gfx_pp = &gfx;
+#ifdef SONAR_PORT /* sonarlib port: the clock belongs to the bottom corner on the side of the frame it stands at */
+            ac_emu64_anchor_at(gfx_pp, (banti.disp_left == TRUE ? SL_ANCHOR_LEFT : SL_ANCHOR_RIGHT) | SL_ANCHOR_BOTTOM);
+#endif
 
             gSPMatrix(gfx_pp[0]++, _Matrix_to_Mtx_new(g), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
 
@@ -631,6 +638,9 @@ extern void banti_draw(GAME_PLAY* play) {
             banti_draw_hiduke(&gfx, play, alpha);
             banti_draw_jikan(&gfx, play, alpha);
 
+#ifdef SONAR_PORT
+            ac_emu64_anchor_at(gfx_pp, SL_ANCHOR_CENTER);
+#endif
             if (poly_render == TRUE) {
                 SET_POLY_OPA_DISP(*gfx_pp);
             } else {

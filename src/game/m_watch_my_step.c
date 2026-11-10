@@ -18,6 +18,10 @@
 #include "audio.h"
 #include "m_scene_table.h"
 #include "m_private.h"
+#ifdef SONAR_PORT /* sonarlib port: the item-name bubble stays at its point of the world (adapter/emu64_glue.c) */
+#include <port/emu64_glue.h>
+#include <sonar/render.h>
+#endif
 
 typedef struct watch_my_step_s {
     f32 pos_x;
@@ -202,6 +206,9 @@ extern void watch_my_step_draw(GAME_PLAY* play) {
         return;
     }
 
+#ifdef SONAR_PORT /* sonarlib port: the bubble follows a point of the world, so it keeps the frame's size and place */
+    ac_emu64_anchor_at(&NOW_DISP(&g->font_thaga), AC_EMU64_ANCHOR_FRAME);
+#endif
     /* load new world-view projection matrix for font */
     if (font_mtx != NULL) {
         mFont_CulcOrthoMatrix(font_mtx);
@@ -284,6 +291,9 @@ extern void watch_my_step_draw(GAME_PLAY* play) {
                 45, 45, 35, (int)(255.0f * text_opacity), FALSE, TRUE, 0.875f, 0.875f, mFont_MODE_FONT);
         }
     }
+#ifdef SONAR_PORT
+    ac_emu64_anchor_at(&NOW_DISP(&g->font_thaga), SL_ANCHOR_CENTER);
+#endif
 }
 
 void navigate_camera_ct() {
