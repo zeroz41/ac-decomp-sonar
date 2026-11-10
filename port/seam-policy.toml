@@ -1,8 +1,10 @@
-# The port's seam policy (sonarlib docs/porting-model.md, Seam audit; docs/roadmap.md, M6 step 6h). The test
+# The port's seam policy (sonarlib docs/porting-model.md, Seam audit; docs/roadmap.md, M6 steps 6h and 10a). The test
 # ac_seam_audit runs sl-seam-audit over the build's compile_commands.json with this policy: every file the build
-# compiles that uses GX is listed here. The SDK's GX units are sdk, the port's glue is glue, and each other file is
-# transitional, with what it does with GX. A file that starts using GX fails the audit until it is listed, and a
-# converted file fails until its entry goes. The seam is complete at transitional 0.
+# compiles that uses GX is listed here. The SDK's GX units are sdk and the port's glue is glue. emu64, which only
+# ac_port_reference links, is reference; a file that names GX's types or data or includes its headers and calls
+# nothing is types, and fails the audit at its first call; the NES emulator, which the port builds and never starts,
+# is unsupported. Each other file is transitional, with what it does with GX. A file that starts using GX fails the
+# audit until it is listed, and a converted file fails until its entry goes. The seam is complete at transitional 0.
 
 [category.GX]
 names = "GX"
@@ -60,7 +62,7 @@ note = "GXInit and the graphics FIFO's base and pointers"
 path = "src/game/m_play.c"
 category = "GX"
 kind = "transitional"
-note = "copy_efb_to_texture's EFB copy, built into a GX display list that emu64's list calls (step 10)"
+note = "copy_efb_to_texture's EFB copy, built into a GX display list that emu64's list calls (step 10b)"
 
 [file.shutdown]
 path = "src/static/libultra/shutdown.c"
@@ -71,53 +73,53 @@ note = "shutdown's abort of the frame, draw done and flush, and the GX thread"
 [file.famicom]
 path = "src/static/Famicom/famicom.cpp"
 category = "GX"
-kind = "transitional"
-note = "the NES emulator's screen and its GX state; unreachable, famicom_init returns -1 under SONAR_PORT"
+kind = "unsupported"
+note = "the NES emulator's screen and its GX state; unreachable, famicom_init returns -1 under SONAR_PORT, as M6's Scope leaves the NES games out"
 
 [file.jfw_system]
 path = "src/static/JSystem/JFramework/JFWSystem.cpp"
 category = "GX"
-kind = "transitional"
+kind = "types"
 note = "names the default render mode, GXNtsc480IntDf; includes dolphin/gx.h"
 
 [file.jut_exception]
 path = "src/static/JSystem/JUtility/JUTException.cpp"
 category = "GX"
-kind = "transitional"
+kind = "types"
 note = "names the render mode and gamma of the exception screen; includes dolphin/gx.h"
 
 [file.jut_xfb]
 path = "src/static/JSystem/JUtility/JUTXfb.cpp"
 category = "GX"
-kind = "transitional"
+kind = "types"
 note = "sizes the XFBs from a GXRenderModeObj; includes dolphin/gx.h"
 
 [file.jsyswrap]
 path = "src/static/jsyswrap.cpp"
 category = "GX"
-kind = "transitional"
+kind = "types"
 note = "names the render mode and GXColor of the JSystem wrapper's display setup"
 
 [file.jsyswrapper_main]
 path = "src/static/libjsys/jsyswrapper_main.cpp"
 category = "GX"
-kind = "transitional"
+kind = "types"
 note = "names the render mode and GXColor of the wrapper's start-up"
 
 [file.famicom_emu]
 path = "src/famicom_emu.c"
 category = "GX"
-kind = "transitional"
+kind = "types"
 note = "names GXColor and GXRenderModeObj; includes dolphin/gx.h"
 
 [file.dvderr]
 path = "src/static/dvderr.c"
 category = "GX"
-kind = "transitional"
+kind = "types"
 note = "includes dolphin/gx.h; its error screen draws through emu64's task"
 
 [file.emu64]
 path = "src/static/libforest/emu64/"
 category = "GX"
-kind = "transitional"
-note = "the console's emu64, the differential test's reference (step 6j): emu64.c draws through GX, and emu64_utility.c and emu64_print.cpp, which it includes, name GX's types"
+kind = "reference"
+note = "the console's emu64, the differential test's reference (step 6j), in ac_port_reference only (step 10a): emu64.c draws through GX, and emu64_utility.c and emu64_print.cpp, which it includes, name GX's types"

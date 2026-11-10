@@ -1,28 +1,28 @@
 # The port's goldens against Dolphin (sonarlib docs/roadmap.md, M6 step 6n; port/NOTES.md, Goldens):
-#   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DSL_CAPTURE=<sl-capture> -DAC_DOLPHIN=<dolphin-emu-nogui>
-#         -DAC_DISC=<disc> -DAC_VERSION=<version> -DSCENES=<goldens.scenes> -DOUT_DIR=<dir>
-#         -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P goldens_test.cmake
+#   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_PORT_REFERENCE=<ac_port_reference>
+#         -DSL_CAPTURE=<sl-capture> -DAC_DOLPHIN=<dolphin-emu-nogui> -DAC_DISC=<disc> -DAC_VERSION=<version>
+#         -DSCENES=<goldens.scenes> -DOUT_DIR=<dir> -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P goldens_test.cmake
 # sl-capture runs Dolphin on the player's disc with no input and caches its frames for the scenes in OUT_DIR/dolphin,
 # given relative to OUT_DIR, as MemoryWatcher's socket path must fit a Unix socket's 107 bytes, and keyed by Dolphin's
 # version, the disc and the settings, with the keys' locations at the decomp's symbols. Then
 # ac-import writes the package, ac_port --goldens writes the port's frames for the same scenes, on the GPU sink through
 # SDL's offscreen video driver and lavapipe's Vulkan, with nothing opened on the desktop, seeded with Dolphin's qrand
-# seed, and sl-capture compares them. Then the same with --reference, the console's emu64 drawing instead of the kit
-# (M6 step 7b), into port-reference. Then the kit's frames three times more on a display wider than the game's (M6
-# step 9c2), a virtual window --display makes: at 16:9 into port-16x9 and at 21:9 into port-21x9, where each frame is
-# wider by the columns the display adds and its middle is compared with Dolphin's frame, and at 16:9 with widescreen
-# off into port-16x9-off, where each frame must be the first run's byte for byte. Then at 21:9 with the UI scale at 50
-# (M6 step 9d2) into port-21x9-ui50, compared with no Dolphin frame, which shows no scaled 2D: its frames have
-# port-21x9's sizes, and the logo held and each play scene must differ from port-21x9's, as each holds 2D the
-# setting reaches. Then the picture's settings in the 16:9 display (M6 step 9e1), of which a frame shows nothing: with a
-# display each scene has a window picture too, <scene>.window.ppm, the display's whole image under the run's
-# settings, 854 x 480 at 16:9. With SMAA, FSR 1 and RCAS into port-16x9-post, each frame must be port-16x9's byte for
-# byte and the window pictures of the logo held and of each play scene must differ from port-16x9's. With
+# seed, and sl-capture compares them. Then the same with ac_port_reference --reference, the console's emu64 drawing
+# instead of the kit (M6 steps 7b and 10a), into port-reference. Then the kit's frames three times more on a display
+# wider than the game's (M6 step 9c2), a virtual window --display makes: at 16:9 into port-16x9 and at 21:9 into
+# port-21x9, where each frame is wider by the columns the display adds and its middle is compared with Dolphin's frame,
+# and at 16:9 with widescreen off into port-16x9-off, where each frame must be the first run's byte for byte. Then at
+# 21:9 with the UI scale at 50 (M6 step 9d2) into port-21x9-ui50, compared with no Dolphin frame, which shows no scaled
+# 2D: its frames have port-21x9's sizes, and the logo held and each play scene must differ from port-21x9's, as each
+# holds 2D the setting reaches. Then the picture's settings in the 16:9 display (M6 step 9e1), of which a frame shows
+# nothing: with a display each scene has a window picture too, <scene>.window.ppm, the display's whole image under the
+# run's settings, 854 x 480 at 16:9. With SMAA, FSR 1 and RCAS into port-16x9-post, each frame must be port-16x9's byte
+# for byte and the window pictures of the logo held and of each play scene must differ from port-16x9's. With
 # supersampling at 2 into port-16x9-ss2, each frame must be twice port-16x9's size and the same window pictures must
 # differ. Each of the two then runs again, and every frame and window picture must be the first run's byte for byte.
 # Then multisampling at 4 in the 16:9 display (M6 step 9e2) into port-16x9-msaa4, which changes the frames themselves:
-# they and the window pictures have port-16x9's sizes, each play scene's frame must differ from port-16x9's, and the
-# run again must write the first run's frames and window pictures byte for byte.
+# they and the window pictures have port-16x9's sizes, each play scene's frame must differ from port-16x9's, and the run
+# again must write the first run's frames and window pictures byte for byte.
 # Every run above draws each classic material with sonarlib's specialized shader for it, waited for (M6 step 12a).
 # Last, in the 16:9 display with sonar.video.specialized_shaders off into port-16x9-general, the general shader draws
 # them all, and every frame and window picture must be port-16x9's byte for byte.
@@ -51,7 +51,7 @@ if(NOT AC_VERSION STREQUAL "GAFE01_00")
     message("ac_port_goldens: skipped, the keys' addresses are GAFE01_00's, not ${AC_VERSION}'s")
     return()
 endif()
-foreach(variable IN ITEMS AC_IMPORT AC_PORT SCENES OUT_DIR)
+foreach(variable IN ITEMS AC_IMPORT AC_PORT AC_PORT_REFERENCE SCENES OUT_DIR)
     if("${${variable}}" STREQUAL "")
         message(FATAL_ERROR "ac_port_goldens: ${variable} is not set")
     endif()
@@ -100,17 +100,23 @@ if(NOT result EQUAL 0)
     message(FATAL_ERROR "ac_port_goldens: ac-import failed (${result}):\n${output}${errors}")
 endif()
 
-# One run's frames: ac_port --goldens with the options into OUT_DIR/<name>.
+# One run's frames: ac_port --goldens with the options into OUT_DIR/<name>, or ac_port_reference's with --reference,
+# which only the reference's program takes (M6 step 10a).
 function(goldens_write name port_options)
+    set(program "${AC_PORT}")
+    if("--reference" IN_LIST port_options)
+        set(program "${AC_PORT_REFERENCE}")
+    endif()
     file(REMOVE_RECURSE "${OUT_DIR}/${name}")
     file(MAKE_DIRECTORY "${OUT_DIR}/${name}")
     execute_process(COMMAND "${CMAKE_COMMAND}" -E env SDL_VIDEO_DRIVER=offscreen "VK_DRIVER_FILES=${AC_LAVAPIPE_ICD}"
-                            "${AC_PORT}" --package "${package}" ${port_options} --goldens "${SCENES}"
+                            "${program}" --package "${package}" ${port_options} --goldens "${SCENES}"
                             "${OUT_DIR}/${name}" --qrand-seed "${seed}"
                     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 600)
     string(REGEX MATCH "ac_port: goldens [^\n]*" line "${output}")
     string(REPLACE ";" " " shown_options "${port_options}")
-    message("ac_port ${shown_options}: seed ${seed}, exit ${result}\n${line}")
+    get_filename_component(shown_program "${program}" NAME)
+    message("${shown_program} ${shown_options}: seed ${seed}, exit ${result}\n${line}")
     if(NOT result EQUAL 0 OR line STREQUAL "")
         string(LENGTH "${errors}" length)
         if(length GREATER 4000)

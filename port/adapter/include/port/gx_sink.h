@@ -11,11 +11,14 @@
 
 #include "dolphin/types.h"
 
+#include <sonar/base/result.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 struct sl_frame;
+struct sl_gxf;
 
 /* Each appends its value's bytes, big-endian, as the write gather pipe did. */
 void ac_gx_write_u8(u8 value);
@@ -69,13 +72,17 @@ BOOL ac_frame_task(struct sl_frame** frame);
    so records go nowhere; with TRUE, begins a new one (sl_frame_begin), whose next record is its first. A refusal
    counts in refused_frames. Does nothing when no frame is open. Neither calls ac_emu64_frame_submitted. */
 void ac_frame_split(BOOL begin);
-/* The reference's GX bytes, kept apart. Begin hands the sink's bytes to the front end, copies its state into the
-   reference's front end, created at the first begin, saves the SDK's GX state (*gx) and sends every later hand-over
-   to the reference's front end. End hands the sink's bytes to it, records them into frame (sl_gxf_record, which
-   clears; a refusal counts as the main front end's do), restores *gx and sends hand-overs to the front end again. The
-   reference's front end keeps its own texture memory. */
-void ac_gx_reference_begin(void);
-void ac_gx_reference_end(struct sl_frame* frame);
+/* What the reference's front end (port/adapter/gx_reference.c, in ac_port_reference) takes of the glue's. Its
+   begin and end hand over through ac_gx_flush, and the hand-over gives it the bytes (port/reference.h,
+   ac_reference_gx). */
+/* The front end the sink's bytes go to; NULL before the first hand-over, or when it could not be made. */
+struct sl_gxf* ac_gx_front_end(void);
+/* A front end on GX's address space; NULL when out of memory. */
+struct sl_gxf* ac_gx_create_front_end(void);
+/* Counts an error in errors, and logs the first, at offset bytes into the stream written outside display lists. */
+void ac_gx_error(u64 offset, const char* what, int detail);
+/* Counts a record the front end refused, and logs the first. */
+void ac_gx_record_refused(sl_result result);
 
 /* The glue's counts since start-up. */
 typedef struct ac_gx_counts {

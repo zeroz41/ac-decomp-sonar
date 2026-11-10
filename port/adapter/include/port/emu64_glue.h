@@ -6,7 +6,10 @@
 
 #include "dolphin/types.h"
 #ifdef _LANGUAGE_C
-#include "PR/mbi.h" /* Gfx: the game's sources and the glue build with _LANGUAGE_C, the SDK's adapters without */
+/* Gfx and THA_GA, a typedef of an unnamed union, so not declared ahead: the game's sources and the glue build with
+   _LANGUAGE_C, the SDK's adapters without. */
+#include "PR/mbi.h"
+#include "THA_GA.h"
 #endif
 
 #ifdef __cplusplus
@@ -104,37 +107,11 @@ void ac_emu64_snap_made(void);
    run goes on. */
 void ac_emu64_frame_submitted(void);
 
-/* The differential test (port/NOTES.md, --diff; sonarlib docs/roadmap.md, M6 step 6j): each task is drawn by the
-   kit and by the console's emu64, the reference, into frames of their own, and the two captures are compared.
-   ac_diff_enable is ac_port.c's, before boot; ac_diff_enabled is for any game thread. */
-void ac_diff_enable(void);
-BOOL ac_diff_enabled(void);
-
-/* The reference run (port/NOTES.md, --reference; sonarlib docs/roadmap.md, M6 step 7b): the kit is not made, and the
-   console's emu64 draws every task through the GX front end into the game's own frame. ac_reference_enable is
-   ac_port.c's, before boot; ac_reference_enabled is for any game thread. */
-void ac_reference_enable(void);
-BOOL ac_reference_enabled(void);
-
-/* The reference's buffers, which OSInit takes from the bottom of the arena under --diff and --reference: emu64.c's
-   two texture caches and its palette buffer, each 32-byte aligned. */
-#define AC_DIFF_TEXTURE_DATA_SIZE 0xC000 /* emu64.c's TEX_BUFFER_DATA_SIZE */
-#define AC_DIFF_TEXTURE_BSS_SIZE 0x400   /* emu64.c's TEX_BUFFER_BSS_SIZE */
-#define AC_DIFF_PALETTES_SIZE 0x8000     /* GX's largest palette */
-
-/* emu64.c, the reference, under the names port/CMakeLists.txt gives it. Only the glue calls it, under --diff and
-   --reference, but for emu64_ref_set_buffers, which is OSInit's. */
-struct ucode_info_s;
-void emu64_ref_set_buffers(void* data, void* bss, void* palettes, u32 palettes_size);
-u32 emu64_ref_palette_overflows(void);
-void emu64_ref_init(void);
-void emu64_ref_cleanup(void);
-void emu64_ref_taskstart(void* gfx);
-void emu64_ref_set_ucode_info(int count, struct ucode_info_s* info);
-void emu64_ref_set_first_ucode(void* ucode);
-void emu64_ref_refresh(void);
-void emu64_ref_texture_cache_data_entry_set(void* begin, void* end);
-void emu64_ref_set_aflags(int idx, int value);
+/* The graph's display list of that index, in GRAPH's field order (AC_EMU64_LISTS), for the reference's names of
+   the kit's draws (emu64_reference.c). */
+#ifdef _LANGUAGE_C
+THA_GA* ac_emu64_list(struct graph_s* graph, int list);
+#endif
 
 #ifdef __cplusplus
 }

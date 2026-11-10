@@ -1,21 +1,24 @@
-# The port's measured runs (sonarlib docs/roadmap.md, M6 steps 7b, 9a, 9b and 9f0; port/NOTES.md, Measured runs):
-#   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
-#         -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P measure_test.cmake
-# ac-import writes the package from the player's disc into OUT_DIR. Then ac_port runs once as it is and once with
-# --reference, the console's emu64 drawing instead of the kit, to play's first frame: the reference's game is the
-# play line's, with no palette overflowed. Then --measure --ticks 1200 runs twice with the kit and twice with
-# --reference, on the GPU sink with no window through SDL's offscreen video driver and lavapipe's Vulkan. Each exits 0
-# with a measure line, a presents line and a measured line, the same in both runs once the twelve times are taken out,
-# with frames, ticks, draws and calls, each frame presented once with nothing held, late, dropped or backward, and
-# nothing invalid, overflowed, refused, unowned or stray; the kit's have no unexplained snap. The kit's and the
-# reference's run the same game for the same frames. --present-hz without --measure, and with --measure --reference,
-# exit 2 with the usage. Then the kit's measured run at 144 Hz and at 360 Hz, once each: the same measured line and
-# ticks as at no rate, its frames and its dropped ones the frames at no rate, more presents than frames, more at
-# 360 Hz than at 144 Hz, none held or backward, no unexplained snap, and the same frames dropped, pairs and snaps at
-# both rates. Last, the kit's --measure --ticks 7200 once, the title left idle past where step 11d's port died: it exits
-# 0 with its three lines, the measured line at tick 7200 and nothing invalid, overflowed, refused, unowned or stray. It
-# prints every line. When AC_DISC names no disc or there is no lavapipe it prints the line the test's
-# SKIP_REGULAR_EXPRESSION matches and returns.
+# The port's measured runs (sonarlib docs/roadmap.md, M6 steps 7b, 9a, 9b, 9f0 and 10a; port/NOTES.md, Measured
+# runs):
+#   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_PORT_REFERENCE=<ac_port_reference> -DAC_DISC=<disc>
+#         -DAC_VERSION=<version> -DOUT_DIR=<dir> -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P measure_test.cmake
+# ac-import writes the package from the player's disc into OUT_DIR. Then ac_port runs as it is, ac_port_reference with
+# --reference, the console's emu64 drawing instead of the kit, and ac_port_reference with neither flag, to play's first
+# frame: the reference's game is the play line's, with no palette overflowed, and the reference's program with neither
+# flag prints ac_port's play line byte for byte. ac_port refuses --diff and --reference, exit 2 with the usage. Then
+# --measure --ticks 1200 runs twice with the kit and twice with ac_port_reference --reference, on the GPU sink with no
+# window through SDL's offscreen video driver and lavapipe's Vulkan. Each exits 0 with a measure line, a presents line
+# and a measured line, the same in both runs once the twelve times are taken out, with frames, ticks, draws and calls,
+# each frame presented once with nothing held, late, dropped or backward, and nothing invalid, overflowed, refused,
+# unowned or stray; the kit's have no unexplained snap. The kit's and the reference's run the same game for the same
+# frames. --present-hz without --measure, on each program, and with --measure --reference exit 2 with the program's
+# usage. Then the kit's measured run at 144 Hz and at 360 Hz, once each: the same measured line and ticks as at no rate,
+# its frames and its dropped ones the frames at no rate, more presents than frames, more at 360 Hz than at 144 Hz, none
+# held or backward, no unexplained snap, and the same frames dropped, pairs and snaps at both rates. Last, the kit's
+# --measure --ticks 7200 once, the title left idle past where step 11d's port died: it exits 0 with its three lines, the
+# measured line at tick 7200 and nothing invalid, overflowed, refused, unowned or stray. It prints every line. When
+# AC_DISC names no disc or there is no lavapipe it prints the line the test's SKIP_REGULAR_EXPRESSION matches and
+# returns.
 cmake_minimum_required(VERSION 3.25)
 
 if("${AC_DISC}" STREQUAL "")
@@ -26,7 +29,7 @@ if("${AC_LAVAPIPE_ICD}" STREQUAL "")
     message("ac_port_measure: skipped, no lavapipe ICD for the offscreen driver's Vulkan")
     return()
 endif()
-foreach(variable IN ITEMS AC_IMPORT AC_PORT AC_VERSION OUT_DIR)
+foreach(variable IN ITEMS AC_IMPORT AC_PORT AC_PORT_REFERENCE AC_VERSION OUT_DIR)
     if("${${variable}}" STREQUAL "")
         message(FATAL_ERROR "ac_port_measure: ${variable} is not set")
     endif()
@@ -58,16 +61,20 @@ string(APPEND presents_pattern " unmatched ${count} explicit ${count} forget ${c
 string(APPEND presents_pattern " duplicate ${count} rotation ${count} distance ${count} gap ${count} auto-cut ${count}")
 set(causes none unmatched explicit forget cut all duplicate rotation distance gap auto-cut)
 
-# Runs ac_port with the options, and fails unless it exits 0 with one line matching each pattern, in order, into the
-# list out.
+# Runs ac_port, or ac_port_reference with REFERENCE, with the options, and fails unless it exits 0 with one line
+# matching each pattern, in order, into the list out.
 function(run name out)
-    cmake_parse_arguments(PARSE_ARGV 2 arg "MEASURE" "" "OPTIONS;PATTERNS")
+    cmake_parse_arguments(PARSE_ARGV 2 arg "MEASURE;REFERENCE" "" "OPTIONS;PATTERNS")
+    set(program "${AC_PORT}")
+    if(arg_REFERENCE)
+        set(program "${AC_PORT_REFERENCE}")
+    endif()
     set(environment "")
     if(arg_MEASURE)
         set(environment SDL_VIDEO_DRIVER=offscreen "VK_DRIVER_FILES=${AC_LAVAPIPE_ICD}")
     endif()
     string(TIMESTAMP started "%s")
-    execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${environment} "${AC_PORT}" --package "${package}"
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${environment} "${program}" --package "${package}"
                             ${arg_OPTIONS}
                     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 1200)
     string(TIMESTAMP ended "%s")
@@ -95,12 +102,17 @@ function(run name out)
     set(${out} "${lines}" PARENT_SCOPE)
 endfunction()
 
-# Fails unless ac_port exits 2 with the usage for the options.
-function(refused name)
-    execute_process(COMMAND "${AC_PORT}" --package "${package}" ${ARGN}
+# Fails unless the program, ac_port or ac_port_reference, exits 2 with its usage for the options.
+function(refused name program)
+    if(program STREQUAL "ac_port")
+        set(path "${AC_PORT}")
+    else()
+        set(path "${AC_PORT_REFERENCE}")
+    endif()
+    execute_process(COMMAND "${path}" --package "${package}" ${ARGN}
                     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 60)
     message("${name}: exit ${result}")
-    if(NOT result EQUAL 2 OR NOT errors MATCHES "^usage: ac_port ")
+    if(NOT result EQUAL 2 OR NOT errors MATCHES "^usage: ${program} ")
         message(FATAL_ERROR "ac_port_measure: ${name} did not exit 2 with the usage:\n${output}${errors}")
     endif()
 endfunction()
@@ -161,7 +173,7 @@ endfunction()
 
 # Play's first frame, drawn by the kit and by the reference.
 run(play play_lines PATTERNS "ac_port: play${report_pattern}")
-run(reference reference_lines OPTIONS --reference PATTERNS "ac_port: reference${report_pattern}")
+run(reference reference_lines REFERENCE OPTIONS --reference PATTERNS "ac_port: reference${report_pattern}")
 game_fields("${play_lines}" play_game)
 game_fields("${reference_lines}" reference_game)
 if(NOT reference_game STREQUAL play_game)
@@ -171,15 +183,27 @@ if(NOT reference_lines MATCHES " palette-overflows 0$")
     message(FATAL_ERROR "ac_port_measure: the reference overflowed a palette:\n${reference_lines}")
 endif()
 
+# The two programs are one game: the reference's with neither flag plays as the player's, and the player's has no
+# reference (M6 step 10a).
+run("play in ac_port_reference" reference_play_lines REFERENCE PATTERNS "ac_port: play${report_pattern}")
+if(NOT reference_play_lines STREQUAL play_lines)
+    message(FATAL_ERROR "ac_port_measure: ac_port_reference's play line is not ac_port's:\n${play_lines}\n"
+                        "${reference_play_lines}")
+endif()
+refused("--diff in ac_port" ac_port --diff)
+refused("--reference in ac_port" ac_port --reference)
+
 # The measured runs at no present rate, twice each.
 foreach(drawer IN ITEMS kit reference)
     set(options --measure --ticks 1200)
+    set(program "")
     if(drawer STREQUAL "reference")
         list(APPEND options --reference)
+        set(program REFERENCE)
     endif()
     set(untimed "")
     foreach(attempt IN ITEMS 1 2)
-        run("${drawer} ${attempt}" lines MEASURE OPTIONS ${options}
+        run("${drawer} ${attempt}" lines MEASURE ${program} OPTIONS ${options}
             PATTERNS "${measure_pattern}" "${presents_pattern}" "ac_port: measured${report_pattern}")
         list(GET lines 0 measure_line)
         list(GET lines 1 presents_line)
@@ -230,8 +254,9 @@ if(NOT kit_frames STREQUAL reference_frames OR NOT kit_game STREQUAL reference_g
 endif()
 
 # A display's rate is the measured run's, and the reference is measured at none.
-refused("--present-hz without --measure" --present-hz 144)
-refused("--present-hz with --reference" --measure --reference --present-hz 144)
+refused("--present-hz without --measure" ac_port --present-hz 144)
+refused("--present-hz without --measure in ac_port_reference" ac_port_reference --present-hz 144)
+refused("--present-hz with --reference" ac_port_reference --measure --reference --present-hz 144)
 
 # The kit's measured run at a display's rate, once at each.
 set(rate_counts "")

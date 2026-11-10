@@ -12,6 +12,7 @@
 
 #include <port/emu64_glue.h>
 #include <port/gx_sink.h>
+#include <port/reference.h>
 
 #include <sonar/base/log.h>
 #include <sonar/dolphin_os/os.h>
@@ -42,8 +43,7 @@ static size_t pending_capacity;
 static u64 gx_errors;
 static u64 unmapped;
 
-/* Counts an error and logs the first, at offset bytes into the stream written outside display lists. */
-static void gx_error(u64 offset, const char* what, int detail) {
+void ac_gx_error(u64 offset, const char* what, int detail) {
     if (gx_errors++ == 0)
         SL_ERROR("gx", "the GX front end's first error, at stream byte %" PRIu64 ": %s (%d)", (uint64_t)offset, what,
                  detail);
@@ -81,7 +81,7 @@ static void put(const u8* bytes, u32 size) {
     }
     bytes_total += size;
     if (pending_capacity - pending_size < size && !pending_grow(size)) {
-        gx_error(bytes_total - size, "bytes dropped: the sink's buffer could not grow", (int)size);
+        ac_gx_error(bytes_total - size, "bytes dropped: the sink's buffer could not grow", (int)size);
         return;
     }
     memcpy(pending + pending_size, bytes, size);
@@ -259,8 +259,6 @@ static const void* gx_memory(void* user, uint32_t address, size_t size) {
 /* ---- The front end, and the frame from the game's frame begin to its end */
 
 static sl_gxf* gxf;
-static sl_gxf* ref_gxf;   /* the differential test's reference's (ac_gx_reference_begin), made at the first */
-static BOOL to_reference; /* hand-overs go to ref_gxf */
 static sl_frame* frame;
 static BOOL frame_open;
 static BOOL frame_recorded; /* the open frame had its sl_gxf_record */
@@ -270,8 +268,7 @@ static u64 nested;
 static u64 refused_frames;
 static u64 refused_records;
 
-/* A front end on GX's address space; NULL when out of memory. */
-static sl_gxf* create_gxf(void) {
+sl_gxf* ac_gx_create_front_end(void) {
     sl_gxf_desc desc;
     memset(&desc, 0, sizeof desc);
     desc.memory = gx_memory;
@@ -279,39 +276,44 @@ static sl_gxf* create_gxf(void) {
     return sl_gxf_create(&desc);
 }
 
-/* The bytes written since the last hand-over go to the front end, created at the first, or to the reference's from
-   ac_gx_reference_begin to ac_gx_reference_end. On a thread that is not a game thread they are dropped. */
+sl_gxf* ac_gx_front_end(void) {
+    return gxf;
+}
+
+void ac_gx_record_refused(sl_result result) {
+    if (refused_records++ == 0)
+        SL_WARN("gx", "the GX front end's first refused record: %s", sl_result_string(result));
+}
+
+/* The bytes written since the last hand-over go to the front end, created at the first, or to the reference's
+   (port/reference.h, ac_reference_gx). On a thread that is not a game thread they are dropped. */
 static void hand_over(void) {
     const u64 offset = bytes_total - pending_size;
     size_t error_offset = 0;
     sl_gx_dl_result result;
-    sl_gxf* target;
     if (sl_os_thread_current().id == 0) {
         if (pending_size != 0)
-            gx_error(offset, "bytes dropped: handed over on a thread that is not a game thread", (int)pending_size);
+            ac_gx_error(offset, "bytes dropped: handed over on a thread that is not a game thread", (int)pending_size);
         pending_size = 0;
         return;
     }
     if (gxf == NULL) {
-        gxf = create_gxf();
+        gxf = ac_gx_create_front_end();
         if (gxf == NULL) {
-            gx_error(offset, "bytes dropped: no GX front end, out of memory", (int)pending_size);
+            ac_gx_error(offset, "bytes dropped: no GX front end, out of memory", (int)pending_size);
             pending_size = 0;
             return;
         }
     }
-    target = to_reference ? ref_gxf : gxf;
-    if (target == NULL) {
-        if (pending_size != 0)
-            gx_error(offset, "bytes dropped: no reference GX front end, out of memory", (int)pending_size);
+    if (ac_reference_gx(pending, pending_size, offset)) {
         pending_size = 0;
         return;
     }
     if (pending_size == 0)
         return;
-    result = sl_gxf_commands(target, pending, pending_size, &error_offset);
+    result = sl_gxf_commands(gxf, pending, pending_size, &error_offset);
     if (result != SL_GX_DL_OK)
-        gx_error(offset + error_offset, "sl_gxf_commands failed", (int)result);
+        ac_gx_error(offset + error_offset, "sl_gxf_commands failed", (int)result);
     pending_size = 0;
 }
 
@@ -323,8 +325,8 @@ static void record(void) {
         return;
     result = frame_recorded ? sl_gxf_record_more(gxf, frame) : sl_gxf_record(gxf, frame);
     frame_recorded = TRUE;
-    if (result != SL_OK && refused_records++ == 0)
-        SL_WARN("gx", "the GX front end's first refused record: %s", sl_result_string(result));
+    if (result != SL_OK)
+        ac_gx_record_refused(result);
 }
 
 void ac_gx_flush(void) {
@@ -390,36 +392,6 @@ void ac_frame_split(BOOL begin) {
     frame = sl_frame_begin();
     if (frame == NULL)
         refused_frames++;
-}
-
-/* The SDK's GX state when the reference began, and the main front end's state on its way to the reference's.
-   Static: the register and vertex states are large. */
-static struct __GXData_struct saved_gx;
-static sl_gx_register_state state_registers;
-static sl_gx_vertex_state state_vertex;
-static uint32_t state_xf[SL_GXF_XF_MEMORY_WORDS];
-
-void ac_gx_reference_begin(void) {
-    hand_over();
-    if (ref_gxf == NULL)
-        ref_gxf = create_gxf();
-    if (gxf != NULL && ref_gxf != NULL) {
-        sl_gxf_get_state(gxf, &state_registers, &state_vertex, state_xf);
-        sl_gxf_set_state(ref_gxf, &state_registers, &state_vertex, state_xf);
-    }
-    saved_gx = *gx;
-    to_reference = TRUE;
-}
-
-void ac_gx_reference_end(struct sl_frame* reference_frame) {
-    hand_over();
-    if (reference_frame != NULL && ref_gxf != NULL) {
-        const sl_result result = sl_gxf_record(ref_gxf, reference_frame);
-        if (result != SL_OK && refused_records++ == 0)
-            SL_WARN("gx", "the GX front end's first refused record: %s", sl_result_string(result));
-    }
-    *gx = saved_gx;
-    to_reference = FALSE;
 }
 
 void ac_gx_get_counts(ac_gx_counts* counts) {

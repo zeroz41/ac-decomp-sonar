@@ -1,6 +1,6 @@
-# Runs ac_port --diff from boot to play's first frame (sonarlib docs/roadmap.md, M6 steps 6j and 9b):
-#   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir>
-#         -P diff_test.cmake
+# Runs ac_port_reference --diff from boot to play's first frame (sonarlib docs/roadmap.md, M6 steps 6j, 9b and 10a):
+#   cmake -DAC_IMPORT=<ac-import> -DAC_PORT_REFERENCE=<ac_port_reference> -DAC_DISC=<disc> -DAC_VERSION=<version>
+#         -DOUT_DIR=<dir> -P diff_test.cmake
 # ac-import writes the package from the player's disc into OUT_DIR, then the run draws every emu64 task through the
 # kit and through the console's emu64, the reference, each into a frame of its own, and compares the two captures. It
 # must reach play's first frame and exit 0 with tasks compared, none different and none refused, and a play line with
@@ -12,7 +12,7 @@ if("${AC_DISC}" STREQUAL "")
     message("ac_port_diff: skipped, AC_DISC is not set")
     return()
 endif()
-foreach(variable IN ITEMS AC_IMPORT AC_PORT AC_VERSION OUT_DIR)
+foreach(variable IN ITEMS AC_IMPORT AC_PORT_REFERENCE AC_VERSION OUT_DIR)
     if("${${variable}}" STREQUAL "")
         message(FATAL_ERROR "ac_port_diff: ${variable} is not set")
     endif()
@@ -31,7 +31,7 @@ set(count "[0-9]+")
 set(diff_pattern "ac_port: diff tasks ${count} equal ${count} different ${count} refused ${count}")
 string(APPEND diff_pattern " triangles ${count} skipped ${count} ${count}")
 string(TIMESTAMP started "%s")
-execute_process(COMMAND "${AC_PORT}" --package "${package}" --diff
+execute_process(COMMAND "${AC_PORT_REFERENCE}" --package "${package}" --diff
                 RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 1200)
 string(TIMESTAMP ended "%s")
 math(EXPR seconds "${ended} - ${started}")

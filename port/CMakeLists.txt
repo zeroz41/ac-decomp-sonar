@@ -41,8 +41,9 @@ sonar_decomp_read_units(PREFIX AC OBJDIFF "${AC_ROOT}/objdiff.json")
 #   the console's hardware set-up, which the host has no counterpart for: the memory map and the DSP tasks that
 #   unlock the memory card and answer the Game Boy Advance;
 #   foresta.rel's start-up, which runs its static constructors: the port links foresta in (boot.c's LoadLink).
-# emu64 stays, under other names (below): the game's calls of it run on sonarlib's kit (kits/emu64, roadmap M6 step
-# 6g) through the glue (adapter/emu64_glue.c), and --diff runs it beside the kit as the reference (step 6j).
+# emu64 stays, under other names, in an object library of its own (ac_reference, below): the game's calls of it run on
+# sonarlib's kit (kits/emu64, roadmap M6 step 6g) through the glue (adapter/emu64_glue.c), and ac_port_reference's
+# --diff runs it beside the kit as the reference (step 6j).
 set(replaced_sources
     "^src/static/dolphin/"
     "^src/static/TRK_MINNOW_DOLPHIN/"
@@ -53,6 +54,7 @@ set(replaced_sources
     "^src/executor\\.c$")
 set(msl_math "^src/static/MSL_C\\.PPCEABI\\.bare\\.H/((e|k|s|w)_[a-z0-9_]+|float)\\.c$")
 set(units "")
+set(reference_units "")
 foreach(unit IN LISTS AC_UNITS)
     set(source "${AC_UNIT_${unit}_SOURCE}")
     if(NOT AC_UNIT_${unit}_LANGUAGE MATCHES "^(C|CXX)$")
@@ -74,12 +76,17 @@ foreach(unit IN LISTS AC_UNITS)
        AND NOT source STREQUAL "src/static/dolphin/gx/GXFifo.c")
         set(replaced FALSE)
     endif()
-    if(NOT replaced)
+    if(replaced)
+        continue()
+    endif()
+    if(source STREQUAL "src/static/libforest/emu64/emu64.c")
+        list(APPEND reference_units "${unit}")
+    else()
         list(APPEND units "${unit}")
     endif()
 endforeach()
 list(LENGTH units unit_count)
-message(STATUS "Animal Crossing: ${unit_count} units")
+message(STATUS "Animal Crossing: ${unit_count} units, and emu64's for the reference")
 
 # What reads the game's headers as the game does: its include directories, the port's switch and the adapter's forced
 # includes. The game and the importer both build on it.
@@ -115,6 +122,12 @@ target_sources(ac_game PRIVATE ${gx_unlisted_sources})
 # The boot's main and foresta's, which the port links into one program.
 set_property(SOURCE "${AC_ROOT}/src/static/boot.c" APPEND PROPERTY COMPILE_DEFINITIONS main=ac_boot_main)
 set_property(SOURCE "${AC_ROOT}/src/main.c" APPEND PROPERTY COMPILE_DEFINITIONS main=ac_foresta_main)
+# The reference (sonarlib docs/steps/m6-10a.md): emu64's unit, the reference's half of the emu64 glue and its own GX
+# front end, which only ac_port_reference links.
+add_library(ac_reference OBJECT)
+sonar_decomp_add_units(ac_reference PREFIX AC ROOT "${AC_ROOT}" UNITS ${reference_units} DROP_DEFINES MUST_MATCH)
+target_sources(ac_reference PRIVATE adapter/emu64_reference.c adapter/gx_reference.c)
+set_source_files_properties(adapter/emu64_reference.c PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
 # emu64, the --diff run's reference (roadmap M6 step 6j): its C entry points and FrameCansel take the emu64_ref_ names,
 # as the glue keeps the game's; the macros rename the class's members of the same names too, which nothing else sees.
 # It keeps what the console's compiler accepted: fastcast_float's register, which C++17 refuses; string literals as
@@ -204,24 +217,28 @@ target_sources(ac_game PRIVATE "${boot_sound_include}")
 set_property(SOURCE "${AC_ROOT}/src/static/jaudio_NES/game/game64.c" APPEND
              PROPERTY INCLUDE_DIRECTORIES "${CMAKE_CURRENT_BINARY_DIR}/assets")
 set_property(SOURCE "${AC_ROOT}/src/static/jaudio_NES/game/game64.c" APPEND PROPERTY OBJECT_DEPENDS "${boot_sound_include}")
-# The decompilation's libc headers stand in for MSL's; the port takes the host's (porting-model.md, Floating-point
-# determinism, for the math library).
-set_target_properties(ac_game PROPERTIES C_STANDARD 11 C_EXTENSIONS ON CXX_STANDARD 20 CXX_EXTENSIONS ON)
-# The exact-sim profile (porting-model.md, 64-bit and endianness; Floating-point determinism).
-target_compile_options(ac_game PRIVATE -fwrapv -fno-strict-aliasing -fno-delete-null-pointer-checks
-                       -ffp-contract=off -Werror=int-to-pointer-cast
-                       $<$<COMPILE_LANGUAGE:C>:-Werror=pointer-to-int-cast> -Werror=return-type
-                       # C++ treats falling off the end of a function as unreachable, not as an unused result.
-                       $<$<COMPILE_LANGUAGE:CXX>:-Werror=return-type>)
-# GCC calls a virtual function's likely override directly, emitting the inline overrides of classes the game never
-# links, such as JUTRomFont's.
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-devirtualize-speculatively>)
-endif()
-# The original compiler took C++98, which allowed narrowing in braced initializers.
-target_compile_options(ac_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>)
-target_link_libraries(ac_game PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
-                      sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend sonar::fmt_card)
+# The game's and the reference's objects build alike.
+foreach(target IN ITEMS ac_game ac_reference)
+    # The decompilation's libc headers stand in for MSL's; the port takes the host's (porting-model.md,
+    # Floating-point determinism, for the math library).
+    set_target_properties(${target} PROPERTIES C_STANDARD 11 C_EXTENSIONS ON CXX_STANDARD 20 CXX_EXTENSIONS ON)
+    # The exact-sim profile (porting-model.md, 64-bit and endianness; Floating-point determinism).
+    target_compile_options(${target} PRIVATE -fwrapv -fno-strict-aliasing -fno-delete-null-pointer-checks
+                           -ffp-contract=off -Werror=int-to-pointer-cast
+                           $<$<COMPILE_LANGUAGE:C>:-Werror=pointer-to-int-cast> -Werror=return-type
+                           # C++ treats falling off the end of a function as unreachable, not as an unused result.
+                           $<$<COMPILE_LANGUAGE:CXX>:-Werror=return-type>)
+    # GCC calls a virtual function's likely override directly, emitting the inline overrides of classes the game
+    # never links, such as JUTRomFont's.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-devirtualize-speculatively>)
+    endif()
+    # The original compiler took C++98, which allowed narrowing in braced initializers.
+    target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>)
+    target_link_libraries(${target} PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
+                          sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend
+                          sonar::fmt_card)
+endforeach()
 
 # The views of the game's card files (NOTES.md, Saves): ac_saves.schema's converters and what ac_saves.c converts around
 # them, built with m_card.c's macros and char signedness. They are built without debug information, so the port's DWARF
@@ -243,11 +260,19 @@ endif()
 set_target_properties(ac_saves PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
 target_link_libraries(ac_saves PRIVATE ac_headers sonar::base sonar::kit_card)
 
-# The program (NOTES.md, The program): the game and its glue, from boot to play's first frame.
-add_executable(ac_port adapter/ac_port.c $<TARGET_OBJECTS:ac_game> $<TARGET_OBJECTS:ac_saves>)
-set_target_properties(ac_port PROPERTIES C_STANDARD 11 C_EXTENSIONS ON LINKER_LANGUAGE CXX)
-target_link_libraries(ac_port PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
-                      sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend sonar::fmt_card)
+# The program (NOTES.md, The program): the game and its glue, from boot to play's first frame, with no reference; and
+# the reference's program, ac_port_reference, the same objects and the reference's, for the tests that draw the
+# console's emu64 (NOTES.md, The reference's program).
+add_executable(ac_port adapter/ac_port.c adapter/reference_none.c $<TARGET_OBJECTS:ac_game> $<TARGET_OBJECTS:ac_saves>)
+set_source_files_properties(adapter/reference_none.c PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
+add_executable(ac_port_reference adapter/ac_port.c $<TARGET_OBJECTS:ac_game> $<TARGET_OBJECTS:ac_saves>
+               $<TARGET_OBJECTS:ac_reference>)
+foreach(target IN ITEMS ac_port ac_port_reference)
+    set_target_properties(${target} PROPERTIES C_STANDARD 11 C_EXTENSIONS ON LINKER_LANGUAGE CXX)
+    target_link_libraries(${target} PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
+                          sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend
+                          sonar::fmt_card)
+endforeach()
 # sonarlib's sl-card, which moves the cards' saves to and from Dolphin (README.md, Saves), and sl-replay, which builds
 # the recordings --replay plays (NOTES.md, Replays), are built with the program.
 add_dependencies(ac_port sl-card sl-replay)
@@ -259,7 +284,7 @@ set(adapter_dir "${CMAKE_CURRENT_SOURCE_DIR}/adapter")
 set(game_dir "${AC_ROOT}/src")
 set(adapter_files "")
 set(game_files "")
-foreach(target IN ITEMS ac_game ac_saves ac_port)
+foreach(target IN ITEMS ac_game ac_saves ac_port ac_reference ac_port_reference)
     get_target_property(sources ${target} SOURCES)
     foreach(source IN LISTS sources)
         if(NOT source MATCHES "\\.(c|cpp)$")
@@ -491,10 +516,11 @@ add_test(NAME ac_port_replay
                  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/replay_test.cmake")
 set_tests_properties(ac_port_replay PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_replay: skipped, AC_DISC is not set")
 
-# ac_port --diff, each emu64 task drawn by the kit and by the console's emu64 and the two compared, on its own package
-# from the player's disc; skipped without one, when the script says so.
+# ac_port_reference --diff, each emu64 task drawn by the kit and by the console's emu64 and the two compared, on its
+# own package from the player's disc; skipped without one, when the script says so.
 add_test(NAME ac_port_diff
-         COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
+         COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>"
+                 "-DAC_PORT_REFERENCE=$<TARGET_FILE:ac_port_reference>"
                  "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/diff"
                  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/diff_test.cmake")
 set_tests_properties(ac_port_diff PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_diff: skipped, AC_DISC is not set")
@@ -551,12 +577,14 @@ add_test(NAME ac_port_save
                  "-DAC_LAVAPIPE_ICD=${AC_LAVAPIPE_ICD}" -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/save_test.cmake")
 set_tests_properties(ac_port_save PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_save: skipped, ")
 
-# ac_port --reference to play's first frame, and --measure --ticks 1200 with the kit and with --reference twice each,
-# then with the kit at --present-hz 144 and 360 once each, and the kit's --measure --ticks 7200 once, on the GPU sink
-# with no window through SDL's offscreen video driver and lavapipe's Vulkan; skipped without the disc or lavapipe, when
-# the script says so.
+# ac_port_reference --reference to play's first frame, and --measure --ticks 1200 with the kit and with
+# ac_port_reference --reference twice each, then with the kit at --present-hz 144 and 360 once each, and the kit's
+# --measure --ticks 7200 once, on the GPU sink with no window through SDL's offscreen video driver and lavapipe's
+# Vulkan; ac_port_reference with neither flag to play's first frame, whose line must be ac_port's; and ac_port's and
+# ac_port_reference's refusals; skipped without the disc or lavapipe, when the script says so.
 add_test(NAME ac_port_measure
          COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
+                 "-DAC_PORT_REFERENCE=$<TARGET_FILE:ac_port_reference>"
                  "-DAC_DISC=${AC_DISC}" "-DAC_VERSION=${AC_VERSION}" "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/measure"
                  "-DAC_LAVAPIPE_ICD=${AC_LAVAPIPE_ICD}" -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/measure_test.cmake")
 set_tests_properties(ac_port_measure PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_measure: skipped, ")
@@ -592,8 +620,9 @@ add_test(NAME ac_port_state_measured
 set_tests_properties(ac_port_state_measured PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_state_measured: skipped, ")
 
 # The goldens: sonarlib's sl-capture runs Dolphin on the player's disc and caches its frames in the build tree, ac_port
-# --goldens writes the same scenes on the GPU sink with no window, offscreen through lavapipe, and sl-capture compares
-# them; skipped without the disc, Dolphin, lavapipe or sl-capture, when the script says so.
+# --goldens writes the same scenes on the GPU sink with no window, offscreen through lavapipe, and ac_port_reference
+# --reference its reference's, and sl-capture compares them; skipped without the disc, Dolphin, lavapipe or
+# sl-capture, when the script says so.
 set(AC_DOLPHIN "" CACHE FILEPATH "dolphin-emu-nogui, built from upstream's tag 2609, for ac_port_goldens")
 if(TARGET sl-capture)
     add_custom_target(ac_capture_tool ALL DEPENDS sl-capture)
@@ -603,15 +632,19 @@ else()
 endif()
 add_test(NAME ac_port_goldens
          COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
-                 "-DSL_CAPTURE=${ac_sl_capture}" "-DAC_DOLPHIN=${AC_DOLPHIN}" "-DAC_DISC=${AC_DISC}"
+                 "-DAC_PORT_REFERENCE=$<TARGET_FILE:ac_port_reference>" "-DSL_CAPTURE=${ac_sl_capture}"
+                 "-DAC_DOLPHIN=${AC_DOLPHIN}" "-DAC_DISC=${AC_DISC}"
                  "-DAC_VERSION=${AC_VERSION}" "-DSCENES=${CMAKE_CURRENT_SOURCE_DIR}/tests/goldens.scenes"
                  "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/goldens" "-DAC_LAVAPIPE_ICD=${AC_LAVAPIPE_ICD}"
                  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/goldens_test.cmake")
 set_tests_properties(ac_port_goldens PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_goldens: skipped, ")
 
 # The seam audit (sonarlib's sl-seam-audit) over the translation units this build compiles, against the port's policy
-# of seam files (seam-policy.toml): every file that uses GX is listed, and no transitional entry is stale. No disc.
+# of seam files (seam-policy.toml): every file that uses GX is listed, no types file calls, no entry is stale, and the
+# line is the notes'. No disc.
 add_custom_target(ac_seam_audit_tool ALL DEPENDS sl-seam-audit)
 add_test(NAME ac_seam_audit
-         COMMAND sl-seam-audit --policy "${CMAKE_CURRENT_SOURCE_DIR}/seam-policy.toml"
-                 --commands "${CMAKE_BINARY_DIR}/compile_commands.json" --root "${AC_ROOT}")
+         COMMAND "${CMAKE_COMMAND}" "-DSL_SEAM_AUDIT=$<TARGET_FILE:sl-seam-audit>"
+                 "-DPOLICY=${CMAKE_CURRENT_SOURCE_DIR}/seam-policy.toml"
+                 "-DCOMMANDS=${CMAKE_BINARY_DIR}/compile_commands.json" "-DROOT=${AC_ROOT}"
+                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/seam_audit_test.cmake")

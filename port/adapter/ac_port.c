@@ -77,6 +77,7 @@
 
 #include <port/emu64_glue.h>
 #include <port/goldens.h>
+#include <port/reference.h>
 
 #include <sonar/audio.h>
 #include <sonar/base/hash.h>
@@ -108,17 +109,18 @@
 
 int ac_boot_main(int argc, const char** argv); /* src/static/boot.c's main */
 
-static const char usage[] =
-    "usage: ac_port --package <file> [--ticks <n>] [--validate] [--diff] [--reference]\n"
-    "               [--window [--user-dir <dir>] [--set <key>=<value>]...\n"
-    "                         [--resize <tick> <width>x<height>]...\n"
-    "                         [--replay <recording> [--unpaced]\n"
-    "                          | --record <recording> [--input-script <script>] [--date <date>]\n"
-    "                                     [--unpaced]]\n"
-    "                | --goldens <scenes> <dir> [--display <width>x<height> [--set <key>=<value>]...]\n"
-    "                | --measure [--present-hz <n>] [--replay <recording>] | --replay <recording>]\n"
-    "               [--qrand-seed <hex>] [--state-hashes <file> [--plant <n>]]\n"
-    "               [--dump <dir> --dump-tick <n>]\n";
+/* The usage's lines after its first, each indented by the width of "usage: <name> " (usage_error). */
+static const char* const usage_lines[] = {
+    "[--window [--user-dir <dir>] [--set <key>=<value>]...",
+    "          [--resize <tick> <width>x<height>]...",
+    "          [--replay <recording> [--unpaced]",
+    "           | --record <recording> [--input-script <script>] [--date <date>]",
+    "                      [--unpaced]]",
+    " | --goldens <scenes> <dir> [--display <width>x<height> [--set <key>=<value>]...]",
+    " | --measure [--present-hz <n>] [--replay <recording>] | --replay <recording>]",
+    "[--qrand-seed <hex>] [--state-hashes <file> [--plant <n>]]",
+    "[--dump <dir> --dump-tick <n>]",
+};
 
 static uint64_t tick_limit = 3600;
 static int ticks_given;          /* --ticks */
@@ -177,8 +179,14 @@ u32 ac_port_rnd_seed(u32 tick) {
     return seed_given ? seed : tick;
 }
 
+/* The usage names the program and the options it adds (port/reference.h). */
 static int usage_error(void) {
-    fputs(usage, stderr);
+    const int indent = (int)(sizeof "usage: " - 1 + strlen(ac_program_name) + 1);
+    size_t i;
+    fprintf(stderr, "usage: %s --package <file> [--ticks <n>] [--validate]%s\n", ac_program_name,
+            ac_reference_options);
+    for (i = 0; i < sizeof usage_lines / sizeof usage_lines[0]; i++)
+        fprintf(stderr, "%*s%s\n", indent, "", usage_lines[i]);
     return 2;
 }
 
@@ -1057,9 +1065,12 @@ int main(int argc, char** argv) {
         } else if (strcmp(argv[i], "--validate") == 0) {
             emu64_flags |= SL_EMU64_VALIDATE; /* every use of a program hashes its ranges again */
         } else if (strcmp(argv[i], "--diff") == 0) {
-            ac_diff_enable(); /* the differential test, before boot: OSInit takes the reference's buffers */
+            /* the differential test, before boot: OSInit takes the reference's buffers; ac_port has no reference */
+            if (!ac_diff_enable())
+                return usage_error();
         } else if (strcmp(argv[i], "--reference") == 0) {
-            ac_reference_enable(); /* before boot, as --diff */
+            if (!ac_reference_enable()) /* before boot, as --diff */
+                return usage_error();
         } else if (strcmp(argv[i], "--measure") == 0) {
             measure = 1;
             ac_measure_enable(); /* play's first frame ends no run */
