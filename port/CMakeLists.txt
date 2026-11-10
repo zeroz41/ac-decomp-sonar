@@ -165,6 +165,9 @@ set_source_files_properties(adapter/emu64_glue.c PROPERTIES COMPILE_DEFINITIONS 
 # The game's state the tick boundaries hash, for --state-hashes (NOTES.md, State hashes).
 target_sources(ac_game PRIVATE adapter/ac_state.c)
 set_source_files_properties(adapter/ac_state.c PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
+# The culling hook the game's culls call, for a display wider than the game's frame (NOTES.md, The window).
+target_sources(ac_game PRIVATE adapter/ac_cull.c)
+set_source_files_properties(adapter/ac_cull.c PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
 # The out-of-line copies of the game's C99 inlines.
 target_sources(ac_game PRIVATE adapter/game_inlines.c)
 set_source_files_properties(adapter/game_inlines.c PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")

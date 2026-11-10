@@ -2,7 +2,9 @@ static void bit_cmn_single_drawS(GAME* game, bg_item_common_info_c* common_info,
                                  s_xyz* angle, xyz_t* scale, u8 alpha, bIT_DRAW_BF_PROC draw_bf,
                                  bIT_DRAW_AF_PROC draw_af, rgba_t* col);
 
-#ifdef SONAR_PORT /* sonarlib port: the bg items' parts of the port's emu64 glue (adapter/emu64_glue.c) */
+#ifdef SONAR_PORT /* sonarlib port: the bg items' parts of the port's emu64 glue (adapter/emu64_glue.c), and its
+                     culling hook (adapter/ac_cull.c) */
+#include <port/cull.h>
 #include <port/emu64_glue.h>
 
 /* A pool element's part: 2^23 + kind * 256 + slot, the kinds drop 0, fruit drop 1, pit 2, ten coin 3, fade 4 and
@@ -2866,7 +2868,11 @@ static int bg_item_common_culling_check(GAME_PLAY* play, ACTOR* actorx, xyz_t* p
     f32 camera_w;
 
     Skin_Matrix_PrjMulVector(&play->projection_matrix, pos, &camera_pos, &camera_w);
+#ifdef SONAR_PORT /* sonarlib port: tested against the display's sides, as only the draw loops read the result */
+    return ac_cull_wide_check(actorx, &camera_pos, camera_w);
+#else
     return Actor_draw_actor_no_culling_check2(actorx, &camera_pos, camera_w);
+#endif
 }
 
 static int bg_item_common_culling_check_talk(GAME_PLAY* play, ACTOR* actorx, xyz_t* pos) {

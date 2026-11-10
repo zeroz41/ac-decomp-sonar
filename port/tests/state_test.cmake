@@ -1,5 +1,5 @@
-# The town replay's state hashes and dumps (port/NOTES.md, State hashes; sonarlib docs/roadmap.md, M6 steps 9f3b and
-# 9c1):
+# The town replay's state hashes and dumps (port/NOTES.md, State hashes; sonarlib docs/roadmap.md, M6 steps 9f3b, 9c1
+# and 9c3):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DSL_REPLAY=<sl-replay> -DSL_DUMP_COMPARE=<sl-dump-compare>
 #         -DSYMBOLS=<ac_port.slsym> -DTOWN_SCRIPT=<town_replay.txt> -DTITLE_SCRIPT=<title_replay.txt> -DAC_DISC=<disc>
 #         -DAC_VERSION=<version> -DOUT_DIR=<dir> -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P state_test.cmake
@@ -16,9 +16,12 @@
 # The town replay then runs with --window --unpaced twice, uncapped with --set sonar.video.pacing=immediate and with
 # interpolation off with --set sonar.video.interpolation=false, each with --state-hashes, at render scale 1 and with
 # its window resized to 1280x720 at tick 6000, 960x720 at 12000 and 1680x720 at 18000: 16:9, 4:3 and 21:9. Each must
-# exit 0 with the headless run's lines and the window line, which must end with the target of the last size,
-# 1120x480; its stderr must report each resize taken; and the headless file must be a prefix of each run's file, as
-# the picture's size is no part of the game's state.
+# exit 0 with the window line, which must end with the target of the last size, 1120x480; its stderr must report each
+# resize taken; and the headless file must be a prefix of each run's file, as the picture's size is no part of the
+# game's state. A wider window shows what the game culls at the sides of its frame (NOTES.md, The window), so its
+# frames hold more than a headless run's: its play and replay lines must be the headless run's in every field but the
+# frame's hash and the kit's counts of what it drew, which are hash, instances, compiles, holes and cpu, and its replay
+# line, at 21:9, must count more instances than the headless run's, which shows the culling hook drew.
 #
 # The plant: the town replay headless with --state-hashes, --plant 19999, --dump and --dump-tick 20000. It must exit 0
 # with the clean runs' lines, its hashes must equal theirs to tick 19999 and differ from each one's from tick 20000 on,
@@ -163,6 +166,25 @@ function(check_prefix name prefix text)
     endif()
 endfunction()
 
+# Sets out to the play and replay lines without the frame's hash and the kit's counts of what it drew, which a wider
+# display changes: hash, instances, compiles, holes and cpu.
+function(without_drawn lines out)
+    string(REGEX REPLACE " hash [0-9a-f]+ instances [0-9]+ compiles [0-9]+ holes [0-9]+/[0-9]+ cpu [0-9]+ "
+                         " hash - instances - compiles - holes - cpu - " lines "${lines}")
+    set(${out} "${lines}" PARENT_SCOPE)
+endfunction()
+
+# Sets out to the instances the replay line among the lines counts, or to nothing.
+function(replay_instances lines out)
+    set(instances "")
+    foreach(line IN LISTS lines)
+        if(line MATCHES "^ac_port: replay .* instances ([0-9]+) ")
+            set(instances "${CMAKE_MATCH_1}")
+        endif()
+    endforeach()
+    set(${out} "${instances}" PARENT_SCOPE)
+endfunction()
+
 # Runs sl-dump-compare --symbols on two dumps, setting result and compared, its output.
 macro(compare_dumps first second)
     execute_process(COMMAND "${SL_DUMP_COMPARE}" --symbols "${SYMBOLS}" "${first}" "${second}"
@@ -210,6 +232,11 @@ if(NOT result EQUAL 0
    OR NOT compared MATCHES "\nsummary: 0 of [1-9][0-9]* variables differ; 0 of [1-9][0-9]* arenas differ\n")
     message(FATAL_ERROR "ac_port_state: the headless runs' dumps differ, or compared no variable or no arena")
 endif()
+without_drawn("${headless}" headless_simulated)
+replay_instances("${headless}" headless_instances)
+if(headless_simulated STREQUAL headless OR headless_instances STREQUAL "")
+    message(FATAL_ERROR "ac_port_state: the headless lines hold no hash and counts to leave out:\n${headless}")
+endif()
 
 # The town replay in a window, unpaced: uncapped, then with interpolation off, each resized as it runs.
 set(resizes "6000 1280x720" "12000 960x720" "18000 1680x720")
@@ -229,10 +256,18 @@ foreach(setting IN ITEMS sonar.video.pacing=immediate sonar.video.interpolation=
         message(FATAL_ERROR "ac_port_state: the window's town replay with ${setting} did not end with the window "
                             "line:\n${errors}")
     endif()
-    if(NOT lines STREQUAL headless)
-        message(FATAL_ERROR "ac_port_state: the window's lines with ${setting} are not the headless run's:\n"
-                            "${lines}\n${headless}")
+    without_drawn("${lines}" simulated)
+    if(NOT simulated STREQUAL headless_simulated)
+        message(FATAL_ERROR "ac_port_state: the window's lines with ${setting} are not the headless run's outside the "
+                            "frame's hash and the kit's counts:\n${lines}\n${headless}")
     endif()
+    replay_instances("${lines}" instances)
+    if(instances STREQUAL "" OR NOT instances GREATER headless_instances)
+        message(FATAL_ERROR "ac_port_state: the window's replay with ${setting} ends at 21:9 with ${instances} "
+                            "instances, no more than the headless run's ${headless_instances}: the culling hook drew "
+                            "nothing at the sides")
+    endif()
+    message("the window run with ${setting}: ${instances} instances at 21:9, ${headless_instances} headless")
     string(REGEX MATCHALL "ac_port: resize [^\n]*" resized "${errors}")
     message("${resized}")
     foreach(resize IN LISTS resizes)

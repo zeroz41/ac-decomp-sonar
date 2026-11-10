@@ -30,4 +30,10 @@ void qrand_state(const u32** idum, const u32** itemp) {
     *idum = &__qrand_idum;
     *itemp = &__qrand_itemp;
 }
+
+/* sonarlib port: sets the two words, for the port's culling hook to put them back after a draw (adapter/ac_cull.c) */
+void qrand_set_state(u32 idum, u32 itemp) {
+    __qrand_idum = idum;
+    __qrand_itemp = itemp;
+}
 #endif

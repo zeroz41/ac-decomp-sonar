@@ -18,7 +18,8 @@
 #include "m_npc.h"
 #include "m_malloc.h"
 #include "m_common_data.h"
-#ifdef SONAR_PORT /* sonarlib port: the owner markers and forgetting of the port's emu64 glue */
+#ifdef SONAR_PORT /* sonarlib port: the owner markers and forgetting of the port's emu64 glue, and its culling hook */
+#include <port/cull.h>
 #include <port/emu64_glue.h>
 #endif
 
@@ -543,6 +544,13 @@ extern void Actor_info_draw_actor(GAME_PLAY* play, Actor_info* actor_info) {
                     Actor_delete_check(actor, (GAME*)play);
                 }
             }
+#ifdef SONAR_PORT /* sonarlib port: an actor the game culls at its frame's side is drawn where a wider display shows
+                     it, and what the draw wrote is put back, so the game's result stays (adapter/ac_cull.c) */
+            if (ac_cull_wide_begin(actor, do_not_draw)) {
+                Actor_draw(play, actor);
+                ac_cull_wide_end(actor);
+            }
+#endif
         }
 
         list++;
