@@ -565,8 +565,9 @@ set_tests_properties(ac_port_measure PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port
 # tests/title_replay.txt, and ac_port runs the town headless twice with --state-hashes and a dump, which sonarlib's
 # sl-dump-compare compares with ac_port.slsym, with --window --unpaced uncapped and with interpolation off, whose state
 # hashes the headless run's must begin, and with --plant, which must be found at its tick and named, then the title
-# measured past its end, and six usage errors, offscreen as ac_port_window; skipped without the disc or lavapipe, when
-# the script says so.
+# headless and with --window --unpaced under the picture's settings, the post chain and supersampling, whose lines must
+# be the headless run's and whose state hashes it must begin, then the title measured past its end, and six usage
+# errors, offscreen as ac_port_window; skipped without the disc or lavapipe, when the script says so.
 add_test(NAME ac_port_state
          COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
                  "-DSL_REPLAY=$<TARGET_FILE:sl-replay>" "-DSL_DUMP_COMPARE=$<TARGET_FILE:sl-dump-compare>"

@@ -1,5 +1,5 @@
-# The town replay's state hashes and dumps (port/NOTES.md, State hashes; sonarlib docs/roadmap.md, M6 steps 9f3b, 9c1
-# and 9c3):
+# The town replay's state hashes and dumps (port/NOTES.md, State hashes; sonarlib docs/roadmap.md, M6 steps 9f3b, 9c1,
+# 9c3 and 9e1):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DSL_REPLAY=<sl-replay> -DSL_DUMP_COMPARE=<sl-dump-compare>
 #         -DSYMBOLS=<ac_port.slsym> -DTOWN_SCRIPT=<town_replay.txt> -DTITLE_SCRIPT=<title_replay.txt> -DAC_DISC=<disc>
 #         -DAC_VERSION=<version> -DOUT_DIR=<dir> -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P state_test.cmake
@@ -27,6 +27,13 @@
 # with the clean runs' lines, its hashes must equal theirs to tick 19999 and differ from each one's from tick 20000 on,
 # and sl-dump-compare on its dump and a clean one must exit 1, naming common_data at +0x1c, the save's pad_1C[0], as
 # the first difference, with one variable differing.
+#
+# The picture's settings (M6 step 9e1): the title replay headless with --state-hashes, which must exit 0 with the
+# replay line at tick 1201 in scene 28, then with --window --unpaced, interpolation off, --resize 1 640x480 and --set
+# for SMAA, FSR 1, RCAS and supersampling at 2. It must exit 0 with the window line, which must end with the target
+# 1280x960, twice the window's size a side; its play and replay lines must be the headless run's, whole, as a 4:3
+# window draws what a headless run draws; and the headless file must be a prefix of its file, as no setting of the
+# picture is part of the game's state.
 #
 # The title replay measured past its end, --measure --replay with --ticks 1500: it must exit 0 with the play line, the
 # measure line, the presents line and the replay line at tick 1201 in scene 28, and no measured line.
@@ -333,6 +340,44 @@ if(NOT result EQUAL 1 OR NOT compared MATCHES "\nfirst difference: common_data a
    OR NOT compared MATCHES "\nsummary: 1 of [0-9]+ variables differ; 0 of [0-9]+ arenas differ\n")
     message(FATAL_ERROR "ac_port_state: the planted dump's compare did not name common_data at +0x1c, alone")
 endif()
+
+# The picture's settings: the title replay headless, then in a 4:3 window with the post chain and supersampling at 2.
+set(hashes "${OUT_DIR}/hashes_title.txt")
+file(REMOVE "${hashes}")
+run_port(--replay "${title}" --state-hashes "${hashes}")
+message("title headless: exit ${result}, ${seconds} s:\n${lines}")
+list(LENGTH lines found)
+set(replay_line "")
+if(found EQUAL 2)
+    list(GET lines 1 replay_line)
+endif()
+if(NOT result EQUAL 0 OR NOT replay_line MATCHES "^ac_port: replay tick 1201 .* scene 28$")
+    tail_of("${errors}" errors)
+    message(FATAL_ERROR "ac_port_state: the headless title replay did not end at tick 1201 in scene 28:\n${errors}")
+endif()
+read_hashes("the headless title replay" "${hashes}" title_hashes)
+set(title_headless "${lines}")
+set(hashes "${OUT_DIR}/hashes_title_window.txt")
+file(REMOVE "${hashes}")
+run_port(--window --user-dir "${user}" --unpaced --replay "${title}" --state-hashes "${hashes}"
+         --set sonar.video.interpolation=false --set sonar.video.antialiasing=smaa --set sonar.video.upscale=fsr1
+         --set sonar.video.sharpen=rcas --set sonar.video.supersampling=2 --resize 1 640x480)
+message("title window, the picture's settings: exit ${result}, ${seconds} s:\n${lines}\n${window_line}")
+if(NOT result EQUAL 0 OR window_line STREQUAL "")
+    tail_of("${errors}" errors)
+    message(FATAL_ERROR "ac_port_state: the window's title replay with the picture's settings did not end with the "
+                        "window line:\n${errors}")
+endif()
+if(NOT lines STREQUAL title_headless)
+    message(FATAL_ERROR "ac_port_state: the window's lines with the picture's settings are not the headless "
+                        "run's:\n${lines}\n${title_headless}")
+endif()
+if(NOT window_line MATCHES " target 1280x960$")
+    message(FATAL_ERROR "ac_port_state: the window run with the picture's settings did not end with the target twice "
+                        "its 640x480 window's size, 1280x960:\n${window_line}")
+endif()
+read_hashes("the window run with the picture's settings" "${hashes}" window_hashes)
+check_prefix("the window run's with the picture's settings" "${title_hashes}" "${window_hashes}")
 
 # The title replay measured past its end.
 run_port(--measure --replay "${title}" --ticks 1500)

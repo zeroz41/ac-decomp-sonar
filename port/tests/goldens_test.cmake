@@ -14,7 +14,13 @@
 # off into port-16x9-off, where each frame must be the first run's byte for byte. Then at 21:9 with the UI scale at 50
 # (M6 step 9d2) into port-21x9-ui50, compared with no Dolphin frame, which shows no scaled 2D: its frames have
 # port-21x9's sizes, and the logo held and each play scene must differ from port-21x9's, as each holds 2D the
-# setting reaches. It prints every line. When AC_DISC names no disc,
+# setting reaches. Then the picture's settings in the 16:9 display (M6 step 9e1), of which a frame shows nothing: with a
+# display each scene has a window picture too, <scene>.window.ppm, the display's whole image under the run's
+# settings, 854 x 480 at 16:9. With SMAA, FSR 1 and RCAS into port-16x9-post, each frame must be port-16x9's byte for
+# byte and the window pictures of the logo held and of each play scene must differ from port-16x9's. With
+# supersampling at 2 into port-16x9-ss2, each frame must be twice port-16x9's size and the same window pictures must
+# differ. Each of the two then runs again, and every frame and window picture must be the first run's byte for byte.
+# It prints every line. When AC_DISC names no disc,
 # AC_DOLPHIN no Dolphin, there is no lavapipe or no sl-capture, or the disc is another version than GAFE01_00, whose
 # addresses these are, it prints the line the test's SKIP_REGULAR_EXPRESSION matches and returns.
 cmake_minimum_required(VERSION 3.25)
@@ -157,16 +163,23 @@ function(goldens_sizes name play logo)
     message("ac_port_goldens: ${name}: ${count} frames, play ${play}, logo ${logo}")
 endfunction()
 
-# Whether a scene's frame in a run is another run's, byte for byte, into the caller's `same`.
-function(goldens_same_frame name other scene)
-    execute_process(COMMAND "${CMAKE_COMMAND}" -E compare_files "${OUT_DIR}/${name}/${scene}.ppm"
-                            "${OUT_DIR}/${other}/${scene}.ppm"
+# Whether a file of a run, a scene's frame or its window picture, is another run's, byte for byte, into the caller's
+# `same`.
+function(goldens_same_file name other file)
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E compare_files "${OUT_DIR}/${name}/${file}"
+                            "${OUT_DIR}/${other}/${file}"
                     RESULT_VARIABLE result OUTPUT_QUIET ERROR_QUIET)
     if(result EQUAL 0)
         set(same TRUE PARENT_SCOPE)
     else()
         set(same FALSE PARENT_SCOPE)
     endif()
+endfunction()
+
+# Whether a scene's frame in a run is another run's, byte for byte, into the caller's `same`.
+function(goldens_same_frame name other scene)
+    goldens_same_file(${name} ${other} "${scene}.ppm")
+    set(same ${same} PARENT_SCOPE)
 endfunction()
 
 # Every frame of a run is another run's, byte for byte.
@@ -204,6 +217,71 @@ function(goldens_scaled name other)
     message("ac_port_goldens: ${name}: the logo held and each play scene, ${count} frames, differ from ${other}'s")
 endfunction()
 
+# Every scene of a run in a display has a window picture of the display's size, as "<width> <height>": the window's
+# whole image under the run's settings (sonarlib's goldens.h).
+function(goldens_window_sizes name size)
+    goldens_scenes(${name})
+    string(HEX "P6\n${size}\n255\n" expected)
+    string(LENGTH "${expected}" length)
+    math(EXPR bytes "${length} / 2")
+    foreach(scene IN LISTS scenes)
+        set(header "")
+        if(EXISTS "${OUT_DIR}/${name}/${scene}.window.ppm")
+            file(READ "${OUT_DIR}/${name}/${scene}.window.ppm" header LIMIT ${bytes} HEX)
+        endif()
+        if(NOT header STREQUAL expected)
+            message(FATAL_ERROR "ac_port_goldens: ${name}/${scene}.window.ppm is not a window picture of ${size}")
+        endif()
+    endforeach()
+    list(LENGTH scenes count)
+    message("ac_port_goldens: ${name}: ${count} window pictures, each ${size}")
+endfunction()
+
+# A run's window pictures against another run's in the same display, both checked by goldens_window_sizes: the logo
+# held and each play scene differ, as a setting of the picture reaches all a window shows.
+function(goldens_windows_differ name other)
+    goldens_scenes(${name})
+    set(count 0)
+    foreach(scene IN LISTS scenes)
+        if(scene MATCHES "^play_" OR scene STREQUAL "logo_held")
+            goldens_same_file(${name} ${other} "${scene}.window.ppm")
+            if(same)
+                message(FATAL_ERROR "ac_port_goldens: ${name}/${scene}.window.ppm is ${other}'s: the picture's "
+                                    "settings did not reach the window")
+            endif()
+            math(EXPR count "${count} + 1")
+        endif()
+    endforeach()
+    if(count LESS 2 OR NOT "logo_held" IN_LIST scenes)
+        message(FATAL_ERROR "ac_port_goldens: the ${name} run wrote no play scene or no logo_held")
+    endif()
+    message("ac_port_goldens: ${name}: the window pictures of the logo held and each play scene, ${count}, differ "
+            "from ${other}'s")
+endfunction()
+
+# A run a second time, into <name>-again: its scenes, and every frame and window picture, are the first run's, byte for
+# byte.
+function(goldens_again name port_options)
+    goldens_write(${name}-again "${port_options}")
+    goldens_scenes(${name})
+    set(first "${scenes}")
+    goldens_scenes(${name}-again)
+    if(NOT scenes STREQUAL first)
+        message(FATAL_ERROR "ac_port_goldens: ${name}'s second run wrote other scenes than its first")
+    endif()
+    foreach(scene IN LISTS scenes)
+        foreach(file IN ITEMS "${scene}.ppm" "${scene}.window.ppm")
+            goldens_same_file(${name}-again ${name} "${file}")
+            if(NOT same)
+                message(FATAL_ERROR "ac_port_goldens: ${name}-again/${file} is not the first run's, byte for byte")
+            endif()
+        endforeach()
+    endforeach()
+    list(LENGTH scenes count)
+    message("ac_port_goldens: ${name}: run again, ${count} frames and ${count} window pictures, each the first "
+            "run's byte for byte")
+endfunction()
+
 # The kit's frames into port, and the reference's, drawn by the console's emu64, into port-reference.
 goldens_run(port "" "")
 goldens_run(port-reference "--reference" "")
@@ -214,6 +292,7 @@ goldens_run(port-reference "--reference" "")
 # hold (sonarlib docs/validation.md, Port goldens).
 goldens_run(port-16x9 "--display;854x480" "--added;214")
 goldens_sizes(port-16x9 "812 464" "854 480")
+goldens_window_sizes(port-16x9 "854 480")
 goldens_run(port-21x9 "--display;1120x480" "--added;480")
 goldens_sizes(port-21x9 "1078 464" "1120 480")
 
@@ -227,3 +306,23 @@ goldens_same(port-16x9-off port)
 goldens_write(port-21x9-ui50 "--display;1120x480;--set;sonar.video.ui_scale=50")
 goldens_sizes(port-21x9-ui50 "1078 464" "1120 480")
 goldens_scaled(port-21x9-ui50 port-21x9)
+
+# The picture's settings in the 16:9 display (M6 step 9e1). The post chain changes only what a window shows, so with
+# SMAA, FSR 1 and RCAS the frames are the 16:9 run's and the window pictures are not. No Dolphin frame shows a filter.
+set(post "--display;854x480;--set;sonar.video.antialiasing=smaa;--set;sonar.video.upscale=fsr1")
+list(APPEND post "--set" "sonar.video.sharpen=rcas")
+goldens_write(port-16x9-post "${post}")
+goldens_sizes(port-16x9-post "812 464" "854 480")
+goldens_same(port-16x9-post port-16x9)
+goldens_window_sizes(port-16x9-post "854 480")
+goldens_windows_differ(port-16x9-post port-16x9)
+goldens_again(port-16x9-post "${post}")
+
+# Supersampling at 2: the frames at twice the 16:9 run's size a side, the scale of 2 the factor asks for in a display
+# of the game's height, and the window pictures, at the display's size, averaged from them.
+set(supersampled "--display;854x480;--set;sonar.video.supersampling=2")
+goldens_write(port-16x9-ss2 "${supersampled}")
+goldens_sizes(port-16x9-ss2 "1624 928" "1708 960")
+goldens_window_sizes(port-16x9-ss2 "854 480")
+goldens_windows_differ(port-16x9-ss2 port-16x9)
+goldens_again(port-16x9-ss2 "${supersampled}")
