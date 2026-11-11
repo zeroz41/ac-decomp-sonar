@@ -1,9 +1,9 @@
-# Runs the seam audit over the translation units the build compiles (sonarlib docs/roadmap.md, M6 steps 6h, 10a to 10c):
+# Runs the seam audit over the translation units the build compiles (sonarlib docs/roadmap.md, M6 steps 6h, 10a to 10e):
 #   cmake -DSL_SEAM_AUDIT=<sl-seam-audit> -DPOLICY=<seam-policy.toml> -DCOMMANDS=<compile_commands.json> -DROOT=<root>
 #         -P seam_audit_test.cmake
 # It must exit 0, every file that uses GX listed, none of the types files calling and no entry stale, and print the
-# line the port's notes give (NOTES.md, The seam audit), so a file that leaves transitional changes the test with the
-# notes. No disc.
+# line the port's notes give (NOTES.md, The seam audit), with no file transitional, as the seam is complete, so a file
+# that starts using GX changes the test with the notes. No disc.
 cmake_minimum_required(VERSION 3.25)
 
 foreach(variable IN ITEMS SL_SEAM_AUDIT POLICY COMMANDS ROOT)
@@ -12,8 +12,8 @@ foreach(variable IN ITEMS SL_SEAM_AUDIT POLICY COMMANDS ROOT)
     endif()
 endforeach()
 
-set(expected "seam GX transitional 4 calls 89 list 1 reference 3 types 8 unsupported 1 sdk 20 glue 3 unlisted 0 called 0")
-string(APPEND expected " stale 0 skipped 236")
+set(expected "seam GX transitional 0 calls 0 list 1 reference 4 types 11 unsupported 1 sdk 20 glue 4 unlisted 0 called 0")
+string(APPEND expected " stale 0 skipped 237")
 execute_process(COMMAND "${SL_SEAM_AUDIT}" --policy "${POLICY}" --commands "${COMMANDS}" --root "${ROOT}"
                 RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors)
 message("exit ${result}:\n${output}${errors}")

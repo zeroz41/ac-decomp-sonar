@@ -1,13 +1,16 @@
-# The port's seam policy (sonarlib docs/porting-model.md, Seam audit; docs/roadmap.md, M6 steps 6h and 10a to 10d). The
+# The port's seam policy (sonarlib docs/porting-model.md, Seam audit; docs/roadmap.md, M6 steps 6h and 10a to 10e). The
 # test ac_seam_audit runs sl-seam-audit over the build's compile_commands.json with this policy: every file the build
 # compiles that uses GX is listed here. The SDK's GX units are sdk and the port's glue is glue. emu64, which only
-# ac_port_reference links, is reference; a file that names GX's types or data or includes its headers and calls nothing
-# is types, and fails the audit at its first call; the NES emulator, which the port builds and never starts, is
+# ac_port_reference links, is reference, and so is the GX the frame's seams leave to it
+# (port/adapter/jsys_display_reference.c); a file that names GX's types or data or includes its headers and calls
+# nothing is types, and fails the audit at its first call; the NES emulator, which the port builds and never starts, is
 # unsupported. m_play.c, whose GX calls build the display list the emu64 kit decodes, is list. J2D's two files are
 # substituted by the port's seam file on the jsys kit (port/adapter/jsys_j2d.cpp), which uses no GX, and JUTResFont.cpp
 # by the font's (port/adapter/jsys_font.cpp), which names GX's texture map type in the game's signatures and calls
-# nothing of GX. Each other file is transitional, with what it does with GX. A file that starts using GX fails the audit
-# until it is listed, and a converted file fails until its entry goes. The seam is complete at transitional 0.
+# nothing of GX. The frame's display, video and FIFO, JFWDisplay.cpp, JUTVideo.cpp and JUTGraphFifo.cpp, are
+# substituted by seam files that name GX's types and call nothing of GX (sonarlib docs/steps/m6-10e.md), and libultra's
+# shutdown.c by one that uses no GX. The seam is complete: no file is transitional. A file that starts using GX fails
+# the audit until it is listed, and a converted file fails until its entry goes.
 
 [category.GX]
 names = "GX"
@@ -23,37 +26,13 @@ note = "the SDK's units, GX's among them, compiled on the host since step 6f; th
 path = "port/adapter/"
 category = "GX"
 kind = "glue"
-note = "the sink, the GX front end's hand-over, the frame and GX's address space"
-
-[file.jfw_display]
-path = "src/static/JSystem/JFramework/JFWDisplay.cpp"
-category = "GX"
-kind = "transitional"
-note = "the frame's clear and copy out, clearEfb's quad, preGX and endGX, the fader"
-
-[file.jut_video]
-path = "src/static/JSystem/JUtility/JUTVideo.cpp"
-category = "GX"
-kind = "transitional"
-note = "the retrace's copy to the XFB, draw done and its callback"
-
-[file.jut_graph_fifo]
-path = "src/static/JSystem/JUtility/JUTGraphFifo.cpp"
-category = "GX"
-kind = "transitional"
-note = "GXInit and the graphics FIFO's base and pointers"
+note = "the sink, which takes display lists and hands GX written outside them to the reference only, GXInit's bracket, the GX thread, the frame and GX's address space"
 
 [file.m_play]
 path = "src/game/m_play.c"
 category = "GX"
 kind = "list"
 note = "copy_efb_to_texture's EFB copy, built into a GX display list that emu64's list calls, which the emu64 kit decodes and records as core's copy (step 10b)"
-
-[file.shutdown]
-path = "src/static/libultra/shutdown.c"
-category = "GX"
-kind = "transitional"
-note = "shutdown's abort of the frame, draw done and flush, and the GX thread"
 
 [file.famicom]
 path = "src/static/Famicom/famicom.cpp"
@@ -84,6 +63,30 @@ path = "port/adapter/jsys_font.cpp"
 category = "GX"
 kind = "types"
 note = "JUTResFont's seam on the jsys kit: names GXTexMapID in loadFont's and loadImage's signatures and GX_TEXMAP0"
+
+[file.jsys_display]
+path = "port/adapter/jsys_display.cpp"
+category = "GX"
+kind = "types"
+note = "JFWDisplay's seam: the frame's clear on the jsys kit; names GXColor and the render mode, and leaves the copy's set-up, preGX's format and clearEfb's quad to the reference's hooks"
+
+[file.jsys_video]
+path = "port/adapter/jsys_video.cpp"
+category = "GX"
+kind = "types"
+note = "JUTVideo's seam: the retrace's copy to the XFB and draw done through the reference's hooks; names the render mode"
+
+[file.jsys_graph_fifo]
+path = "port/adapter/jsys_graph_fifo.cpp"
+category = "GX"
+kind = "types"
+note = "JUTGraphFifo's seam: GXInit and the FIFO's base and pointers through the glue (port/gx_sink.h); names GXFifoObj"
+
+[file.jsys_display_reference]
+path = "port/adapter/jsys_display_reference.c"
+category = "GX"
+kind = "reference"
+note = "the GX the frame's seams leave to the reference, in ac_port_reference only, under --diff or --reference: the display copy, preGX's format and dither, clearEfb's quad and GX's waits and flushes"
 
 [file.jsyswrap]
 path = "src/static/jsyswrap.cpp"

@@ -1,9 +1,10 @@
-/* The sink the SDK's GX units write their command bytes into (port/gx_sink.h), GX's address space, the frame the GX
-   front end and emu64's kit record into, and the FIFO functions of GXFifo.c, which the port does not compile: the
-   console's FIFO was hardware, the write gather pipe pouring into a ring the GPU read. Here the CPU FIFO is either
-   linked to the GPU's, as GXInit leaves it, and its bytes go to sonarlib's GX front end at each GXFlush and before
-   each record, or it is a display list's, set by GXBeginDisplayList, and its bytes go into the list (sonarlib
-   docs/roadmap.md, M6 step 6h). */
+/* The sink the SDK's GX units write their command bytes into (port/gx_sink.h), GX's address space, the frame
+   sonarlib's kits record into, and the FIFO functions of GXFifo.c, which the port does not compile: the console's FIFO
+   was hardware, the write gather pipe pouring into a ring the GPU read. Here the CPU FIFO is either a display list's,
+   set by GXBeginDisplayList, and its bytes go into the list, or it is linked to the GPU's, as GXInit leaves it, and its
+   bytes are handed over at each GXFlush and before each record (sonarlib docs/roadmap.md, M6 steps 6h and 10e). No
+   seam writes GX there: the reference's front ends take them under its flags (port/reference.h), and otherwise
+   GXInit's are dropped in the init bracket, GXFlush's zero bytes are dropped, and any other byte is an error. */
 #include "dolphin/gx.h"
 #include "dolphin/os.h"
 #include "gx/__gx.h"
@@ -12,12 +13,12 @@
 
 #include <port/emu64_glue.h>
 #include <port/gx_sink.h>
+#include <port/jsys_display.h>
 #include <port/jsys_j2d.h>
 #include <port/reference.h>
 
 #include <sonar/base/log.h>
 #include <sonar/dolphin_os/os.h>
-#include <sonar/gx_frontend.h>
 #include <sonar/mem.h>
 #include <sonar/os.h>
 #include <sonar/render.h>
@@ -34,6 +35,7 @@ static struct __GXFifoObj* gp_fifo;
 static OSThread* gx_thread;
 static u64 bytes_total;
 static BOOL overflow;
+static BOOL in_init; /* ac_gx_init's bracket: GXInit's bytes */
 
 /* ---- The sink: the bytes written outside display lists since the last hand-over */
 
@@ -46,7 +48,7 @@ static u64 unmapped;
 
 void ac_gx_error(u64 offset, const char* what, int detail) {
     if (gx_errors++ == 0)
-        SL_ERROR("gx", "the GX front end's first error, at stream byte %" PRIu64 ": %s (%d)", (uint64_t)offset, what,
+        SL_ERROR("gx", "the GX glue's first error, at stream byte %" PRIu64 ": %s (%d)", (uint64_t)offset, what,
                  detail);
 }
 
@@ -256,12 +258,11 @@ const void* ac_gx_memory(void* user, uint32_t address, size_t size) {
     return r != NULL ? r->host + (address - r->address) : NULL;
 }
 
-/* ---- The front end, and the frame from the game's frame begin to its end */
+/* ---- The hand-over, and the frame from the game's frame begin to its end */
 
-static sl_gxf* gxf;
 static sl_frame* frame;
 static BOOL frame_open;
-static BOOL frame_recorded; /* the open frame had its sl_gxf_record */
+static BOOL frame_recorded; /* the open frame had its first record */
 static u64 recorded_bytes;  /* bytes_total as of the last record */
 static BOOL submitted;      /* a frame was submitted since the last begin */
 static u64 outside;
@@ -269,72 +270,78 @@ static u64 nested;
 static u64 refused_frames;
 static u64 refused_records;
 
-sl_gxf* ac_gx_create_front_end(void) {
-    sl_gxf_desc desc;
-    memset(&desc, 0, sizeof desc);
-    desc.memory = ac_gx_memory;
-    desc.max_vertices = 0;
-    return sl_gxf_create(&desc);
-}
-
-sl_gxf* ac_gx_front_end(void) {
-    return gxf;
-}
-
 void ac_gx_record_refused(sl_result result) {
     if (refused_records++ == 0)
         SL_WARN("gx", "the GX front end's first refused record: %s", sl_result_string(result));
 }
 
-/* The bytes written since the last hand-over go to the front end, created at the first, or to the reference's
-   (port/reference.h, ac_reference_gx). On a thread that is not a game thread they are dropped. */
+/* The bytes written since the last hand-over: dropped as an error on a thread that is not a game thread; under the
+   reference's flags its front ends' (port/reference.h, ac_reference_gx); otherwise dropped in the init bracket, and
+   when all zero, GXFlush's, and an error when any byte is not, as the SDK wrote GX outside a display list. */
 static void hand_over(void) {
     const u64 offset = bytes_total - pending_size;
-    size_t error_offset = 0;
-    sl_gx_dl_result result;
+    size_t i;
     if (sl_os_thread_current().id == 0) {
         if (pending_size != 0)
             ac_gx_error(offset, "bytes dropped: handed over on a thread that is not a game thread", (int)pending_size);
         pending_size = 0;
         return;
     }
-    if (gxf == NULL) {
-        gxf = ac_gx_create_front_end();
-        if (gxf == NULL) {
-            ac_gx_error(offset, "bytes dropped: no GX front end, out of memory", (int)pending_size);
-            pending_size = 0;
-            return;
-        }
-    }
     if (ac_reference_gx(pending, pending_size, offset)) {
         pending_size = 0;
         return;
     }
-    if (pending_size == 0)
-        return;
-    result = sl_gxf_commands(gxf, pending, pending_size, &error_offset);
-    if (result != SL_GX_DL_OK)
-        ac_gx_error(offset + error_offset, "sl_gxf_commands failed", (int)result);
+    if (!in_init) {
+        for (i = 0; i < pending_size; i++) {
+            if (pending[i] != 0) {
+                ac_gx_error(offset + i, "GX written outside a display list", (int)pending[i]);
+                break;
+            }
+        }
+    }
     pending_size = 0;
 }
 
-/* The bytes since the last hand-over, recorded into the open frame after what it holds: its first record clears. The
-   font's open run is recorded first, so what GX drew after the text comes after it. */
+/* The font's open run is recorded first, so what GX drew after the text comes after it; then the bytes since the last
+   hand-over are handed over, and the reference's draws recorded into the open frame after what it holds. */
 static void record(void) {
-    sl_result result;
     ac_jsys_j2d_flush();
     hand_over();
     recorded_bytes = bytes_total;
-    if (frame == NULL || gxf == NULL)
+    if (frame == NULL)
         return;
-    result = frame_recorded ? sl_gxf_record_more(gxf, frame) : sl_gxf_record(gxf, frame);
+    ac_reference_record(frame, !frame_recorded);
     frame_recorded = TRUE;
-    if (result != SL_OK)
-        ac_gx_record_refused(result);
 }
 
 void ac_gx_flush(void) {
     hand_over();
+}
+
+void* ac_gx_init(void* base, u32 size) {
+    GXFifoObj* fifo;
+    in_init = TRUE;
+    fifo = GXInit(base, size);
+    if (gx->dirtyState != 0)
+        __GXSetDirtyState();
+    hand_over();
+    in_init = FALSE;
+    return fifo;
+}
+
+void ac_gx_init_fifo(void* fifo, void* base, u32 size) {
+    GXInitFifoBase((GXFifoObj*)fifo, base, size);
+    GXInitFifoPtrs((GXFifoObj*)fifo, base, base);
+}
+
+OSThread* ac_gx_thread(void) {
+    return gx_thread;
+}
+
+OSThread* ac_gx_set_thread(void) {
+    OSThread* const previous = gx_thread;
+    gx_thread = OSGetCurrentThread();
+    return previous;
 }
 
 void ac_frame_begin(void) {
@@ -410,6 +417,7 @@ void ac_frame_split(BOOL begin) {
     frame = sl_frame_begin();
     if (frame == NULL)
         refused_frames++;
+    ac_jsys_display_reclear(frame);
 }
 
 void ac_gx_get_counts(ac_gx_counts* counts) {
@@ -490,13 +498,11 @@ void GXGetGPStatus(GXBool* overhi, GXBool* underlow, GXBool* readIdle, GXBool* c
 }
 
 OSThread* GXSetCurrentGXThread(void) {
-    OSThread* const previous = gx_thread;
-    gx_thread = OSGetCurrentThread();
-    return previous;
+    return ac_gx_set_thread();
 }
 
 OSThread* GXGetCurrentGXThread(void) {
-    return gx_thread;
+    return ac_gx_thread();
 }
 
 GXFifoObj* GXGetCPUFifo(void) {

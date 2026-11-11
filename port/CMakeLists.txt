@@ -43,6 +43,9 @@ sonar_decomp_read_units(PREFIX AC OBJDIFF "${AC_ROOT}/objdiff.json")
 #   J2D's port, projection, quads and lines, J2DGrafContext.cpp and J2DOrthoGraph.cpp, which the seam file
 #   adapter/jsys_j2d.cpp substitutes on sonarlib's jsys kit (sonarlib docs/steps/m6-10c.md), and J2D's font,
 #   JUTResFont.cpp, which adapter/jsys_font.cpp substitutes on the same kit (m6-10d.md);
+#   the frame's display, video and FIFO, JFWDisplay.cpp, JUTVideo.cpp and JUTGraphFifo.cpp, and libultra's
+#   shutdown.c, which the seam files adapter/jsys_display.cpp, jsys_video.cpp, jsys_graph_fifo.cpp and
+#   libultra_shutdown.c substitute without GX (m6-10e.md);
 #   foresta.rel's start-up, which runs its static constructors: the port links foresta in (boot.c's LoadLink).
 # emu64 stays, under other names, in an object library of its own (ac_reference, below): the game's calls of it run on
 # sonarlib's kit (kits/emu64, roadmap M6 step 6g) through the glue (adapter/emu64_glue.c), and ac_port_reference's
@@ -55,6 +58,9 @@ set(replaced_sources
     "^src/static/libforest/ReconfigBATs\\.c$"
     "^src/static/JSystem/J2DGraph/J2D(GrafContext|OrthoGraph)\\.cpp$"
     "^src/static/JSystem/JUtility/JUTResFont\\.cpp$"
+    "^src/static/JSystem/JFramework/JFWDisplay\\.cpp$"
+    "^src/static/JSystem/JUtility/JUT(Video|GraphFifo)\\.cpp$"
+    "^src/static/libultra/shutdown\\.c$"
     "^src/static/jaudio_NES/internal/dsp_(cardunlock|GBAKey)\\.c$"
     "^src/executor\\.c$")
 set(msl_math "^src/static/MSL_C\\.PPCEABI\\.bare\\.H/((e|k|s|w)_[a-z0-9_]+|float)\\.c$")
@@ -127,11 +133,11 @@ target_sources(ac_game PRIVATE ${gx_unlisted_sources})
 # The boot's main and foresta's, which the port links into one program.
 set_property(SOURCE "${AC_ROOT}/src/static/boot.c" APPEND PROPERTY COMPILE_DEFINITIONS main=ac_boot_main)
 set_property(SOURCE "${AC_ROOT}/src/main.c" APPEND PROPERTY COMPILE_DEFINITIONS main=ac_foresta_main)
-# The reference (sonarlib docs/steps/m6-10a.md): emu64's unit, the reference's half of the emu64 glue and its own GX
-# front end, which only ac_port_reference links.
+# The reference (sonarlib docs/steps/m6-10a.md): emu64's unit, the reference's half of the emu64 glue, its GX front
+# ends and the GX the frame's seams leave to it (m6-10e.md), which only ac_port_reference links.
 add_library(ac_reference OBJECT)
 sonar_decomp_add_units(ac_reference PREFIX AC ROOT "${AC_ROOT}" UNITS ${reference_units} DROP_DEFINES MUST_MATCH)
-target_sources(ac_reference PRIVATE adapter/emu64_reference.c adapter/gx_reference.c)
+target_sources(ac_reference PRIVATE adapter/emu64_reference.c adapter/gx_reference.c adapter/jsys_display_reference.c)
 set_source_files_properties(adapter/emu64_reference.c PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
 # emu64, the --diff run's reference (roadmap M6 step 6j): its C entry points and FrameCansel take the emu64_ref_ names,
 # as the glue keeps the game's; the macros rename the class's members of the same names too, which nothing else sees.
@@ -174,16 +180,26 @@ set_source_files_properties(adapter/dolphin_dvd.c PROPERTIES COMPILE_DEFINITIONS
                             "AC_PORT_DISC_VERSION=\"${AC_VERSION}\";F3DEX_GBI_2;_LANGUAGE_C")
 # The SDK's video and controller functions on sonarlib's VI and PAD kits.
 target_sources(ac_game PRIVATE adapter/dolphin_vi.c adapter/dolphin_pad.c)
-# The sink the SDK's GX units write into, handing its bytes to sonarlib's GX front end, GX's address space, the frame
-# from JW_BeginFrame to JW_EndFrame, and the FIFO functions of GXFifo.c, which it replaces.
+# The sink the SDK's GX units write into, which takes display lists for emu64's kit and hands GX written outside them
+# to the reference only (m6-10e.md), GX's address space, the frame from JW_BeginFrame to JW_EndFrame, and the FIFO
+# functions of GXFifo.c, which it replaces.
 target_sources(ac_game PRIVATE adapter/dolphin_gx.c)
 # J2D's port, projection, quads and lines on sonarlib's jsys kit, in place of J2DGrafContext.cpp and
-# J2DOrthoGraph.cpp, and J2D's font in place of JUTResFont.cpp, built as JSystem's units are.
-target_sources(ac_game PRIVATE adapter/jsys_j2d.cpp adapter/jsys_font.cpp)
+# J2DOrthoGraph.cpp, J2D's font in place of JUTResFont.cpp, and the frame's display, video and FIFO in place of
+# JFWDisplay.cpp, JUTVideo.cpp and JUTGraphFifo.cpp, built as JSystem's units are.
+set(jsys_seams adapter/jsys_j2d.cpp adapter/jsys_font.cpp adapter/jsys_display.cpp adapter/jsys_video.cpp
+    adapter/jsys_graph_fifo.cpp)
+target_sources(ac_game PRIVATE ${jsys_seams})
 get_source_file_property(jsys_defines "${AC_ROOT}/src/static/JSystem/JUtility/JUTFader.cpp" COMPILE_DEFINITIONS)
 get_source_file_property(jsys_options "${AC_ROOT}/src/static/JSystem/JUtility/JUTFader.cpp" COMPILE_OPTIONS)
-set_source_files_properties(adapter/jsys_j2d.cpp adapter/jsys_font.cpp PROPERTIES COMPILE_DEFINITIONS
-                            "${jsys_defines}" COMPILE_OPTIONS "${jsys_options}")
+set_source_files_properties(${jsys_seams} PROPERTIES COMPILE_DEFINITIONS "${jsys_defines}"
+                            COMPILE_OPTIONS "${jsys_options}")
+# libultra's shutdown in place of shutdown.c, without GX, built as libultra's units are.
+target_sources(ac_game PRIVATE adapter/libultra_shutdown.c)
+get_source_file_property(libultra_defines "${AC_ROOT}/src/static/libultra/initialize.c" COMPILE_DEFINITIONS)
+get_source_file_property(libultra_options "${AC_ROOT}/src/static/libultra/initialize.c" COMPILE_OPTIONS)
+set_source_files_properties(adapter/libultra_shutdown.c PROPERTIES COMPILE_DEFINITIONS "${libultra_defines}"
+                            COMPILE_OPTIONS "${libultra_options}")
 # What the game calls of emu64, on sonarlib's kit, and the proof's stop at play's first frame.
 target_sources(ac_game PRIVATE adapter/emu64_glue.c)
 set_source_files_properties(adapter/emu64_glue.c PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
@@ -249,8 +265,10 @@ foreach(target IN ITEMS ac_game ac_reference)
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>)
     target_link_libraries(${target} PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
                           sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::kit_jsys
-                          sonar::gx_frontend sonar::fmt_card)
+                          sonar::fmt_card)
 endforeach()
+# The GX front end is the reference's only (m6-10e.md).
+target_link_libraries(ac_reference PRIVATE sonar::gx_frontend)
 
 # The views of the game's card files (NOTES.md, Saves): ac_saves.schema's converters and what ac_saves.c converts around
 # them, built with m_card.c's macros and char signedness. They are built without debug information, so the port's DWARF
@@ -283,8 +301,9 @@ foreach(target IN ITEMS ac_port ac_port_reference)
     set_target_properties(${target} PROPERTIES C_STANDARD 11 C_EXTENSIONS ON LINKER_LANGUAGE CXX)
     target_link_libraries(${target} PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
                           sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::kit_jsys
-                          sonar::gx_frontend sonar::fmt_card)
+                          sonar::fmt_card)
 endforeach()
+target_link_libraries(ac_port_reference PRIVATE sonar::gx_frontend)
 # sonarlib's sl-card, which moves the cards' saves to and from Dolphin (README.md, Saves), and sl-replay, which builds
 # the recordings --replay plays (NOTES.md, Replays), are built with the program.
 add_dependencies(ac_port sl-card sl-replay)
@@ -320,10 +339,15 @@ foreach(name IN LISTS adapter_files)
     endif()
 endforeach()
 # The symbol manifest, ac_port.slsym, which sl-dump-compare reads --dump's dumps with (NOTES.md, State hashes): the
-# game's variables, without those that hold pointers into the host's heap or stacks or are not the game's.
+# game's variables, without those that hold pointers into the host's heap or stacks or are not the game's. The seam
+# files that keep a game unit's text keep its file-local variables, as the unit did (m6-10e.md): JFWDisplay's waits,
+# JUTVideo's frame buffer, which points into main memory, and the seams' own, which hold no pointer.
+set(game_text_seams jsys_display.cpp jsys_video.cpp jsys_graph_fifo.cpp libultra_shutdown.c)
 set(manifest_excludes "")
 foreach(name IN LISTS adapter_files)
-    list(APPEND manifest_excludes "${name}:*")
+    if(NOT name IN_LIST game_text_seams)
+        list(APPEND manifest_excludes "${name}:*")
+    endif()
 endforeach()
 sonar_add_symbol_manifest(ac_port EXCLUDE ${manifest_excludes}
     # The adapter's globals.
@@ -652,6 +676,12 @@ add_test(NAME ac_port_goldens
                  "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/goldens" "-DAC_LAVAPIPE_ICD=${AC_LAVAPIPE_ICD}"
                  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/goldens_test.cmake")
 set_tests_properties(ac_port_goldens PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_goldens: skipped, ")
+
+# ac_port without the GX front end (sonarlib docs/steps/m6-10e.md): the toolchain's nm lists its symbols, which must
+# hold the jsys kit's clear and none of the front end's. No disc.
+add_test(NAME ac_port_front_end
+         COMMAND "${CMAKE_COMMAND}" "-DNM=${CMAKE_NM}" "-DAC_PORT=$<TARGET_FILE:ac_port>"
+                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/front_end_test.cmake")
 
 # The seam audit (sonarlib's sl-seam-audit) over the translation units this build compiles, against the port's policy
 # of seam files (seam-policy.toml): every file that uses GX is listed, no types file calls, no entry is stale, and the

@@ -1,9 +1,10 @@
-/* The hooks the shared glue calls of the reference, the console's emu64 drawn through sonarlib's GX front end (sonarlib
-   docs/steps/m6-10a.md). Two programs of one build define them: ac_port_reference by the reference's own files,
-   port/adapter/emu64_reference.c and gx_reference.c, with emu64's unit under the emu64_ref_ names, for the
-   differential test (--diff, M6 step 6j) and the measured reference (--reference, M6 step 7b); ac_port, the player's
-   program, by port/adapter/reference_none.c, where each does nothing and reports no reference. Each is for the game
-   threads, one at a time, unless it says otherwise. */
+/* The hooks the shared glue and the frame's seams call of the reference, the console's emu64 drawn through sonarlib's
+   GX front end (sonarlib docs/steps/m6-10a.md, m6-10e.md). Two programs of one build define them: ac_port_reference
+   by the reference's own files, port/adapter/emu64_reference.c, gx_reference.c and jsys_display_reference.c, with
+   emu64's unit under the emu64_ref_ names, for the differential test (--diff, M6 step 6j) and the measured reference
+   (--reference, M6 step 7b); ac_port, the player's program, by port/adapter/reference_none.c, where each does nothing
+   and reports no reference. This header names no GX; the hooks that do are in port/display_reference.h. Each is for
+   the game threads, one at a time, unless it says otherwise. */
 #ifndef AC_PORT_REFERENCE_H
 #define AC_PORT_REFERENCE_H
 
@@ -20,6 +21,8 @@ extern "C" {
 #endif
 
 struct sl_emu64;
+struct sl_frame;
+struct sl_gxf;
 struct ucode_info_s;
 
 /* The program's name, ac_port or ac_port_reference, and the options its usage adds after --validate: none, or
@@ -66,11 +69,39 @@ void ac_reference_report(void);
    copies are the kit's in the equal tasks. */
 void ac_reference_submitted(void);
 
-/* The GX glue's hand-over (dolphin_gx.c), once the main front end exists, with the bytes written outside display
-   lists since the last, offset bytes into that stream. Between ac_gx_reference_begin and ac_gx_reference_end, TRUE:
-   the bytes went to the reference's front end, or were dropped as an error when it could not be made, and the glue
-   empties its buffer. Otherwise FALSE. */
+/* The GX glue's hand-over (dolphin_gx.c), with the bytes written outside display lists since the last, offset bytes
+   into that stream. Under --diff or --reference, TRUE: between ac_gx_reference_begin and ac_gx_reference_end the bytes
+   went to the reference's front end, and otherwise to the main front end, made at the first with SL_GXF_NO_CLEAR, or
+   they were dropped as an error when it could not be made; the glue empties its buffer. Otherwise FALSE, and the glue
+   judges the bytes itself. */
 BOOL ac_reference_gx(const u8* bytes, size_t size, u64 offset);
+/* The GX glue's record (dolphin_gx.c), after its hand-over, into the open frame: under either flag, the main front
+   end's draws gathered since its last record, with sl_gxf_record when first, its first record of the frame, and
+   sl_gxf_record_more otherwise; a refusal is counted by ac_gx_record_refused. Nothing for a NULL frame, or before the
+   main front end exists. */
+void ac_reference_record(struct sl_frame* frame, BOOL first);
+/* The main front end, gx_reference.c's: NULL before the first hand-over under either flag, when it could not be made,
+   and always in ac_port, which defines neither. */
+struct sl_gxf* ac_gx_front_end(void);
+/* A front end on GX's address space (port/gx_sink.h, ac_gx_memory), with flags (SL_GXF_*); NULL when out of memory.
+   ac_port_reference's only. */
+struct sl_gxf* ac_gx_create_front_end(uint32_t flags);
+
+/* The GX calls of the frame's seams that only make the GPU wait, flush or sync (port/adapter/jsys_display.cpp,
+   jsys_video.cpp, libultra_shutdown.c). Under --diff or --reference each is the GX call it names, as the reference's
+   front end reads the stream the console's GX did; otherwise nothing. GX's draw-done callback stays NULL in both
+   programs: a seam calls the game's (port/jsys_display.h, ac_jsys_video_draw_done) after a draw-done call. */
+typedef enum ac_reference_sync_call {
+    AC_REFERENCE_FLUSH,         /* GXFlush */
+    AC_REFERENCE_DRAW_DONE,     /* GXDrawDone */
+    AC_REFERENCE_SET_DRAW_DONE, /* GXSetDrawDone */
+    AC_REFERENCE_ABORT_FRAME,   /* GXAbortFrame */
+    AC_REFERENCE_PIX_MODE_SYNC  /* GXPixModeSync */
+} ac_reference_sync_call;
+void ac_reference_sync(ac_reference_sync_call call);
+/* GXCopyDisp(xfb, GX_TRUE), the display copy that clears the EFB, under either flag; otherwise nothing. The copy's
+   set-up is ac_reference_prepare_copy's (port/display_reference.h). */
+void ac_reference_copy_display(void* xfb);
 
 #ifdef __cplusplus
 }

@@ -1,5 +1,7 @@
-/* The reference's hooks in ac_port, the player's program, which links no reference (port/reference.h; sonarlib
-   docs/steps/m6-10a.md): --diff, --diff-from and --reference are refused, and each hook does nothing. */
+/* The reference's hooks in ac_port, the player's program, which links no reference and no GX front end
+   (port/reference.h, port/display_reference.h; sonarlib docs/steps/m6-10a.md and m6-10e.md): --diff, --diff-from and
+   --reference are refused, and each hook does nothing. */
+#include <port/display_reference.h>
 #include <port/reference.h>
 
 const char ac_program_name[] = "ac_port";
@@ -71,4 +73,32 @@ BOOL ac_reference_gx(const u8* bytes, size_t size, u64 offset) {
     (void)size;
     (void)offset;
     return FALSE;
+}
+
+void ac_reference_record(struct sl_frame* frame, BOOL first) {
+    (void)frame;
+    (void)first;
+}
+
+void ac_reference_sync(ac_reference_sync_call call) {
+    (void)call;
+}
+
+void ac_reference_copy_display(void* xfb) {
+    (void)xfb;
+}
+
+void ac_reference_prepare_copy(const ac_reference_copy* copy) {
+    (void)copy;
+}
+
+void ac_reference_pre_gx(const GXRenderModeObj* mode, BOOL enable_alpha) {
+    (void)mode;
+    (void)enable_alpha;
+}
+
+void ac_reference_clear_efb(const GXRenderModeObj* mode, GXColor color, BOOL enable_alpha) {
+    (void)mode;
+    (void)color;
+    (void)enable_alpha;
 }

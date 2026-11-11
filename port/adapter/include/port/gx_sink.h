@@ -1,7 +1,9 @@
 /* The sink the SDK's GX units write their command bytes into, in place of the console's write gather pipe, GX's
-   address space, and the frame sonarlib's GX front end and emu64's kit record into (port/adapter/dolphin_gx.c;
-   sonarlib docs/roadmap.md, M6 step 6h). Outside a display list the bytes go to the GX front end at each GXFlush and
-   before each record; between GXBeginDisplayList and GXEndDisplayList they go into the list's buffer.
+   address space, and the frame sonarlib's kits record into (port/adapter/dolphin_gx.c; sonarlib docs/roadmap.md, M6
+   steps 6h and 10e). Between GXBeginDisplayList and GXEndDisplayList the bytes go into the list's buffer. Outside a
+   display list they are handed over at each GXFlush and before each record: under the reference's flags to its front
+   ends (port/reference.h, ac_reference_gx); otherwise GXInit's, in the init bracket, and GXFlush's zero bytes are
+   dropped, and any other byte is an error, as no seam writes GX outside a display list.
 
    AC begins frames on several game threads: the main thread, initial_menu's, the graph thread and whichever runs
    dvderr. Core os runs one game thread at a time, as the console's one CPU did, so they share the sink, the front end
@@ -20,8 +22,8 @@
 extern "C" {
 #endif
 
+struct OSThread;
 struct sl_frame;
-struct sl_gxf;
 
 /* Each appends its value's bytes, big-endian, as the write gather pipe did. */
 void ac_gx_write_u8(u8 value);
@@ -33,8 +35,8 @@ void ac_gx_write_f32(f32 value);
    main memory at 0 to its size, then the image's data ranges (sl_mem_image_data) in address order, then its
    zero-initialized ranges (sl_mem_image_zero_data) in address order, each at the end of the one before rounded up to
    32, plus its begin's offset within 32 bytes. The two share a table of 16 ranges. A range past the table, or that
-   would end past 0x20000000, is not mapped, and is logged. OSInit builds it once main memory exists, before any thread but the main one runs;
-   it is read-only after. Main thread. */
+   would end past 0x20000000, is not mapped, and is logged. OSInit builds it once main memory exists, before any
+   thread but the main one runs; it is read-only after. Main thread. */
 void ac_gx_map_memory(void);
 /* A pointer the GPU read, as the 32-bit value a unit writes: its GX address when it lies in main memory or a mapped
    range, and otherwise 0, counted as unmapped. NULL is no address: 0, not counted. */
@@ -56,40 +58,49 @@ u64 ac_gx_bytes(void);
 /* The pointers ac_gx_address and ac_gx_tlut_address could not map since start-up. */
 u64 ac_gx_unmapped(void);
 
-/* GXFlush's, in place of the console's sync of the write gather pipe: hands the bytes written outside a display
-   list since the last hand-over to the GX front end, created at the first. */
+/* GXFlush's, in place of the console's sync of the write gather pipe: hands over the bytes written outside a display
+   list since the last hand-over. */
 void ac_gx_flush(void);
+
+/* JUTGraphFifo's first FIFO (port/adapter/jsys_graph_fifo.cpp): GXInit(base, size) in the glue's init bracket, with the
+   state it left dirty written, and its bytes handed over, so dropped outside the reference. Returns GXInit's FIFO. */
+void* ac_gx_init(void* base, u32 size);
+/* A later FIFO's: GXInitFifoBase(fifo, base, size) and GXInitFifoPtrs(fifo, base, base). fifo is a GXFifoObj. */
+void ac_gx_init_fifo(void* fifo, void* base, u32 size);
+/* The GX thread, GXGetCurrentGXThread's: the thread that called GXInit until a set. */
+struct OSThread* ac_gx_thread(void);
+/* GXSetCurrentGXThread's: makes the calling thread the GX thread, and returns the one before. The glue's emu64_init
+   calls it first, as the console's emu64_init did. */
+struct OSThread* ac_gx_set_thread(void);
 
 /* JW_BeginFrame's, after FrameDrawing is set: begins the frame (sl_frame_begin). A NULL frame is counted in
    refused_frames, and its records are skipped while its GX commands are still decoded. A begin while a frame is
    open is counted in nested and ignored. */
 void ac_frame_begin(void);
-/* JW_EndFrame's, after endRender: hands the sink's bytes to the front end, records them into the frame after what
+/* JW_EndFrame's, after endRender: hands over the sink's bytes, records the reference's into the frame after what
    it holds, ends the J2D kit's frame (port/jsys_j2d.h, ac_jsys_j2d_end_frame), and submits it, then calls
    ac_emu64_frame_submitted and, for a frame submitted, ac_measure_frame. An end with no frame open is counted in
    nested and does nothing. Every record first closes the font's open run (ac_jsys_j2d_flush). */
 void ac_frame_end(void);
-/* emu64_taskstart's, and J2D's seam's before each draw (port/jsys_j2d.h): hands the sink's bytes to the front end
-   and records them into the open frame, then gives it in *frame for the task or the draw to record into. FALSE,
+/* emu64_taskstart's, J2D's seam's before each draw (port/jsys_j2d.h), and JFWDisplay's seam's before the frame's
+   clear (port/jsys_display.h): hands over the sink's bytes and records the reference's into the open frame, then gives
+   it in *frame for the task or the draw to record into. FALSE,
    with *frame NULL, when the frame was refused, or when no frame is open, counted in outside. */
 BOOL ac_frame_task(struct sl_frame** frame);
 /* JUTResFont's seam's before each glyph (port/jsys_j2d.h): ac_frame_task's, but it records only when bytes were
-   written since the last record, or when the frame has had no record, which adds the frame's clear view. So glyphs
-   drawn with no GX between them stay in the kit's one run. */
+   written since the last record, or when the frame has had no record. So glyphs drawn with no GX between them stay in
+   the kit's one run. */
 BOOL ac_frame_text(struct sl_frame** frame);
 
 /* The differential test's (port/NOTES.md, --diff; sonarlib docs/roadmap.md, M6 step 6j), around each emu64 task,
-   after ac_frame_task. With begin FALSE, closes the font's open run and submits the open frame early and leaves the glue's frame open with no frame,
-   so records go nowhere; with TRUE, begins a new one (sl_frame_begin), whose next record is its first. A refusal
-   counts in refused_frames. Does nothing when no frame is open. Neither calls ac_emu64_frame_submitted. */
+   after ac_frame_task. With begin FALSE, closes the font's open run and submits the open frame early and leaves the
+   glue's frame open with no frame, so records go nowhere; with TRUE, begins a new one (sl_frame_begin), records the
+   frame's clear into it again (port/jsys_display.h, ac_jsys_display_reclear), and its next record is its first. A
+   refusal counts in refused_frames. Does nothing when no frame is open. Neither calls ac_emu64_frame_submitted. */
 void ac_frame_split(BOOL begin);
-/* What the reference's front end (port/adapter/gx_reference.c, in ac_port_reference) takes of the glue's. Its
-   begin and end hand over through ac_gx_flush, and the hand-over gives it the bytes (port/reference.h,
+/* What the reference's front ends (port/adapter/gx_reference.c, in ac_port_reference) take of the glue's. Their
+   begin and end hand over through ac_gx_flush, and the hand-over gives them the bytes (port/reference.h,
    ac_reference_gx). */
-/* The front end the sink's bytes go to; NULL before the first hand-over, or when it could not be made. */
-struct sl_gxf* ac_gx_front_end(void);
-/* A front end on GX's address space; NULL when out of memory. */
-struct sl_gxf* ac_gx_create_front_end(void);
 /* Counts an error in errors, and logs the first, at offset bytes into the stream written outside display lists. */
 void ac_gx_error(u64 offset, const char* what, int detail);
 /* Counts a record the front end refused, and logs the first. */
@@ -97,7 +108,8 @@ void ac_gx_record_refused(sl_result result);
 
 /* The glue's counts since start-up. */
 typedef struct ac_gx_counts {
-    u64 errors;         /* hand-overs the front end failed, and bytes dropped; the first is logged */
+    u64 errors;         /* hand-overs a front end failed, bytes dropped, and GX outside a display list; the first is
+                           logged */
     u64 unmapped;       /* as ac_gx_unmapped */
     u64 outside;        /* emu64 tasks with no frame open */
     u64 nested;         /* frame begins inside a frame, and ends outside one */

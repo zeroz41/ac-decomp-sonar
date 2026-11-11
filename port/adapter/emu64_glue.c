@@ -1,7 +1,7 @@
 /* What the game calls of emu64 (src/static/libforest/emu64/emu64.c, whose entry points the port renames), on
-   sonarlib's kits/emu64 (sonarlib docs/roadmap.md, M6 steps 6g and 6h): each task is recorded on the kit into the frame the GX
-   glue holds open from JW_BeginFrame to JW_EndFrame (port/gx_sink.h), the game's edits on the kit's path come here
-   (port/emu64_glue.h), and the program's proof stops the run at play's first frame, after the submit of the frame
+   sonarlib's kits/emu64 (sonarlib docs/roadmap.md, M6 steps 6g and 6h): each task is recorded on the kit into the frame
+   the GX glue holds open from JW_BeginFrame to JW_EndFrame (port/gx_sink.h), the game's edits on the kit's path come
+   here (port/emu64_glue.h), and the program's proof stops the run at play's first frame, after the submit of the frame
    that holds play's first task (port/NOTES.md). Under --goldens each frame goes to sonar/goldens.h with the keys
    Dolphin reads (M6 step 6n). The entry points call the reference's hooks too (port/reference.h): in
    ac_port_reference, under --diff and --reference, the console's emu64 draws each task beside the kit or in its place
@@ -18,6 +18,7 @@
 
 #include <port/emu64_glue.h>
 #include <port/goldens.h>
+#include <port/gx_sink.h>
 #include <port/reference.h>
 
 #include <sonar/base/log.h>
@@ -78,7 +79,10 @@ void ac_emu64_start(sl_emu64* made) {
 
 /* ---- emu64's entry points: the kit's, then the reference's hooks, which keep or run the reference's calls */
 
+/* The console's emu64_init made its caller the GX thread first (emu64.c:699-701), which shutdown's cancel
+   reads (port/adapter/libultra_shutdown.c). */
 void emu64_init(void) {
+    (void)ac_gx_set_thread();
     ac_reference_init();
 }
 
