@@ -19,6 +19,12 @@ struct __GXLightObjInt_struct {
     f32 ldir[3];
 };
 
+#ifdef SONAR_PORT /* sonarlib port: the public object holds the internal one at the host's sizes */
+_Static_assert(sizeof(struct __GXLightObjInt_struct) <= sizeof(GXLightObj)
+                   && _Alignof(struct __GXLightObjInt_struct) <= _Alignof(GXLightObj),
+               "GXLightObj");
+#endif
+
 void GXInitLightAttn(GXLightObj *lt_obj, f32 a0, f32 a1, f32 a2, f32 k0, f32 k1, f32 k2)
 {
     struct __GXLightObjInt_struct *obj;

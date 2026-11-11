@@ -35,6 +35,10 @@ typedef struct _GXColor {
 typedef struct _GXTexObj {
 #ifdef TARGET_PC
   u32 dummy[22];
+#elif defined(SONAR_PORT) /* sonarlib port: GXTexture.c's __GXTexObjInt at the host's sizes, its userData a host pointer */
+  u32 dummy[4];
+  void* userData;
+  u32 dummy2[3];
 #else
   u32 dummy[8];
 #endif
