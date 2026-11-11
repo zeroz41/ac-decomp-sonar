@@ -8,7 +8,7 @@
 # Vulkan, with SDL's dummy audio driver: nothing opens on the desktop and nothing plays.
 #
 # The town replay runs headless with --state-hashes: it must exit 0 with the play line and the replay line at tick
-# 24001 in the town, and write a line for each tick boundary, its ticks consecutive from 0. Then --measure --replay
+# 38001 in the town, and write a line for each tick boundary, its ticks consecutive from 0. Then --measure --replay
 # --ticks 3000 --state-hashes runs at --present-hz 144 and at 360, once each. Each must exit 0 with the measure line,
 # a presents line at its rate with nothing backward or unexplained, and the measured line, and write its state hashes,
 # ticks consecutive from 0, a prefix of the headless run's file. The two rates' measured lines must be equal.
@@ -131,10 +131,10 @@ set(replay_line "")
 if(found EQUAL 2)
     list(GET lines 1 replay_line)
 endif()
-if(NOT result EQUAL 0 OR NOT replay_line MATCHES "^ac_port: replay tick 24001 .* scene 7$")
+if(NOT result EQUAL 0 OR NOT replay_line MATCHES "^ac_port: replay tick 38001 .* scene 7$")
     tail_of("${errors}" errors)
     message(FATAL_ERROR "ac_port_state_measured: the headless run did not end with the replay in the town at tick "
-                        "24001:\n${errors}")
+                        "38001:\n${errors}")
 endif()
 read_hashes("the headless run" "${hashes}" headless_hashes)
 

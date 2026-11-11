@@ -679,6 +679,21 @@ add_test(NAME ac_port_goldens
                  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/goldens_test.cmake")
 set_tests_properties(ac_port_goldens PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_goldens: skipped, ")
 
+# The town's goldens (NOTES.md, Goldens): sonarlib's sl-replay builds tests/town_replay.txt and tests/title_replay.txt,
+# and ac_port --replay --goldens writes tests/town.scenes along the town replay at 1x, in a 16:9 display with
+# widescreen off, at 21:9 and at 21:9 with the UI scale at 50, on the GPU sink with no window, offscreen through
+# lavapipe, compared with each other, then ends at the title replay's end and at a tick limit with scenes left;
+# skipped without the disc or lavapipe, when the script says so.
+add_test(NAME ac_port_town_goldens
+         COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
+                 "-DSL_REPLAY=$<TARGET_FILE:sl-replay>"
+                 "-DTOWN_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/town_replay.txt"
+                 "-DTITLE_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/title_replay.txt" "-DAC_DISC=${AC_DISC}"
+                 "-DAC_VERSION=${AC_VERSION}" "-DSCENES=${CMAKE_CURRENT_SOURCE_DIR}/tests/town.scenes"
+                 "-DOUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/town_goldens" "-DAC_LAVAPIPE_ICD=${AC_LAVAPIPE_ICD}"
+                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/town_goldens_test.cmake")
+set_tests_properties(ac_port_town_goldens PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_town_goldens: skipped, ")
+
 # ac_port without the GX front end (sonarlib docs/steps/m6-10e.md): the toolchain's nm lists its symbols, which must
 # hold the jsys kit's clear and none of the front end's. No disc.
 add_test(NAME ac_port_front_end

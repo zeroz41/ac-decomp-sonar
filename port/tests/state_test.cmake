@@ -9,7 +9,7 @@
 # the desktop, nothing plays and no player's file is read or written.
 #
 # The town replay runs headless twice with --state-hashes, --dump and --dump-tick 20000. Each must exit 0 with the
-# play line and the replay line at tick 24001 in the town, the same in both, write a line for each tick boundary, its
+# play line and the replay line at tick 38001 in the town, the same in both, write a line for each tick boundary, its
 # ticks consecutive from 0, and write the dump. The two files must be equal, and sl-dump-compare --symbols on the two
 # dumps must exit 0 with no variable and no arena differing.
 #
@@ -20,8 +20,9 @@
 # resize taken; and the headless file must be a prefix of each run's file, as the picture's size is no part of the
 # game's state. A wider window shows what the game culls at the sides of its frame (NOTES.md, The window), so its
 # frames hold more than a headless run's: its play and replay lines must be the headless run's in every field but the
-# frame's hash and the kit's counts of what it drew, which are hash, instances, compiles, holes and cpu, and its replay
-# line, at 21:9, must count more instances than the headless run's, which shows the culling hook drew.
+# frame's hash and the kit's counts of what it drew, which are hash, instances, compiles, holes and cpu. The replay
+# ends on the beach, whose sides hold nothing the game culls; ac_port_town_goldens shows the culling hook drawing at
+# 21:9 in the town, at tick 24001, with the 1x run's state hashes (town_goldens_test.cmake).
 #
 # The plant: the town replay headless with --state-hashes, --plant 19999, --dump and --dump-tick 20000. It must exit 0
 # with the clean runs' lines, its hashes must equal theirs to tick 19999 and differ from each one's from tick 20000 on,
@@ -181,17 +182,6 @@ function(without_drawn lines out)
     set(${out} "${lines}" PARENT_SCOPE)
 endfunction()
 
-# Sets out to the instances the replay line among the lines counts, or to nothing.
-function(replay_instances lines out)
-    set(instances "")
-    foreach(line IN LISTS lines)
-        if(line MATCHES "^ac_port: replay .* instances ([0-9]+) ")
-            set(instances "${CMAKE_MATCH_1}")
-        endif()
-    endforeach()
-    set(${out} "${instances}" PARENT_SCOPE)
-endfunction()
-
 # Runs sl-dump-compare --symbols on two dumps, setting result and compared, its output.
 macro(compare_dumps first second)
     execute_process(COMMAND "${SL_DUMP_COMPARE}" --symbols "${SYMBOLS}" "${first}" "${second}"
@@ -213,10 +203,10 @@ foreach(run IN ITEMS 1 2)
     if(found EQUAL 2)
         list(GET lines 1 replay_line)
     endif()
-    if(NOT result EQUAL 0 OR NOT replay_line MATCHES "^ac_port: replay tick 24001 .* scene 7$")
+    if(NOT result EQUAL 0 OR NOT replay_line MATCHES "^ac_port: replay tick 38001 .* scene 7$")
         tail_of("${errors}" errors)
         message(FATAL_ERROR "ac_port_state: headless run ${run} did not end with the replay in the town at tick "
-                            "24001:\n${errors}")
+                            "38001:\n${errors}")
     endif()
     if(NOT EXISTS "${dumps}/tick${dump_tick}.sldump")
         message(FATAL_ERROR "ac_port_state: headless run ${run} wrote no dump of tick ${dump_tick}")
@@ -240,8 +230,7 @@ if(NOT result EQUAL 0
     message(FATAL_ERROR "ac_port_state: the headless runs' dumps differ, or compared no variable or no arena")
 endif()
 without_drawn("${headless}" headless_simulated)
-replay_instances("${headless}" headless_instances)
-if(headless_simulated STREQUAL headless OR headless_instances STREQUAL "")
+if(headless_simulated STREQUAL headless)
     message(FATAL_ERROR "ac_port_state: the headless lines hold no hash and counts to leave out:\n${headless}")
 endif()
 
@@ -268,13 +257,6 @@ foreach(setting IN ITEMS sonar.video.pacing=immediate sonar.video.interpolation=
         message(FATAL_ERROR "ac_port_state: the window's lines with ${setting} are not the headless run's outside the "
                             "frame's hash and the kit's counts:\n${lines}\n${headless}")
     endif()
-    replay_instances("${lines}" instances)
-    if(instances STREQUAL "" OR NOT instances GREATER headless_instances)
-        message(FATAL_ERROR "ac_port_state: the window's replay with ${setting} ends at 21:9 with ${instances} "
-                            "instances, no more than the headless run's ${headless_instances}: the culling hook drew "
-                            "nothing at the sides")
-    endif()
-    message("the window run with ${setting}: ${instances} instances at 21:9, ${headless_instances} headless")
     string(REGEX MATCHALL "ac_port: resize [^\n]*" resized "${errors}")
     message("${resized}")
     foreach(resize IN LISTS resizes)

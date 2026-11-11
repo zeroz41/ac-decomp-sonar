@@ -507,6 +507,9 @@ extern int goto_other_scene(GAME_PLAY* play, Door_data_c* door_data, int update_
             }
 
             Common_Set(door_data, *door_data);
+#ifdef SONAR_PORT /* sonarlib port: a door made on the stack leaves its pad as the host left it (port/NOTES.md) */
+            bzero(Common_Get(door_data).pad, sizeof(Common_Get(door_data).pad));
+#endif
             Common_Get(door_data).next_scene_id = door_data->next_scene_id + 1;
             play->next_scene_no = door_data->next_scene_id;
 

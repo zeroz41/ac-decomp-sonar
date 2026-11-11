@@ -417,9 +417,11 @@ void ac_replay_enable(void) {
 }
 
 /* The keys Dolphin reads at the decomp's symbols (port/NOTES.md, Goldens), and the part of the frame buffer the VI
-   shows: from VIConfigure's, the whole of it, the EFB's 640 x 480 before. */
+   shows: from VIConfigure's, the whole of it, the EFB's 640 x 480 before. The last three place a frame of a replay in
+   its run and in the town: vi.c's retraceCount, the save's scene_no and play's block_table, the block's x in the high
+   byte and its z in the low, 0 outside play. */
 void ac_goldens_frame(void) {
-    sl_golden_key keys[5];
+    sl_golden_key keys[8];
     sl_golden_rect shown = { 0, 0, 640, 480 };
     sl_vi_pan pan;
     u32 fader, fader_time;
@@ -437,6 +439,16 @@ void ac_goldens_frame(void) {
     keys[3].value = game_class_p != NULL ? (u32)game_class_p->frame_counter : 0;
     keys[4].name = "play";
     keys[4].value = game_class_p != NULL && game_class_p->exec == play_main;
+    keys[5].name = "retrace";
+    keys[5].value = sl_vi_retrace_count();
+    keys[6].name = "scene";
+    keys[6].value = (u32)Save_Get(scene_no);
+    keys[7].name = "block";
+    keys[7].value = 0;
+    if (keys[4].value) {
+        const mFI_block_tbl_c* block = &((GAME_PLAY*)game_class_p)->block_table;
+        keys[7].value = (u32)(u8)block->block_x << 8 | (u8)block->block_z;
+    }
     if (sl_vi_get_pan(&pan) == SL_OK) {
         shown.x = pan.x;
         shown.y = pan.y;
@@ -444,7 +456,7 @@ void ac_goldens_frame(void) {
         shown.height = pan.height;
     }
     atomic_fetch_add(&goldens_frames, 1);
-    result = sl_goldens_frame(keys, 5, &shown);
+    result = sl_goldens_frame(keys, 8, &shown);
     if (result != SL_OK) {
         fprintf(stderr, "ac_port: sl_goldens_frame: %s\n", sl_result_string(result));
         _Exit(1);

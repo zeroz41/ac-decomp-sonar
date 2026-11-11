@@ -3,7 +3,7 @@
 #         -DAC_DISC=<disc> -DAC_VERSION=<version> -DOUT_DIR=<dir> -P replay_test.cmake
 # ac-import writes the package from the player's disc into OUT_DIR, and sl-replay builds the script into a recording
 # there. ac_port runs once without a replay, to play's first frame, then with --replay twice and once with --validate.
-# Each replay must exit 0 with a play line and a replay line at the tick after the recording's last, 24001, and the
+# Each replay must exit 0 with a play line and a replay line at the tick after the recording's last, 38001, and the
 # three runs must print the same lines. The replay line's scene must be 7, the town, its frame must hold instances and
 # a hash, with nothing refused, stray, unowned, invalid or overflowed, the GX glue's counts must all be 0, and the
 # game's sound and the DSP must have sounded. The play line must be the one the run without a replay prints, but for
@@ -78,13 +78,13 @@ foreach(run IN ITEMS 1 2 validate)
         list(GET lines 0 play)
         list(GET lines 1 replay)
     endif()
-    if(NOT result EQUAL 0 OR NOT play MATCHES "^ac_port: play " OR NOT replay MATCHES "^ac_port: replay tick 24001 ")
+    if(NOT result EQUAL 0 OR NOT play MATCHES "^ac_port: play " OR NOT replay MATCHES "^ac_port: replay tick 38001 ")
         string(LENGTH "${errors}" length)
         if(length GREATER 4000)
             math(EXPR from "${length} - 4000")
             string(SUBSTRING "${errors}" ${from} -1 errors)
         endif()
-        message(FATAL_ERROR "ac_port_replay: run ${run} did not end with the replay at tick 24001:\n${errors}")
+        message(FATAL_ERROR "ac_port_replay: run ${run} did not end with the replay at tick 38001:\n${errors}")
     endif()
     list(APPEND runs "${play}|${replay}")
 endforeach()

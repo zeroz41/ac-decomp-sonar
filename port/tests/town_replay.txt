@@ -1,9 +1,11 @@
-# The town replay (port/NOTES.md, Replays; sonarlib docs/roadmap.md, M6 step 9f1): a new game from the title's
-# Start into the town, to tick 24000, on a GameCube pad in port 0. ac_port_replay builds it with sonarlib's
+# The town replay (port/NOTES.md, Replays; sonarlib docs/roadmap.md, M6 steps 9f1 and 9f4a): a new game from the
+# title's Start into the town, through the player's house and Nook's job, then on foot past two trees, the river
+# and the cliffs to the beach, to tick 38000, on a GameCube pad in port 0. ac_port_replay builds it with sonarlib's
 # sl-replay and runs it headless with --replay. It plays at the headless calendar, 2001-12-14. Each comment names
-# what the game shows at a tick, as the run reached it; one retrace a tick throughout.
+# what the game shows at a tick, as the run reached it; one retrace a tick throughout. Down on the stick is south,
+# the town's z and its blocks' second index increasing.
 
-ticks 24000
+ticks 38000
 
 0 0 connect
 
@@ -288,3 +290,440 @@ ticks 24000
 23800 0 press a 6
 23880 0 press a 6
 23960 0 press a 6
+
+
+# Down, right, then up to the house's door, where Nook stops the player at 24220.
+24000 0 move stick-y=-100 55
+24060 0 move stick-x=100 90
+24200 0 move stick-y=100 8
+
+# Nook's lines at the door, its gyroid beside it; the door opens at 24700, and the room, scene 20, at 24870: dark,
+# with the game's hint for Z and the light.
+24215 0 press a 6
+24300 0 press a 6
+24380 0 press a 6
+24460 0 press a 6
+24540 0 press a 6
+24620 0 press a 6
+24700 0 press a 6
+24780 0 press a 6
+24860 0 press a 6
+
+# Z turns the room's light on, then down takes the player out of the door: scene 7 again at 25200, through the
+# game's iris wipe.
+25000 0 press z 6
+25100 0 move stick-y=-100 40
+
+# A every 24 retraces through Nook's talk outside the house, from 25280: the job at about 28000, the player's give
+# at 31250, and the player free at 34200, the clock at 12:09 pm.
+25300 0 press a 6
+25324 0 press a 6
+25348 0 press a 6
+25372 0 press a 6
+25396 0 press a 6
+25420 0 press a 6
+25444 0 press a 6
+25468 0 press a 6
+25492 0 press a 6
+25516 0 press a 6
+25540 0 press a 6
+25564 0 press a 6
+25588 0 press a 6
+25612 0 press a 6
+25636 0 press a 6
+25660 0 press a 6
+25684 0 press a 6
+25708 0 press a 6
+25732 0 press a 6
+25756 0 press a 6
+25780 0 press a 6
+25804 0 press a 6
+25828 0 press a 6
+25852 0 press a 6
+25876 0 press a 6
+25900 0 press a 6
+25924 0 press a 6
+25948 0 press a 6
+25972 0 press a 6
+25996 0 press a 6
+26020 0 press a 6
+26044 0 press a 6
+26068 0 press a 6
+26092 0 press a 6
+26116 0 press a 6
+26140 0 press a 6
+26164 0 press a 6
+26188 0 press a 6
+26212 0 press a 6
+26236 0 press a 6
+26260 0 press a 6
+26284 0 press a 6
+26308 0 press a 6
+26332 0 press a 6
+26356 0 press a 6
+26380 0 press a 6
+26404 0 press a 6
+26428 0 press a 6
+26452 0 press a 6
+26476 0 press a 6
+26500 0 press a 6
+26524 0 press a 6
+26548 0 press a 6
+26572 0 press a 6
+26596 0 press a 6
+26620 0 press a 6
+26644 0 press a 6
+26668 0 press a 6
+26692 0 press a 6
+26716 0 press a 6
+26740 0 press a 6
+26764 0 press a 6
+26788 0 press a 6
+26812 0 press a 6
+26836 0 press a 6
+26860 0 press a 6
+26884 0 press a 6
+26908 0 press a 6
+26932 0 press a 6
+26956 0 press a 6
+26980 0 press a 6
+27004 0 press a 6
+27028 0 press a 6
+27052 0 press a 6
+27076 0 press a 6
+27100 0 press a 6
+27124 0 press a 6
+27148 0 press a 6
+27172 0 press a 6
+27196 0 press a 6
+27220 0 press a 6
+27244 0 press a 6
+27268 0 press a 6
+27292 0 press a 6
+27316 0 press a 6
+27340 0 press a 6
+27364 0 press a 6
+27388 0 press a 6
+27412 0 press a 6
+27436 0 press a 6
+27460 0 press a 6
+27484 0 press a 6
+27508 0 press a 6
+27532 0 press a 6
+27556 0 press a 6
+27580 0 press a 6
+27604 0 press a 6
+27628 0 press a 6
+27652 0 press a 6
+27676 0 press a 6
+27700 0 press a 6
+27724 0 press a 6
+27748 0 press a 6
+27772 0 press a 6
+27796 0 press a 6
+27820 0 press a 6
+27844 0 press a 6
+27868 0 press a 6
+27892 0 press a 6
+27916 0 press a 6
+27940 0 press a 6
+27964 0 press a 6
+27988 0 press a 6
+28012 0 press a 6
+28036 0 press a 6
+28060 0 press a 6
+28084 0 press a 6
+28108 0 press a 6
+28132 0 press a 6
+28156 0 press a 6
+28180 0 press a 6
+28204 0 press a 6
+28228 0 press a 6
+28252 0 press a 6
+28276 0 press a 6
+28300 0 press a 6
+28324 0 press a 6
+28348 0 press a 6
+28372 0 press a 6
+28396 0 press a 6
+28420 0 press a 6
+28444 0 press a 6
+28468 0 press a 6
+28492 0 press a 6
+28516 0 press a 6
+28540 0 press a 6
+28564 0 press a 6
+28588 0 press a 6
+28612 0 press a 6
+28636 0 press a 6
+28660 0 press a 6
+28684 0 press a 6
+28708 0 press a 6
+28732 0 press a 6
+28756 0 press a 6
+28780 0 press a 6
+28804 0 press a 6
+28828 0 press a 6
+28852 0 press a 6
+28876 0 press a 6
+28900 0 press a 6
+28924 0 press a 6
+28948 0 press a 6
+28972 0 press a 6
+28996 0 press a 6
+29020 0 press a 6
+29044 0 press a 6
+29068 0 press a 6
+29092 0 press a 6
+29116 0 press a 6
+29140 0 press a 6
+29164 0 press a 6
+29188 0 press a 6
+29212 0 press a 6
+29236 0 press a 6
+29260 0 press a 6
+29284 0 press a 6
+29308 0 press a 6
+29332 0 press a 6
+29356 0 press a 6
+29380 0 press a 6
+29404 0 press a 6
+29428 0 press a 6
+29452 0 press a 6
+29476 0 press a 6
+29500 0 press a 6
+29524 0 press a 6
+29548 0 press a 6
+29572 0 press a 6
+29596 0 press a 6
+29620 0 press a 6
+29644 0 press a 6
+29668 0 press a 6
+29692 0 press a 6
+29716 0 press a 6
+29740 0 press a 6
+29764 0 press a 6
+29788 0 press a 6
+29812 0 press a 6
+29836 0 press a 6
+29860 0 press a 6
+29884 0 press a 6
+29908 0 press a 6
+29932 0 press a 6
+29956 0 press a 6
+29980 0 press a 6
+30004 0 press a 6
+30028 0 press a 6
+30052 0 press a 6
+30076 0 press a 6
+30100 0 press a 6
+30124 0 press a 6
+30148 0 press a 6
+30172 0 press a 6
+30196 0 press a 6
+30220 0 press a 6
+30244 0 press a 6
+30268 0 press a 6
+30292 0 press a 6
+30316 0 press a 6
+30340 0 press a 6
+30364 0 press a 6
+30388 0 press a 6
+30412 0 press a 6
+30436 0 press a 6
+30460 0 press a 6
+30484 0 press a 6
+30508 0 press a 6
+30532 0 press a 6
+30556 0 press a 6
+30580 0 press a 6
+30604 0 press a 6
+30628 0 press a 6
+30652 0 press a 6
+30676 0 press a 6
+30700 0 press a 6
+30724 0 press a 6
+30748 0 press a 6
+30772 0 press a 6
+30796 0 press a 6
+30820 0 press a 6
+30844 0 press a 6
+30868 0 press a 6
+30892 0 press a 6
+30916 0 press a 6
+30940 0 press a 6
+30964 0 press a 6
+30988 0 press a 6
+31012 0 press a 6
+31036 0 press a 6
+31060 0 press a 6
+31084 0 press a 6
+31108 0 press a 6
+31132 0 press a 6
+31156 0 press a 6
+31180 0 press a 6
+31204 0 press a 6
+31228 0 press a 6
+31252 0 press a 6
+31276 0 press a 6
+31300 0 press a 6
+31324 0 press a 6
+31348 0 press a 6
+31372 0 press a 6
+31396 0 press a 6
+31420 0 press a 6
+31444 0 press a 6
+31468 0 press a 6
+31492 0 press a 6
+31516 0 press a 6
+31540 0 press a 6
+31564 0 press a 6
+31588 0 press a 6
+31612 0 press a 6
+31636 0 press a 6
+31660 0 press a 6
+31684 0 press a 6
+31708 0 press a 6
+31732 0 press a 6
+31756 0 press a 6
+31780 0 press a 6
+31804 0 press a 6
+31828 0 press a 6
+31852 0 press a 6
+31876 0 press a 6
+31900 0 press a 6
+31924 0 press a 6
+31948 0 press a 6
+31972 0 press a 6
+31996 0 press a 6
+32020 0 press a 6
+32044 0 press a 6
+32068 0 press a 6
+32092 0 press a 6
+32116 0 press a 6
+32140 0 press a 6
+32164 0 press a 6
+32188 0 press a 6
+32212 0 press a 6
+32236 0 press a 6
+32260 0 press a 6
+32284 0 press a 6
+32308 0 press a 6
+32332 0 press a 6
+32356 0 press a 6
+32380 0 press a 6
+32404 0 press a 6
+32428 0 press a 6
+32452 0 press a 6
+32476 0 press a 6
+32500 0 press a 6
+32524 0 press a 6
+32548 0 press a 6
+32572 0 press a 6
+32596 0 press a 6
+32620 0 press a 6
+32644 0 press a 6
+32668 0 press a 6
+32692 0 press a 6
+32716 0 press a 6
+32740 0 press a 6
+32764 0 press a 6
+32788 0 press a 6
+32812 0 press a 6
+32836 0 press a 6
+32860 0 press a 6
+32884 0 press a 6
+32908 0 press a 6
+32932 0 press a 6
+32956 0 press a 6
+32980 0 press a 6
+33004 0 press a 6
+33028 0 press a 6
+33052 0 press a 6
+33076 0 press a 6
+33100 0 press a 6
+33124 0 press a 6
+33148 0 press a 6
+33172 0 press a 6
+33196 0 press a 6
+33220 0 press a 6
+33244 0 press a 6
+33268 0 press a 6
+33292 0 press a 6
+33316 0 press a 6
+33340 0 press a 6
+33364 0 press a 6
+33388 0 press a 6
+33412 0 press a 6
+33436 0 press a 6
+33460 0 press a 6
+33484 0 press a 6
+33508 0 press a 6
+33532 0 press a 6
+33556 0 press a 6
+33580 0 press a 6
+33604 0 press a 6
+33628 0 press a 6
+33652 0 press a 6
+33676 0 press a 6
+33700 0 press a 6
+33724 0 press a 6
+33748 0 press a 6
+33772 0 press a 6
+33796 0 press a 6
+33820 0 press a 6
+33844 0 press a 6
+33868 0 press a 6
+33892 0 press a 6
+33916 0 press a 6
+33940 0 press a 6
+33964 0 press a 6
+33988 0 press a 6
+34012 0 press a 6
+34036 0 press a 6
+34060 0 press a 6
+34084 0 press a 6
+34108 0 press a 6
+34132 0 press a 6
+34156 0 press a 6
+
+# Down, left along the houses into block (2,2) at 34570, then up to a cedar: A shakes it at 34890.
+34300 0 move stick-y=-100 70
+34380 0 move stick-x=-100 340
+34730 0 move stick-y=100 116
+34850 0 move stick-x=-100 25
+34880 0 press a 6
+
+# Around the cedar, by block (2,1) from 35000 to 35070, to a cherry tree: A shakes it at 35130, its cherries
+# falling.
+34970 0 move stick-y=100 28
+35000 0 move stick-x=-100 45
+35050 0 move stick-y=-100 20
+35110 0 move stick-x=-100 10
+35125 0 press a 6
+
+# Down and right, then down into block (2,3) at 35560: the cliff's top, with a rock, at 35665.
+35230 0 move stick-y=-100 35
+35270 0 move stick-x=100 55
+35330 0 move stick-y=-100 340
+
+# Left to the waterfall at 35750 and a fish's shadow in the river below it at 35797, then right along the cliff
+# into block (3,3) at 35920, its edge by a lit tree at 36100.
+35675 0 move stick-x=-100 60
+35750 0 move stick-y=100 25
+35780 0 move stick-x=100 460
+
+# Right into block (4,3) at 36280, then down the slope from 36520, by blocks (4,4) at 36720 and (4,5) at 37020,
+# to (4,6) and Able Sisters at 37330.
+36245 0 move stick-y=100 12
+36260 0 move stick-x=100 88
+36350 0 move stick-y=-100 33
+36385 0 move stick-x=100 123
+36510 0 move stick-y=-100 840
+
+# Round Able Sisters, by the path beside it at 37600, and down to the beach: the player waits there from 37800, by
+# the waves and a shell, the clock at 12:10 pm.
+37360 0 move stick-x=100 72
+37440 0 move stick-y=-100 102
+37545 0 move stick-x=-100 167
+37715 0 move stick-y=-100 60

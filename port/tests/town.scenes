@@ -1,0 +1,32 @@
+# The town's goldens (port/NOTES.md, Goldens; sonarlib docs/roadmap.md, M6 step 9f4a), written along the town replay,
+# tests/town_replay.txt: each scene is the first frame whose keys hold every value its line gives, in hex. retrace is
+# vi.c's retraceCount, one a tick; scene the save's scene_no, f the train, 7 the town and 14 the player's house; block
+# play's block_table, block_x << 8 | block_z, 0 outside play and in the train and the house. The retrace finds the
+# frame, and the scene and the block say the run is where its name says, so a route that changes fails its scenes.
+# They are the port's alone, compared with no Dolphin frame until step 9f4c. The scenes on the line below hold the
+# game's 2D, which the UI scale reaches, and the others show the world alone (port/tests/town_goldens_test.cmake).
+# 2D: train_rover station_talk houses walk_to_house room_dark room_lit nook_job free cedar_shake cherry_shake beach
+train_rover retrace=340d scene=f block=0
+station retrace=43a8 scene=7 block=301
+station_talk retrace=4650 scene=7 block=301
+houses retrace=4c90 scene=7 block=301
+walk_to_house retrace=5780 scene=7 block=302
+house_talk retrace=5bcc scene=7 block=302
+door retrace=60b8 scene=7 block=302
+room_dark retrace=619e scene=14 block=0
+room_lit retrace=6202 scene=14 block=0
+iris retrace=627a scene=7 block=302
+nook_job retrace=6d60 scene=7 block=302
+give retrace=7a26 scene=7 block=302
+free retrace=8610 scene=7 block=302
+cedar_shake retrace=8868 scene=7 block=202
+cherry_shake retrace=896c scene=7 block=202
+cliff_rock retrace=8b51 scene=7 block=203
+waterfall retrace=8ba6 scene=7 block=203
+fish retrace=8bd5 scene=7 block=203
+cliff_tree retrace=8d04 scene=7 block=303
+slope retrace=8ea8 scene=7 block=403
+south retrace=90ec scene=7 block=405
+tailors retrace=91f5 scene=7 block=406
+tailors_path retrace=92e0 scene=7 block=406
+beach retrace=943e scene=7 block=406

@@ -3,6 +3,7 @@
                      [--replay <recording> [--unpaced]
                       | --record <recording> [--input-script <script>] [--date <date>] [--unpaced]]
             | --goldens <scenes> <dir> [--display <width>x<height> [--set <key>=<value>]...]
+                        [--replay <recording>]
             | --measure [--present-hz <n>] [--pipeline-list <file>] [--render-scale <n>]
                         [--dynamic-resolution <us>] [--replay <recording>]
             | --replay <recording>]
@@ -43,11 +44,14 @@
    --goldens: headless and deterministic, but on the GPU sink with no window, writing the frames the scenes file names
    into the directory (sonar/goldens.h, port/NOTES.md, Goldens). The GX glue's frame begin hands each frame's keys to
    the goldens (emu64_glue.c), play's first frame ends no run, and the main thread serves the captures until every
-   scene is written, or until the tick limit stops them. --qrand-seed gives init_rnd's seed (sys_math.c). --display
-   gives the run a display of that size in pixels, a virtual window the goldens make and bind to the video settings
-   (sl_goldens_display), so the frames are those a player's window of that shape shows, with the columns a wider
-   display adds beside each scene's rectangle; it opens nothing on the desktop. Each --set is then an override of a
-   video setting for the run, with no settings file and no user directory.
+   scene is written, or until the tick limit stops them. With --replay, the recording plays from tick 0, as headless,
+   and the run ends once every scene is written, exit 0. When the replay ends first, with scenes left, the game thread
+   prints the report, named replay, and the saves line, as headless, and stops the captures, and the run ends, exit
+   1, as at the limit, whose report is named limit (port/NOTES.md, Goldens). --qrand-seed gives init_rnd's seed
+   (sys_math.c). --display gives the run a display of that size in pixels, a virtual window the goldens make and bind
+   to the video settings (sl_goldens_display), so the frames are those a player's window of that shape shows, with the
+   columns a wider display adds beside each scene's rectangle; it opens nothing on the desktop. Each --set is then an
+   override of a video setting for the run, with no settings file and no user directory.
 
    --measure: headless and deterministic, on the GPU sink with no window, timing each frame from play's first to the
    tick limit (sonar/measure.h, port/NOTES.md, Measured runs). The GX glue's frame end hands each frame to the measured
@@ -75,7 +79,7 @@
    settings bound and given the recorded slots; one that carries none has no card in either slot. Play's first frame
    prints the play line and ends no run, and when the replay ends, at the tick after its last, the run prints the
    report, named replay, then the saves line when it has a store, and ends, exit 0. Each line names the scene. No tick
-   limit applies unless --ticks gives one (port/NOTES.md, Replays). With --window, above.
+   limit applies unless --ticks gives one (port/NOTES.md, Replays). With --window, --goldens or --measure, above.
 
    --state-hashes: the game's state hashed at each tick boundary (sonar/state.h, ac_state.c), a line for each written
    to the file, which is replaced: the tick, then the hash as 16 hex digits. --plant adds 1 to one byte of the save at
@@ -129,6 +133,7 @@ static const char* const usage_lines[] = {
     "           | --record <recording> [--input-script <script>] [--date <date>]",
     "                      [--unpaced]]",
     " | --goldens <scenes> <dir> [--display <width>x<height> [--set <key>=<value>]...]",
+    "             [--replay <recording>]",
     " | --measure [--present-hz <n>] [--pipeline-list <file>]",
     "             [--render-scale <n>] [--dynamic-resolution <us>]",
     "             [--replay <recording>]",
@@ -370,12 +375,17 @@ static sl_result saves_report(void) {
     return SL_OK;
 }
 
+/* What stopped --goldens's captures first: the tick limit or the replay's end (stop_at_limit, serve). */
+enum { GOLDENS_SERVING, GOLDENS_LIMIT, GOLDENS_REPLAY };
+static atomic_int goldens_stopped;
+
 /* Ends the run once the runtime has begun the limit's ticks without a frame of play; with --goldens, stops the
    captures, and the main thread ends the run. With --measure, once play was reached, stops the measured run and prints
    its two lines, the report, the pipelines line and, with --render-scale or --dynamic-resolution, the resolution line,
    here on the game thread at a retrace, while no present runs: the game thread waits in sl_measure_frame for each
    frame's presents. With --replay, first ends the run once the replay has ended, with the report, named replay, and
-   the saves line, after the measured run's two lines and its resolution line with --measure. In a window, the only
+   the saves line, after the measured run's two lines and its resolution line with --measure; with --goldens, prints
+   the two lines and stops the captures, unless the limit stopped them first. In a window, the only
    runs it is registered for are a replay's, for which it prints the two lines once and tells the present loop, which
    ends the run, as it does at --ticks's limit, and a recording's: at the retrace where the runtime has begun the
    limit's ticks, or the first after the window closed, it stops the recording, which ends at that tick's boundary,
@@ -385,6 +395,15 @@ static void stop_at_limit(void* user, uint64_t retrace) {
     (void)user;
     (void)retrace;
     if (replay != NULL && !sl_input_replay_active()) {
+        if (goldens != NULL) {
+            int serving = GOLDENS_SERVING;
+            if (atomic_compare_exchange_strong(&goldens_stopped, &serving, GOLDENS_REPLAY)) {
+                ac_port_report("replay");
+                (void)saves_report();
+                sl_goldens_stop(); /* the main thread names the scenes left, and the run ends, exit 1 (serve) */
+            }
+            return;
+        }
         if (window) {
             if (!atomic_load(&run_ended)) {
                 ac_port_report("replay");
@@ -429,7 +448,9 @@ static void stop_at_limit(void* user, uint64_t retrace) {
         return;
     if (sl_tick_count() >= tick_limit) {
         if (goldens != NULL) {
-            sl_goldens_stop();
+            int serving = GOLDENS_SERVING;
+            if (atomic_compare_exchange_strong(&goldens_stopped, &serving, GOLDENS_LIMIT))
+                sl_goldens_stop();
             return;
         }
         if (measure && ac_play_reached()) {
@@ -614,12 +635,14 @@ static int write_record(void* user, const void* data, size_t size) {
 }
 
 /* --goldens's main loop: serves the captures until every scene is written, then prints the goldens line, or until the
-   tick limit stops them. Never returns. */
+   tick limit or the replay's end stops them, with the report named limit, or the one the game thread printed at the
+   replay's end (stop_at_limit). Never returns. */
 static void serve(void) {
     const sl_result result = sl_goldens_serve();
     if (result != SL_OK) {
         fprintf(stderr, "ac_port: sl_goldens_serve: %s\n", sl_result_string(result));
-        ac_port_report("limit");
+        if (atomic_load(&goldens_stopped) != GOLDENS_REPLAY)
+            ac_port_report("limit");
         _Exit(1);
     }
     printf("ac_port: goldens scenes %" PRIu64 " frames %" PRIu64 "\n", scenes_written(),
@@ -1231,7 +1254,7 @@ int main(int argc, char** argv) {
         return usage_error(); /* and only it has a window to resize */
     if (diff_from_given && !ac_diff_enabled())
         return usage_error(); /* --diff-from is the differential test's */
-    if (replay != NULL && (goldens != NULL || ac_reference_enabled() || (window && ac_diff_enabled())))
+    if (replay != NULL && (ac_reference_enabled() || (window && ac_diff_enabled())))
         return usage_error(); /* a replay runs on the kit, headless or in a window, and under --diff headless */
     if (measure && replay != NULL && !ticks_given)
         return usage_error(); /* the medians are sized for --ticks's frames */

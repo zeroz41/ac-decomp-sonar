@@ -125,7 +125,13 @@ static void Actor_ct(ACTOR* actor, GAME* game) {
     exchange = &play->object_exchange;
     bank = &exchange->banks[actor->data_bank_id];
 
+#ifdef SONAR_PORT /* sonarlib port: bank -1 is none, which the console counts before the banks (port/NOTES.md) */
+    if (actor->data_bank_id >= 0) {
+        bank->num_exist++;
+    }
+#else
     bank->num_exist++;
+#endif
     if (actor->part == ACTOR_PART_NPC) {
         NPC_ACTOR* npc_actor = (NPC_ACTOR*)actor;
         aNPC_draw_data_c draw_data;
@@ -136,7 +142,13 @@ static void Actor_ct(ACTOR* actor, GAME* game) {
         npc_actor->draw.texture_bank_idx = tex_bank_id;
 
         bank = &exchange->banks[tex_bank_id];
+#ifdef SONAR_PORT /* sonarlib port: as the data bank's above */
+        if (tex_bank_id >= 0) {
+            bank->num_exist++;
+        }
+#else
         bank->num_exist++;
+#endif
     }
 
     /* Initialize world position & rotation to home position & rotation */
