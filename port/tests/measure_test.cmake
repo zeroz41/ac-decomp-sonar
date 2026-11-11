@@ -1,4 +1,4 @@
-# The port's measured runs (sonarlib docs/roadmap.md, M6 steps 7b, 9a, 9b, 9f0 and 10a; port/NOTES.md, Measured
+# The port's measured runs (sonarlib docs/roadmap.md, M6 steps 7b, 9a, 9b, 9f0, 10a and 12b; port/NOTES.md, Measured
 # runs):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_PORT_REFERENCE=<ac_port_reference> -DAC_DISC=<disc>
 #         -DAC_VERSION=<version> -DOUT_DIR=<dir> -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P measure_test.cmake
@@ -6,19 +6,24 @@
 # --reference, the console's emu64 drawing instead of the kit, and ac_port_reference with neither flag, to play's first
 # frame: the reference's game is the play line's, with no palette overflowed, and the reference's program with neither
 # flag prints ac_port's play line byte for byte. ac_port refuses --diff and --reference, exit 2 with the usage. Then
-# --measure --ticks 1200 runs twice with the kit and twice with ac_port_reference --reference, on the GPU sink with no
-# window through SDL's offscreen video driver and lavapipe's Vulkan. Each exits 0 with a measure line, a presents line
-# and a measured line, the same in both runs once the twelve times are taken out, with frames, ticks, draws and calls,
-# each frame presented once with nothing held, late, dropped or backward, and nothing invalid, overflowed, refused,
-# unowned or stray; the kit's have no unexplained snap. The kit's and the reference's run the same game for the same
-# frames. --present-hz without --measure, on each program, and with --measure --reference exit 2 with the program's
-# usage. Then the kit's measured run at 144 Hz and at 360 Hz, once each: the same measured line and ticks as at no rate,
-# its frames and its dropped ones the frames at no rate, more presents than frames, more at 360 Hz than at 144 Hz, none
-# held or backward, no unexplained snap, and the same frames dropped, pairs and snaps at both rates. Last, the kit's
-# --measure --ticks 7200 once, the title left idle past where step 11d's port died: it exits 0 with its three lines, the
-# measured line at tick 7200 and nothing invalid, overflowed, refused, unowned or stray. It prints every line. When
-# AC_DISC names no disc or there is no lavapipe it prints the line the test's SKIP_REGULAR_EXPRESSION matches and
-# returns.
+# the measured runs, on the GPU sink with no window through SDL's offscreen video driver and lavapipe's Vulkan, each
+# exiting 0 with a measure line, a presents line, a measured line and a pipelines line. The kit and ac_port_reference
+# --reference first run --measure --ticks 2400 once each from no pipeline list, each writing its own, --pipeline-list's
+# file in OUT_DIR, deleted first, with nothing invalid, overflowed, refused, unowned or stray. Then each runs
+# --measure --ticks 1200 twice from its list, the four lines the same in both runs once the twelve times are taken
+# out, with frames, ticks, draws and calls, each frame presented once with nothing held, late, dropped or backward,
+# and nothing invalid, overflowed, refused, unowned or stray; the kit's have no unexplained snap. Every pipeline they
+# draw with is made from the list at the start, general and specialized, none at a submit, and no list is written;
+# their draws are drawn by specialized pipelines, and no classic one by the general shader. The kit's and the
+# reference's run the same game for the same frames. --present-hz without --measure, on each program, and with
+# --measure --reference, and --pipeline-list without --measure, on each program, exit 2 with the program's usage.
+# Then the kit's measured run at 144 Hz and at 360 Hz, from no list, once each: the same measured line and ticks as at
+# no rate, its frames and its dropped ones the frames at no rate, more presents than frames, more at 360 Hz than at
+# 144 Hz, none held or backward, no unexplained snap, and the same frames dropped, pairs and snaps at both rates.
+# Last, the kit's --measure --ticks 7200 once, the title left idle past where step 11d's port died: it exits 0 with
+# its four lines, the measured line at tick 7200 and nothing invalid, overflowed, refused, unowned or stray. It
+# prints every line. When AC_DISC names no disc or there is no lavapipe it prints the line the test's
+# SKIP_REGULAR_EXPRESSION matches and returns.
 cmake_minimum_required(VERSION 3.25)
 
 if("${AC_DISC}" STREQUAL "")
@@ -60,6 +65,11 @@ string(APPEND presents_pattern " backward ${count} pairs ${count} unexplained ${
 string(APPEND presents_pattern " unmatched ${count} explicit ${count} forget ${count} cut ${count} all ${count}")
 string(APPEND presents_pattern " duplicate ${count} rotation ${count} distance ${count} gap ${count} auto-cut ${count}")
 set(causes none unmatched explicit forget cut all duplicate rotation distance gap auto-cut)
+set(pipelines_pattern "ac_port: pipelines made ${count} warmed ${count} specialized ${count}")
+string(APPEND pipelines_pattern " specialized-warmed ${count} lists ${count} draws-specialized ${count}")
+string(APPEND pipelines_pattern " draws-unspecialized ${count}")
+set(measured_patterns "${measure_pattern}" "${presents_pattern}" "ac_port: measured${report_pattern}"
+    "${pipelines_pattern}")
 
 # Runs ac_port, or ac_port_reference with REFERENCE, with the options, and fails unless it exits 0 with one line
 # matching each pattern, in order, into the list out.
@@ -117,19 +127,19 @@ function(refused name program)
     endif()
 endfunction()
 
-# Sets out to the presents line's value of each field, in order, as "<field> <value>" pairs.
+# Sets out to the presents or pipelines line's value of each field, in order, as "<field> <value>" pairs.
 function(presents_fields line out)
     set(fields "")
     foreach(field IN LISTS ARGN)
         if(NOT line MATCHES " ${field} ([0-9]+)")
-            message(FATAL_ERROR "ac_port_measure: the presents line has no ${field}:\n${line}")
+            message(FATAL_ERROR "ac_port_measure: the line has no ${field}:\n${line}")
         endif()
         list(APPEND fields "${field} ${CMAKE_MATCH_1}")
     endforeach()
     set(${out} "${fields}" PARENT_SCOPE)
 endfunction()
 
-# Sets out to the presents line's value of the field.
+# Sets out to the presents or pipelines line's value of the field.
 function(presents_field line field out)
     presents_fields("${line}" pair ${field})
     string(REPLACE "${field} " "" value "${pair}")
@@ -193,21 +203,48 @@ endif()
 refused("--diff in ac_port" ac_port --diff)
 refused("--reference in ac_port" ac_port --reference)
 
-# The measured runs at no present rate, twice each.
+# The measured runs at no present rate: once each from no pipeline list, twice from the list that run wrote.
 foreach(drawer IN ITEMS kit reference)
-    set(options --measure --ticks 1200)
+    set(list_file "${OUT_DIR}/${drawer}.slpc")
+    file(REMOVE "${list_file}")
+    set(options --measure --pipeline-list "${list_file}")
     set(program "")
     if(drawer STREQUAL "reference")
         list(APPEND options --reference)
         set(program REFERENCE)
     endif()
+    # Twice the ticks of the runs from its list, so it has made their pipelines and written them before its end:
+    # the run ends by _Exit, and a list is written during a run once 120 frames have made no pipeline.
+    run("${drawer} from no list" lines MEASURE ${program} OPTIONS ${options} --ticks 2400 PATTERNS ${measured_patterns})
+    list(GET lines 2 measured_line)
+    list(GET lines 3 pipelines_line)
+    check_report("the ${drawer}'s run from no list" "${measured_line}")
+    presents_field("${pipelines_line}" lists lists)
+    if(NOT lists GREATER 0 OR NOT EXISTS "${list_file}")
+        message(FATAL_ERROR "ac_port_measure: the ${drawer}'s run from no list wrote none:\n${pipelines_line}")
+    endif()
+    list(APPEND options --ticks 1200)
     set(untimed "")
     foreach(attempt IN ITEMS 1 2)
-        run("${drawer} ${attempt}" lines MEASURE ${program} OPTIONS ${options}
-            PATTERNS "${measure_pattern}" "${presents_pattern}" "ac_port: measured${report_pattern}")
+        run("${drawer} ${attempt}" lines MEASURE ${program} OPTIONS ${options} PATTERNS ${measured_patterns})
         list(GET lines 0 measure_line)
         list(GET lines 1 presents_line)
         list(GET lines 2 measured_line)
+        list(GET lines 3 pipelines_line)
+        # Every pipeline drawn with made from the list at the start, none at a submit, so no list is written, and
+        # every classic draw drawn specialized.
+        set(pipeline_fields made warmed specialized specialized-warmed lists draws-specialized draws-unspecialized)
+        foreach(field IN LISTS pipeline_fields)
+            string(REPLACE "-" "_" name "${field}")
+            presents_field("${pipelines_line}" ${field} ${name})
+        endforeach()
+        if(NOT made GREATER 0 OR NOT warmed EQUAL made OR NOT specialized GREATER 0
+           OR NOT specialized_warmed EQUAL specialized OR NOT draws_specialized GREATER 0
+           OR NOT draws_unspecialized EQUAL 0 OR NOT lists EQUAL 0)
+            message(FATAL_ERROR "ac_port_measure: the ${drawer}'s run from its list made a pipeline the list did "
+                                "not name, wrote a list or drew a classic draw by the general shader:\n"
+                                "${pipelines_line}")
+        endif()
         if(NOT measure_line MATCHES "^ac_port: measure ${drawer} ")
             message(FATAL_ERROR "ac_port_measure: the measure line is not the ${drawer}'s:\n${measure_line}")
         endif()
@@ -233,7 +270,7 @@ foreach(drawer IN ITEMS kit reference)
             message(FATAL_ERROR "ac_port_measure: the kit's run snapped unexplained:\n${presents_line}")
         endif()
         string(REGEX REPLACE " (game|prepare|present|gpu) [0-9]+ [0-9]+ [0-9]+" " \\1" measure_line "${measure_line}")
-        list(APPEND untimed "${measure_line}\n${presents_line}\n${measured_line}")
+        list(APPEND untimed "${measure_line}\n${presents_line}\n${measured_line}\n${pipelines_line}")
     endforeach()
     list(GET untimed 0 first)
     list(GET untimed 1 second)
@@ -257,13 +294,16 @@ endif()
 refused("--present-hz without --measure" ac_port --present-hz 144)
 refused("--present-hz without --measure in ac_port_reference" ac_port_reference --present-hz 144)
 refused("--present-hz with --reference" ac_port_reference --measure --reference --present-hz 144)
+# A pipeline list is a measured run's.
+refused("--pipeline-list without --measure" ac_port --pipeline-list "${OUT_DIR}/kit.slpc")
+refused("--pipeline-list without --measure in ac_port_reference" ac_port_reference --pipeline-list
+        "${OUT_DIR}/reference.slpc")
 
 # The kit's measured run at a display's rate, once at each.
 set(rate_counts "")
 set(rate_snaps "")
 foreach(hz IN ITEMS 144 360)
-    run("kit at ${hz} Hz" lines MEASURE OPTIONS --measure --ticks 1200 --present-hz ${hz}
-        PATTERNS "${measure_pattern}" "${presents_pattern}" "ac_port: measured${report_pattern}")
+    run("kit at ${hz} Hz" lines MEASURE OPTIONS --measure --ticks 1200 --present-hz ${hz} PATTERNS ${measured_patterns})
     list(GET lines 0 measure_line)
     list(GET lines 1 presents_line)
     list(GET lines 2 measured_line)
@@ -314,8 +354,7 @@ endif()
 
 # The title left idle to tick 7200, past where step 11d's port died between ticks 5737 and 5751, when jaudio's DVD
 # queue had run past its buffer (port/NOTES.md, The edits on the path).
-run("kit to 7200" lines MEASURE OPTIONS --measure --ticks 7200
-    PATTERNS "${measure_pattern}" "${presents_pattern}" "ac_port: measured${report_pattern}")
+run("kit to 7200" lines MEASURE OPTIONS --measure --ticks 7200 PATTERNS ${measured_patterns})
 list(GET lines 0 measure_line)
 list(GET lines 2 measured_line)
 if(NOT measure_line MATCHES "^ac_port: measure kit " OR NOT measured_line MATCHES "^ac_port: measured tick 7200 ")

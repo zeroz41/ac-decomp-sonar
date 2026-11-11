@@ -615,11 +615,13 @@ add_test(NAME ac_port_save
                  "-DAC_LAVAPIPE_ICD=${AC_LAVAPIPE_ICD}" -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/save_test.cmake")
 set_tests_properties(ac_port_save PROPERTIES SKIP_REGULAR_EXPRESSION "ac_port_save: skipped, ")
 
-# ac_port_reference --reference to play's first frame, and --measure --ticks 1200 with the kit and with
-# ac_port_reference --reference twice each, then with the kit at --present-hz 144 and 360 once each, and the kit's
-# --measure --ticks 7200 once, on the GPU sink with no window through SDL's offscreen video driver and lavapipe's
-# Vulkan; ac_port_reference with neither flag to play's first frame, whose line must be ac_port's; and ac_port's and
-# ac_port_reference's refusals; skipped without the disc or lavapipe, when the script says so.
+# ac_port_reference --reference to play's first frame; --measure with the kit and with ac_port_reference --reference,
+# each once at --ticks 2400 writing a pipeline list of its own (--pipeline-list) and then twice at --ticks 1200 from
+# it, every pipeline made from the list and every draw specialized; then with the kit at --present-hz 144 and 360
+# once each, and the kit's --measure --ticks 7200 once, on the GPU sink with no window through SDL's offscreen video
+# driver and lavapipe's Vulkan; ac_port_reference with neither flag to play's first frame, whose line must be
+# ac_port's; and ac_port's and ac_port_reference's refusals; skipped without the disc or lavapipe, when the script
+# says so.
 add_test(NAME ac_port_measure
          COMMAND "${CMAKE_COMMAND}" "-DAC_IMPORT=$<TARGET_FILE:ac-import>" "-DAC_PORT=$<TARGET_FILE:ac_port>"
                  "-DAC_PORT_REFERENCE=$<TARGET_FILE:ac_port_reference>"

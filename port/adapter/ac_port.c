@@ -3,7 +3,8 @@
                      [--replay <recording> [--unpaced]
                       | --record <recording> [--input-script <script>] [--date <date>] [--unpaced]]
             | --goldens <scenes> <dir> [--display <width>x<height> [--set <key>=<value>]...]
-            | --measure [--present-hz <n>] [--replay <recording>] | --replay <recording>]
+            | --measure [--present-hz <n>] [--pipeline-list <file>] [--replay <recording>]
+            | --replay <recording>]
            [--qrand-seed <hex>] [--state-hashes <file> [--plant <n>]] [--dump <dir> --dump-tick <n>]:
    Animal Crossing on sonarlib
    (port/NOTES.md, The program). The process's main thread starts the library and the render module, makes the emu64
@@ -48,12 +49,16 @@
    video setting for the run, with no settings file and no user directory.
 
    --measure: headless and deterministic, on the GPU sink with no window, timing each frame from play's first to the
-   tick limit (sonar/measure.h, port/NOTES.md, Measured runs). The GX glue's frame end hands each frame to the
-   measured run, which waits while the main thread presents it: once at alpha 1, or with --present-hz at each of the
-   display's times at that rate in the frame's tick, at the clock's alpha. At the limit the game thread prints the
-   measure line, the presents line and the report, named measured, and the run ends, exit 0. With --replay, which needs
-   --ticks, the recording plays from tick 0, as headless: when it ends before the limit, the game thread prints the
-   measure and presents lines, then the report, named replay, and the saves line, and the run ends, exit 0.
+   tick limit (sonar/measure.h, port/NOTES.md, Measured runs). The GX glue's frame end hands each frame to the measured
+   run, which waits while the main thread presents it: once at alpha 1, or with --present-hz at each of the display's
+   times at that rate in the frame's tick, at the clock's alpha. The run draws with the specialized shaders, as a
+   player's does, each made before the frame that first needs it is presented. --pipeline-list keeps the GPU sink's
+   pipeline list in that host file (sonar/render.h, sl_render_desc's pipeline_cache): read at the start, whose pipelines
+   are made then, and written during the run, so a run started from a list that a run at least as long wrote makes no
+   pipeline at a submit; without it the run keeps no list. At the limit the game thread prints the measure line, the
+   presents line, the report, named measured, and the pipelines line, and the run ends, exit 0. With --replay, which
+   needs --ticks, the recording plays from tick 0, as headless: when it ends before the limit, the game thread prints
+   the measure and presents lines, then the report, named replay, and the saves line, and the run ends, exit 0.
 
    --reference: the kit is not made, and the console's emu64 draws every task through the GX front end into the
    game's own frame (emu64_glue.c), headless, with --goldens or with --measure at no present rate.
@@ -119,7 +124,9 @@ static const char* const usage_lines[] = {
     "           | --record <recording> [--input-script <script>] [--date <date>]",
     "                      [--unpaced]]",
     " | --goldens <scenes> <dir> [--display <width>x<height> [--set <key>=<value>]...]",
-    " | --measure [--present-hz <n>] [--replay <recording>] | --replay <recording>]",
+    " | --measure [--present-hz <n>] [--pipeline-list <file>]",
+    "             [--replay <recording>]",
+    " | --replay <recording>]",
     "[--qrand-seed <hex>] [--state-hashes <file> [--plant <n>]]",
     "[--dump <dir> --dump-tick <n>]",
 };
@@ -143,6 +150,7 @@ static uint64_t measured;        /* frames handed to the measured run */
 static uint64_t measured_first;  /* the tick of the first */
 static uint64_t measured_last;   /* and of the latest */
 static uint32_t present_hz;      /* --present-hz: the measured run's display rate; 0, each frame presented once */
+static const char* pipeline_list; /* --pipeline-list: the measured run's pipeline list, a host file */
 static int seed_given;           /* --qrand-seed */
 static u32 seed;
 static const char* replay;               /* --replay's recording */
@@ -236,6 +244,22 @@ static void measure_report(void) {
            render.storage_binds, render.uniform_pushes);
 }
 
+/* The pipelines line: the GPU sink's general pipelines made and those of them made from the pipeline list at the
+   start, its specialized ones made and those of them the list named, the lists written, then the draws drawn by
+   specialized pipelines and those of a combiner material drawn by the general shader while specialized shaders
+   were on (sonar/render.h, sl_render_stats). */
+static void pipelines_report(void) {
+    sl_render_stats render;
+    sl_render_get_stats(&render);
+    printf("ac_port: pipelines made %" PRIu32 " warmed %" PRIu32 " specialized %" PRIu32
+           " specialized-warmed %" PRIu32 " lists %" PRIu32 " draws-specialized %" PRIu64
+           " draws-unspecialized %" PRIu64 "\n",
+           render.pipelines, render.pipelines_warmed, render.pipelines_specialized,
+           render.pipelines_specialized_warmed, render.pipeline_lists_written, render.draws_specialized,
+           render.draws_unspecialized);
+    fflush(stdout);
+}
+
 /* The presents line: the display's rate, 0 without one, then the presents, those held at alpha 1, the display times
    late, the frames dropped, the presents going backward, the frames with one before to blend from, the snaps only the
    library's checks found, and the snaps by cause, in sl_snap_cause's order, at each such frame's first present. */
@@ -323,15 +347,15 @@ static sl_result saves_report(void) {
 }
 
 /* Ends the run once the runtime has begun the limit's ticks without a frame of play; with --goldens, stops the
-   captures, and the main thread ends the run. With --measure, once play was reached, stops the measured run and
-   prints its two lines and the report, here on the game thread at a retrace, while no present runs: the game thread
-   waits in sl_measure_frame for each frame's presents. With --replay, first ends the run once the replay has ended,
-   with the report, named replay, and the saves line, after the measured run's two lines with --measure. In a window,
-   the only runs it is registered for are a replay's, for which it prints the two lines once and tells the present loop,
-   which ends the run, as it does at --ticks's limit, and a recording's: at the retrace where the runtime has begun the
-   limit's ticks, or the first after the window closed, it stops the recording, which ends at that tick's boundary,
-   after the retrace callbacks, and one retrace later, where a replay of it ends, it closes the file, prints the report,
-   named record, and the saves line, and tells the present loop. */
+   captures, and the main thread ends the run. With --measure, once play was reached, stops the measured run and prints
+   its two lines, the report and the pipelines line, here on the game thread at a retrace, while no present runs: the
+   game thread waits in sl_measure_frame for each frame's presents. With --replay, first ends the run once the replay
+   has ended, with the report, named replay, and the saves line, after the measured run's two lines with --measure. In a
+   window, the only runs it is registered for are a replay's, for which it prints the two lines once and tells the
+   present loop, which ends the run, as it does at --ticks's limit, and a recording's: at the retrace where the runtime
+   has begun the limit's ticks, or the first after the window closed, it stops the recording, which ends at that tick's
+   boundary, after the retrace callbacks, and one retrace later, where a replay of it ends, it closes the file, prints
+   the report, named record, and the saves line, and tells the present loop. */
 static void stop_at_limit(void* user, uint64_t retrace) {
     (void)user;
     (void)retrace;
@@ -387,6 +411,7 @@ static void stop_at_limit(void* user, uint64_t retrace) {
             measure_report();
             presents_report();
             ac_port_report("measured");
+            pipelines_report();
             _Exit(0);
         }
         ac_port_report("limit");
@@ -1039,11 +1064,13 @@ static void present(sl_window shown) {
     }
     printf("ac_port: window ticks %" PRIu64 " frames %" PRIu64 " blended %" PRIu64 " audio %" PRIu64 " loud %" PRIu64
            " dsp %" PRIu64 " pacing %s limit %" PRIu64 " gain %.3f pipelines %" PRIu32 " warmed %" PRIu32
-           " lists %" PRIu32 " cards %s %s target %" PRIu32 "x%" PRIu32 "\n",
+           " lists %" PRIu32 " specialized %" PRIu32 " specialized-warmed %" PRIu32 " unspecialized %" PRIu64
+           " cards %s %s target %" PRIu32 "x%" PRIu32 "\n",
            sl_tick_count(), frames, blended, audio.frames, audio.loud_frames, (uint64_t)ac_dsp_sounding_frames(),
            (uint32_t)info.pacing < sizeof pacings / sizeof pacings[0] ? pacings[info.pacing] : "unknown",
            whole_hz(info.frame_limit), (double)sl_audio_output_gain(), render.pipelines, render.pipelines_warmed,
-           render.pipeline_lists_written, cards[0], cards[1], target_width, target_height);
+           render.pipeline_lists_written, render.pipelines_specialized, render.pipelines_specialized_warmed,
+           render.draws_unspecialized, cards[0], cards[1], target_width, target_height);
     fflush(stdout);
     if (record != NULL)
         _Exit(atomic_load(&run_ended) && run_result == SL_OK ? 0 : 1);
@@ -1083,6 +1110,8 @@ int main(int argc, char** argv) {
         } else if (strcmp(argv[i], "--measure") == 0) {
             measure = 1;
             ac_measure_enable(); /* play's first frame ends no run */
+        } else if (strcmp(argv[i], "--pipeline-list") == 0 && i + 1 < argc && pipeline_list == NULL) {
+            pipeline_list = argv[++i];
         } else if (strcmp(argv[i], "--present-hz") == 0 && i + 1 < argc) {
             if (!parse_hz(argv[++i], &present_hz))
                 return usage_error();
@@ -1149,6 +1178,8 @@ int main(int argc, char** argv) {
         return usage_error(); /* the measured run presents each frame itself, headless */
     if (present_hz != 0 && (!measure || ac_reference_enabled()))
         return usage_error(); /* a display's rate is the measured run's, and the reference is measured at none */
+    if (pipeline_list != NULL && !measure)
+        return usage_error(); /* the list is a measured run's: a player's is in their cache, the others keep none */
     if (ac_reference_enabled() && (window || ac_diff_enabled() || (emu64_flags & SL_EMU64_VALIDATE) != 0))
         return usage_error(); /* the reference runs headless, without the kit */
     if (display_given && goldens == NULL)
@@ -1230,6 +1261,7 @@ int main(int argc, char** argv) {
         desc.max_views = 256;
         desc.max_snaps = 8192;
         desc.snap_distance = 40.0f;
+        desc.pipeline_cache = pipeline_list; /* NULL: a window's in the player's cache, else none */
         result = sl_render_init(&desc);
         if (result != SL_OK)
             return failed("sl_render_init", result);
@@ -1290,7 +1322,7 @@ int main(int argc, char** argv) {
         ac_jsys_j2d_start(j2d);
     }
     if (!window) {
-        /* Headless, after the render module, as before: the GPU sink keeps no pipeline list. */
+        /* Headless, after the render module, as before: the GPU sink keeps no pipeline list but --pipeline-list's. */
         result = start_fs();
         if (result != SL_OK)
             return failed("sl_fs_init", result);
