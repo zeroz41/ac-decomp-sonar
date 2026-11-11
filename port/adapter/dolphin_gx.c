@@ -12,6 +12,7 @@
 
 #include <port/emu64_glue.h>
 #include <port/gx_sink.h>
+#include <port/jsys_j2d.h>
 #include <port/reference.h>
 
 #include <sonar/base/log.h>
@@ -261,6 +262,7 @@ static sl_gxf* gxf;
 static sl_frame* frame;
 static BOOL frame_open;
 static BOOL frame_recorded; /* the open frame had its sl_gxf_record */
+static u64 recorded_bytes;  /* bytes_total as of the last record */
 static BOOL submitted;      /* a frame was submitted since the last begin */
 static u64 outside;
 static u64 nested;
@@ -316,10 +318,13 @@ static void hand_over(void) {
     pending_size = 0;
 }
 
-/* The bytes since the last hand-over, recorded into the open frame after what it holds: its first record clears. */
+/* The bytes since the last hand-over, recorded into the open frame after what it holds: its first record clears. The
+   font's open run is recorded first, so what GX drew after the text comes after it. */
 static void record(void) {
     sl_result result;
+    ac_jsys_j2d_flush();
     hand_over();
+    recorded_bytes = bytes_total;
     if (frame == NULL || gxf == NULL)
         return;
     result = frame_recorded ? sl_gxf_record_more(gxf, frame) : sl_gxf_record(gxf, frame);
@@ -355,6 +360,7 @@ void ac_frame_end(void) {
         return;
     }
     record();
+    ac_jsys_j2d_end_frame();
     submitting = frame != NULL;
     if (submitting) {
         sl_frame_submit(frame);
@@ -378,10 +384,23 @@ BOOL ac_frame_task(struct sl_frame** task_frame) {
     return frame != NULL;
 }
 
+BOOL ac_frame_text(struct sl_frame** text_frame) {
+    *text_frame = NULL;
+    if (!frame_open) {
+        outside++;
+        return FALSE;
+    }
+    if (!frame_recorded || bytes_total != recorded_bytes)
+        record();
+    *text_frame = frame;
+    return frame != NULL;
+}
+
 void ac_frame_split(BOOL begin) {
     if (!frame_open)
         return;
     if (!begin) {
+        ac_jsys_j2d_flush();
         if (frame != NULL)
             sl_frame_submit(frame);
         frame = NULL;

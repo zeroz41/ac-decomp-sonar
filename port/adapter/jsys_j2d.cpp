@@ -6,6 +6,8 @@
 // mLineWidth, and mMtx44 and mPosMtx, still filled by C_MTXOrtho and PSMTXIdentity. What the two files handed the
 // console's graphics goes to sonarlib's kits/jsys instead: the port's viewport and scissor, the projection, and quads
 // and lines in the position matrix. setup2D's state is the kit's materials, and a line's width, kept, is not drawn.
+// The position matrix is kept where GX loaded it, for JUTResFont's seam (jsys_font.cpp), which draws its glyphs
+// through the same object, under the same port.
 #include "JSystem/J2D/J2DGrafContext.h"
 
 #include <port/gx_sink.h>
@@ -16,8 +18,12 @@
 
 namespace {
 
-// The kit's object, handed over by the program; NULL before, when J2D draws nothing.
+// The kit's object, handed over by the program; NULL before, when J2D and the font draw nothing.
 sl_jsys_j2d* j2d_kit = NULL;
+
+// The position matrix last loaded, as GXLoadPosMtxImm loaded it: at setup2D and at each draw. The font's glyphs are
+// drawn under it (ac_jsys_j2d_position).
+sl_mat34 loaded_position = sl_mat34_identity();
 
 // J2D's port as the console held it, one for all of J2D's contexts: the last scissor setScissor set and the last
 // viewport setPort set, handed to the kit together.
@@ -53,12 +59,12 @@ sl_frame* open_frame() {
     return frame;
 }
 
-sl_mat34 position_of(const GC_Mtx m) {
-    sl_mat34 out;
+// GXLoadPosMtxImm's: m is the position matrix from here on, and the one a draw hands the kit.
+const sl_mat34& load_position(const GC_Mtx m) {
     for (int r = 0; r < 3; r++)
         for (int c = 0; c < 4; c++)
-            out.m[r][c] = m[r][c];
-    return out;
+            loaded_position.m[r][c] = m[r][c];
+    return loaded_position;
 }
 
 // A vertex at z 0, as J2D's were, in the color as the console took it: red, green, blue, alpha.
@@ -71,6 +77,24 @@ sl_jsys_j2d_vertex vertex(f32 x, f32 y, const JUtility::TColor& color) {
 
 extern "C" void ac_jsys_j2d_start(sl_jsys_j2d* j2d) {
     j2d_kit = j2d;
+}
+
+extern "C" sl_jsys_j2d* ac_jsys_j2d_kit(void) {
+    return j2d_kit;
+}
+
+extern "C" void ac_jsys_j2d_position(sl_mat34* out) {
+    *out = loaded_position;
+}
+
+extern "C" void ac_jsys_j2d_flush(void) {
+    if (j2d_kit != NULL)
+        (void)sl_jsys_j2d_flush(j2d_kit);
+}
+
+extern "C" void ac_jsys_j2d_end_frame(void) {
+    if (j2d_kit != NULL)
+        sl_jsys_j2d_end_frame(j2d_kit);
 }
 
 J2DGrafContext::J2DGrafContext(f32 left, f32 top, f32 right, f32 bottom)
@@ -91,9 +115,10 @@ void J2DGrafContext::setPort() {
     hand_port();
 }
 
-// The state J2D's draws need, vertex colors with no texture, no depth and no cull, is the kit's materials, and the
-// position matrix is handed with each draw.
+// The state J2D's draws need, vertex colors with no texture, no depth and no cull, is the kit's materials. The
+// position matrix is loaded, as the game loaded it, and handed with each draw.
 void J2DGrafContext::setup2D() {
+    (void)load_position(mPosMtx);
 }
 
 void J2DGrafContext::setScissor() {
@@ -181,13 +206,13 @@ void J2DGrafContext::setLineWidth(u8 width) {
 
 // The corners in the game's order and colors: the bottom right takes mColorBL and the bottom left mColorBR.
 void J2DGrafContext::fillBox(const JGeometry::TBox2f& box) {
+    const sl_mat34 position = load_position(mPosMtx);
     sl_jsys_j2d_blend blend;
     if (!kit_blend(mBoxPart, &blend))
         return;
     sl_frame* frame = open_frame();
     if (frame == NULL)
         return;
-    const sl_mat34 position = position_of(mPosMtx);
     const sl_jsys_j2d_vertex corners[4] = { vertex(box.i.x, box.i.y, mColorTL), vertex(box.f.x, box.i.y, mColorTR),
                                             vertex(box.f.x, box.f.y, mColorBL), vertex(box.i.x, box.f.y, mColorBR) };
     (void)sl_jsys_j2d_quad(j2d_kit, frame, &position, corners, blend);
@@ -195,13 +220,13 @@ void J2DGrafContext::fillBox(const JGeometry::TBox2f& box) {
 
 // fillBox's corners as a strip of five lines' ends, back to the first, in the box's blend.
 void J2DGrafContext::drawFrame(const JGeometry::TBox2f& box) {
+    const sl_mat34 position = load_position(mPosMtx);
     sl_jsys_j2d_blend blend;
     if (!kit_blend(mBoxPart, &blend))
         return;
     sl_frame* frame = open_frame();
     if (frame == NULL)
         return;
-    const sl_mat34 position = position_of(mPosMtx);
     const sl_jsys_j2d_vertex strip[5] = { vertex(box.i.x, box.i.y, mColorTL), vertex(box.f.x, box.i.y, mColorTR),
                                           vertex(box.f.x, box.f.y, mColorBL), vertex(box.i.x, box.f.y, mColorBR),
                                           vertex(box.i.x, box.i.y, mColorTL) };
@@ -209,13 +234,13 @@ void J2DGrafContext::drawFrame(const JGeometry::TBox2f& box) {
 }
 
 void J2DGrafContext::line(JGeometry::TVec2f start, JGeometry::TVec2f end) {
+    const sl_mat34 position = load_position(mPosMtx);
     sl_jsys_j2d_blend blend;
     if (!kit_blend(mLinePart, &blend))
         return;
     sl_frame* frame = open_frame();
     if (frame == NULL)
         return;
-    const sl_mat34 position = position_of(mPosMtx);
     const sl_jsys_j2d_vertex ends[2] = { vertex(start.x, start.y, mColorTL), vertex(end.x, end.y, mColorBR) };
     (void)sl_jsys_j2d_lines(j2d_kit, frame, &position, ends, 2, 0, blend);
 }

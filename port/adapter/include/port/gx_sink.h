@@ -65,16 +65,21 @@ void ac_gx_flush(void);
    open is counted in nested and ignored. */
 void ac_frame_begin(void);
 /* JW_EndFrame's, after endRender: hands the sink's bytes to the front end, records them into the frame after what
-   it holds, and submits it, then calls ac_emu64_frame_submitted and, for a frame submitted, ac_measure_frame. An end
-   with no frame open is counted in nested and does nothing. */
+   it holds, ends the J2D kit's frame (port/jsys_j2d.h, ac_jsys_j2d_end_frame), and submits it, then calls
+   ac_emu64_frame_submitted and, for a frame submitted, ac_measure_frame. An end with no frame open is counted in
+   nested and does nothing. Every record first closes the font's open run (ac_jsys_j2d_flush). */
 void ac_frame_end(void);
 /* emu64_taskstart's, and J2D's seam's before each draw (port/jsys_j2d.h): hands the sink's bytes to the front end
    and records them into the open frame, then gives it in *frame for the task or the draw to record into. FALSE,
    with *frame NULL, when the frame was refused, or when no frame is open, counted in outside. */
 BOOL ac_frame_task(struct sl_frame** frame);
+/* JUTResFont's seam's before each glyph (port/jsys_j2d.h): ac_frame_task's, but it records only when bytes were
+   written since the last record, or when the frame has had no record, which adds the frame's clear view. So glyphs
+   drawn with no GX between them stay in the kit's one run. */
+BOOL ac_frame_text(struct sl_frame** frame);
 
 /* The differential test's (port/NOTES.md, --diff; sonarlib docs/roadmap.md, M6 step 6j), around each emu64 task,
-   after ac_frame_task. With begin FALSE, submits the open frame early and leaves the glue's frame open with no frame,
+   after ac_frame_task. With begin FALSE, closes the font's open run and submits the open frame early and leaves the glue's frame open with no frame,
    so records go nowhere; with TRUE, begins a new one (sl_frame_begin), whose next record is its first. A refusal
    counts in refused_frames. Does nothing when no frame is open. Neither calls ac_emu64_frame_submitted. */
 void ac_frame_split(BOOL begin);

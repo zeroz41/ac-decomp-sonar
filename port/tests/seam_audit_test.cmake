@@ -12,8 +12,8 @@ foreach(variable IN ITEMS SL_SEAM_AUDIT POLICY COMMANDS ROOT)
     endif()
 endforeach()
 
-set(expected "seam GX transitional 5 calls 146 list 1 reference 3 types 7 unsupported 1 sdk 20 glue 3 unlisted 0 called 0")
-string(APPEND expected " stale 0 skipped 235")
+set(expected "seam GX transitional 4 calls 89 list 1 reference 3 types 8 unsupported 1 sdk 20 glue 3 unlisted 0 called 0")
+string(APPEND expected " stale 0 skipped 236")
 execute_process(COMMAND "${SL_SEAM_AUDIT}" --policy "${POLICY}" --commands "${COMMANDS}" --root "${ROOT}"
                 RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors)
 message("exit ${result}:\n${output}${errors}")
