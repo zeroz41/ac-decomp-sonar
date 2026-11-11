@@ -15,7 +15,17 @@ You need:
 - the decompilation's requirements (see the [main README](../README.md#building)): Python, ninja and your disc in `orig/GAFE01_00`;
 - CMake 3.25 or newer and a C/C++20 compiler (GCC or Clang);
 - a GPU with Vulkan drivers, for the window;
-- a checkout of sonarlib. The build looks for it next to this repository (`../sonarlib`) unless you pass `-DSONARLIB_DIR`.
+- a checkout of sonarlib's `master`. The build looks for it next to this repository (`../sonarlib`) unless you pass `-DSONARLIB_DIR`, and builds it with the port.
+
+Keep the two checkouts side by side, and run every command in this README from this repository's top folder, on its branch `port`:
+
+```sh
+git clone https://github.com/zeroz41/sonarlib.git
+git clone -b port https://github.com/zeroz41/ac-decomp-sonar.git
+cd ac-decomp-sonar
+```
+
+Then put your disc in `orig/GAFE01_00`: an image, as the main README says, or the `sys` and `files` folders of an extracted disc.
 
 First, build the decompilation once. The port reads files it generates:
 
@@ -24,7 +34,7 @@ python configure.py
 ninja
 ```
 
-If you built it before the port played the boot jingle, build it again: the port needs the jingle's files it now extracts, and its build stops and says so without them.
+Build it again after each update ([Updating](#updating)): the port's build stops and says so when it needs a file that the decompilation's build of your checkout hasn't written.
 
 Then build the port:
 
@@ -34,6 +44,8 @@ cmake --build port/build
 ```
 
 `AC_DISC` is optional. It points at your disc, either an image or an extracted folder, and is only used by the tests.
+
+Each command must end without an error. `ninja` and `cmake --build` stop at the first error and print it, with `FAILED:` before the step that failed, and a failed build leaves the last good build's programs in `port/build`: running them then runs that older version.
 
 The goldens test, `ac_port_goldens`, also needs Dolphin, as the reference the port's pictures are compared with. Build its headless player from upstream's tag 2609 and pass it as `AC_DOLPHIN`:
 
@@ -45,6 +57,19 @@ cmake -S port -B port/build -G Ninja -DAC_DISC=orig/GAFE01_00 -DAC_DOLPHIN=$PWD/
 ```
 
 It runs with no window, through SDL's offscreen video driver and Mesa's lavapipe Vulkan driver, which it needs installed (`lvp_icd*.json`). The first run plays the disc in Dolphin, which takes under a minute, and keeps its frames in the build tree; later runs reuse them.
+
+### Updating
+
+Pull both checkouts, then build both again, the decompilation first:
+
+```sh
+git -C ../sonarlib pull
+git pull
+ninja
+cmake --build port/build
+```
+
+The port's build builds sonarlib too, from `../sonarlib`, so both must be updated: the port's newest code needs sonarlib's. If a build that worked before fails after an update, delete `port/build` and configure again with the `cmake -S port …` line above. `port/build` holds only what the build made: your settings, saves and pipeline list are in your user directories ([Settings](#settings)), or in the folder you give `--user-dir`, and the package and its cache are where you wrote them. Then import again only if `ac_port` says so ([How to run](#how-to-run)).
 
 ## How to run
 
@@ -114,6 +139,54 @@ ctest --test-dir port/build
 The tests that need your disc are skipped when `AC_DISC` isn't set.
 
 For how the port works inside (the package, the glue, every edit to the game's code), see [NOTES.md](NOTES.md).
+
+## The renderer, and the old GX front-end version
+
+`ac_port` draws only through sonarlib's renderer: the game's 3D and its frame copies go through sonarlib's emu64 kit, and its 2D, text and display through its jsys kit, into models that sonarlib's GPU code draws. Nothing turns the game's GX calls into GPU work one by one: `ac_port` has no GX front end in it, which the test `ac_port_front_end` checks. Only `ac_port_reference --reference` still draws through the GX front end, headless, as a test ([How to run](#how-to-run)).
+
+### The old GX front-end version
+
+To compare, the branch `port-old` is the port as it was on 2026-11-02, before the kits: the game's emu64 made GX calls, and sonarlib's GX front end drew each as it came. It is a local branch of the checkout it was made in, on GitHub only once it is pushed. It draws the console's 640x480, stretches it to the window and shows one picture each refresh, with sound, the keyboard and gamepads. It has no settings file, overlay, package or replays, and no options but `--headless`, `--ticks N`, `--deterministic`, `--user DIR` and `--shot FILE`. It needs sonarlib as it was then, `b54ba59`, a build type, and a whole disc image: yours, or one that `port/tools/disc_image.py` writes from an extracted disc.
+
+Build it in a folder of its own outside your checkouts, here `~/ac-old-gx`, starting from this repository's top folder, on `port`:
+
+```sh
+old=~/ac-old-gx
+mkdir -p "$old"
+git clone ../sonarlib "$old/sonarlib"
+git -C "$old/sonarlib" checkout b54ba59
+git clone -b port-old . "$old/ac-decomp-sonar"
+cp -r orig/GAFE01_00/sys orig/GAFE01_00/files "$old/ac-decomp-sonar/orig/GAFE01_00/"
+python3 port/tools/disc_image.py orig/GAFE01_00 "$old/GAFE01_00.iso"
+cd "$old/ac-decomp-sonar"
+python configure.py
+ninja
+cmake -S port -B port/build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build port/build
+port/build/ac_port ../GAFE01_00.iso --user ../user
+```
+
+Without `-DCMAKE_BUILD_TYPE` it fails to link, with `undefined reference to __GXReadCPCounterU32` among others; the current port sets a build type itself. With a disc image in place of an extracted disc, copy the image to the old checkout's `orig/GAFE01_00` in place of the `cp` and `disc_image.py` lines, and give `ac_port` its path. The image written is 1.4 GB, but its gaps take no space on most Linux file systems, about 27 MB in all. `--user ../user` keeps its saves in the old folder. Close the window to quit.
+
+### Comparing them
+
+The GPU's work grows with the pictures shown each second times the pixels drawn in each, so compare the two at the same of both:
+
+- **Pictures a second.** The old version shows one each refresh of the display. So does `ac_port` at its default pacing, `vsync`. With `sonar.video.pacing` at `limiter`, `ac_port` shows `frame_limit` a second, up to 1000, whatever the display's rate, and with `interpolation` on, as by default, each is a new picture, blended between the game's last two frames: at 1000 a second it draws over four times what a 240 Hz display can show.
+- **Pixels.** The old version draws 640x480 and stretches it to the window. `ac_port` at its default `render_scale`, 0, draws the smallest whole multiple of the console's 480 lines that fills the window, as wide as the window: 2562x1440 for a 2560x1440 window and for a 1920x1080 one, 4270x2400 for 3840x2160. With `render_scale` 1 it draws 480 lines, 640 pixels wide with `widescreen` off.
+
+So, like for like with the old version:
+
+```sh
+port/build/ac_port --package ac.pkg --window --set sonar.video.pacing=vsync --set sonar.video.render_scale=1 --set sonar.video.widescreen=false
+```
+
+To measure, F1's overlay shows its statistics, and on NVIDIA `nvidia-smi dmon -s pu` in another terminal prints the GPU's power and use each second. For the same run each time, play the title's replay at a set window size, or with `--set sonar.video.mode=borderless` on the whole display. It closes the window after about 21 seconds and prints its window line:
+
+```sh
+port/build/sonarlib/tools/sl-replay build port/tests/title_replay.txt title.slir
+port/build/ac_port --package ac.pkg --window --replay title.slir --resize 1 1920x1080
+```
 
 ## Settings
 
