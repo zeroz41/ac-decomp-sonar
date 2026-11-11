@@ -68,9 +68,9 @@ void ac_frame_begin(void);
    it holds, and submits it, then calls ac_emu64_frame_submitted and, for a frame submitted, ac_measure_frame. An end
    with no frame open is counted in nested and does nothing. */
 void ac_frame_end(void);
-/* emu64_taskstart's: hands the sink's bytes to the front end and records them into the open frame, then gives it in
-   *frame for the task to record into. FALSE, with *frame NULL, when the frame was refused, or when no frame is
-   open, counted in outside. */
+/* emu64_taskstart's, and J2D's seam's before each draw (port/jsys_j2d.h): hands the sink's bytes to the front end
+   and records them into the open frame, then gives it in *frame for the task or the draw to record into. FALSE,
+   with *frame NULL, when the frame was refused, or when no frame is open, counted in outside. */
 BOOL ac_frame_task(struct sl_frame** frame);
 
 /* The differential test's (port/NOTES.md, --diff; sonarlib docs/roadmap.md, M6 step 6j), around each emu64 task,

@@ -40,6 +40,8 @@ sonar_decomp_read_units(PREFIX AC OBJDIFF "${AC_ROOT}/objdiff.json")
 #   keeps the game's Famicom front end, whose famicom_init declines to start, and stubs the core's entry points;
 #   the console's hardware set-up, which the host has no counterpart for: the memory map and the DSP tasks that
 #   unlock the memory card and answer the Game Boy Advance;
+#   J2D's port, projection, quads and lines, J2DGrafContext.cpp and J2DOrthoGraph.cpp, which the seam file
+#   adapter/jsys_j2d.cpp substitutes on sonarlib's jsys kit (sonarlib docs/steps/m6-10c.md);
 #   foresta.rel's start-up, which runs its static constructors: the port links foresta in (boot.c's LoadLink).
 # emu64 stays, under other names, in an object library of its own (ac_reference, below): the game's calls of it run on
 # sonarlib's kit (kits/emu64, roadmap M6 step 6g) through the glue (adapter/emu64_glue.c), and ac_port_reference's
@@ -50,6 +52,7 @@ set(replaced_sources
     "^src/static/Runtime\\.PPCEABI\\.H/"
     "^src/static/Famicom/ks_nes_(core|draw)\\.cpp$"
     "^src/static/libforest/ReconfigBATs\\.c$"
+    "^src/static/JSystem/J2DGraph/J2D(GrafContext|OrthoGraph)\\.cpp$"
     "^src/static/jaudio_NES/internal/dsp_(cardunlock|GBAKey)\\.c$"
     "^src/executor\\.c$")
 set(msl_math "^src/static/MSL_C\\.PPCEABI\\.bare\\.H/((e|k|s|w)_[a-z0-9_]+|float)\\.c$")
@@ -172,6 +175,13 @@ target_sources(ac_game PRIVATE adapter/dolphin_vi.c adapter/dolphin_pad.c)
 # The sink the SDK's GX units write into, handing its bytes to sonarlib's GX front end, GX's address space, the frame
 # from JW_BeginFrame to JW_EndFrame, and the FIFO functions of GXFifo.c, which it replaces.
 target_sources(ac_game PRIVATE adapter/dolphin_gx.c)
+# J2D's port, projection, quads and lines on sonarlib's jsys kit, in place of J2DGrafContext.cpp and
+# J2DOrthoGraph.cpp, built as JSystem's units are.
+target_sources(ac_game PRIVATE adapter/jsys_j2d.cpp)
+get_source_file_property(jsys_defines "${AC_ROOT}/src/static/JSystem/JUtility/JUTFader.cpp" COMPILE_DEFINITIONS)
+get_source_file_property(jsys_options "${AC_ROOT}/src/static/JSystem/JUtility/JUTFader.cpp" COMPILE_OPTIONS)
+set_source_files_properties(adapter/jsys_j2d.cpp PROPERTIES COMPILE_DEFINITIONS "${jsys_defines}"
+                            COMPILE_OPTIONS "${jsys_options}")
 # What the game calls of emu64, on sonarlib's kit, and the proof's stop at play's first frame.
 target_sources(ac_game PRIVATE adapter/emu64_glue.c)
 set_source_files_properties(adapter/emu64_glue.c PROPERTIES COMPILE_DEFINITIONS "F3DEX_GBI_2;_LANGUAGE_C")
@@ -236,8 +246,8 @@ foreach(target IN ITEMS ac_game ac_reference)
     # The original compiler took C++98, which allowed narrowing in braced initializers.
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing>)
     target_link_libraries(${target} PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
-                          sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend
-                          sonar::fmt_card)
+                          sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::kit_jsys
+                          sonar::gx_frontend sonar::fmt_card)
 endforeach()
 
 # The views of the game's card files (NOTES.md, Saves): ac_saves.schema's converters and what ac_saves.c converts around
@@ -270,8 +280,8 @@ add_executable(ac_port_reference adapter/ac_port.c $<TARGET_OBJECTS:ac_game> $<T
 foreach(target IN ITEMS ac_port ac_port_reference)
     set_target_properties(${target} PROPERTIES C_STANDARD 11 C_EXTENSIONS ON LINKER_LANGUAGE CXX)
     target_link_libraries(${target} PRIVATE ac_headers sonar::base sonar::core sonar::kit_dolphin_os sonar::kit_card
-                          sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::gx_frontend
-                          sonar::fmt_card)
+                          sonar::kit_jaudio sonar::kit_vi sonar::kit_pad sonar::kit_emu64 sonar::kit_jsys
+                          sonar::gx_frontend sonar::fmt_card)
 endforeach()
 # sonarlib's sl-card, which moves the cards' saves to and from Dolphin (README.md, Saves), and sl-replay, which builds
 # the recordings --replay plays (NOTES.md, Replays), are built with the program.

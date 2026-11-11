@@ -1,10 +1,11 @@
-# The port's seam policy (sonarlib docs/porting-model.md, Seam audit; docs/roadmap.md, M6 steps 6h, 10a and 10b). The
+# The port's seam policy (sonarlib docs/porting-model.md, Seam audit; docs/roadmap.md, M6 steps 6h and 10a to 10c). The
 # test ac_seam_audit runs sl-seam-audit over the build's compile_commands.json with this policy: every file the build
 # compiles that uses GX is listed here. The SDK's GX units are sdk and the port's glue is glue. emu64, which only
 # ac_port_reference links, is reference; a file that names GX's types or data or includes its headers and calls nothing
 # is types, and fails the audit at its first call; the NES emulator, which the port builds and never starts, is
-# unsupported. m_play.c, whose GX calls build the display list the emu64 kit decodes, is list. Each other file is
-# transitional, with what it does with GX. A file that starts using GX fails the audit until it is listed, and a
+# unsupported. m_play.c, whose GX calls build the display list the emu64 kit decodes, is list. J2D's two files are
+# substituted by the port's seam file on the jsys kit (port/adapter/jsys_j2d.cpp), which uses no GX. Each other file
+# is transitional, with what it does with GX. A file that starts using GX fails the audit until it is listed, and a
 # converted file fails until its entry goes. The seam is complete at transitional 0.
 
 [category.GX]
@@ -28,18 +29,6 @@ path = "src/static/JSystem/JFramework/JFWDisplay.cpp"
 category = "GX"
 kind = "transitional"
 note = "the frame's clear and copy out, clearEfb's quad, preGX and endGX, the fader"
-
-[file.j2d_graf_context]
-path = "src/static/JSystem/J2DGraph/J2DGrafContext.cpp"
-category = "GX"
-kind = "transitional"
-note = "J2D's port: viewport, scissor, its TEV and blend state, lines and quads"
-
-[file.j2d_ortho_graph]
-path = "src/static/JSystem/J2DGraph/J2DOrthoGraph.cpp"
-category = "GX"
-kind = "transitional"
-note = "J2D's orthographic projection and position matrix"
 
 [file.jut_res_font]
 path = "src/static/JSystem/JUtility/JUTResFont.cpp"

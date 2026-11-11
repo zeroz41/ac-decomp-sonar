@@ -77,6 +77,7 @@
 
 #include <port/emu64_glue.h>
 #include <port/goldens.h>
+#include <port/jsys_j2d.h>
 #include <port/reference.h>
 
 #include <sonar/audio.h>
@@ -87,6 +88,7 @@
 #include <sonar/fs.h>
 #include <sonar/goldens.h>
 #include <sonar/input.h>
+#include <sonar/jsys/j2d.h>
 #include <sonar/measure.h>
 #include <sonar/mem.h>
 #include <sonar/os.h>
@@ -1276,6 +1278,16 @@ int main(int argc, char** argv) {
         for (n = 0; n < count && n < 16; n++)
             sl_emu64_static_range(emu, ranges[n].begin, ranges[n].end);
         ac_emu64_start(emu);
+    }
+    {
+        /* J2D's kit, for the game's 640 x 480 frame, in both programs: --reference draws J2D through it too
+           (port/jsys_j2d.h). Its target is RGBA6 and dithered: the game's display has alpha and no AA
+           (jsyswrap.cpp's createManager), so JFWDisplay::preGX sets GX_PF_RGBA6_Z24 and dither each frame, as
+           emu64_init does. */
+        sl_jsys_j2d* j2d = sl_jsys_j2d_create(640, 480, SL_COMBINER_OUTPUT_RGBA6_DITHER);
+        if (j2d == NULL)
+            return failed("sl_jsys_j2d_create", SL_ERROR_OUT_OF_MEMORY);
+        ac_jsys_j2d_start(j2d);
     }
     if (!window) {
         /* Headless, after the render module, as before: the GPU sink keeps no pipeline list. */
