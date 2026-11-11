@@ -125,9 +125,9 @@ string(FIND "${output}" "${window_line}" window_at)
 if(window_at LESS replay_at)
     message(FATAL_ERROR "ac_port_window_replay: the window line does not follow the replay line:\n${output}")
 endif()
-if(NOT window_line MATCHES " cards - - target 640x480$")
+if(NOT window_line MATCHES " cards - - draw-scale 16 draw-scale-changes 0 gpu-timed 0 gpu-over 0 target 640x480$")
     message(FATAL_ERROR "ac_port_window_replay: the window's town replay has a card in a slot, or a target that is "
-                        "not the logical size at scale 1:\n${window_line}")
+                        "not the logical size at scale 1, drawn at it and untimed:\n${window_line}")
 endif()
 
 # The title replay, headless, then in a window, paced.

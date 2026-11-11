@@ -1,4 +1,5 @@
-# Runs the seam audit over the translation units the build compiles (sonarlib docs/roadmap.md, M6 steps 6h, 10a to 10e):
+# Runs the seam audit over the translation units the build compiles (sonarlib docs/roadmap.md, M6 steps 6h, 10a to 10e
+# and 9e3):
 #   cmake -DSL_SEAM_AUDIT=<sl-seam-audit> -DPOLICY=<seam-policy.toml> -DCOMMANDS=<compile_commands.json> -DROOT=<root>
 #         -P seam_audit_test.cmake
 # It must exit 0, every file that uses GX listed, none of the types files calling and no entry stale, and print the
@@ -13,7 +14,7 @@ foreach(variable IN ITEMS SL_SEAM_AUDIT POLICY COMMANDS ROOT)
 endforeach()
 
 set(expected "seam GX transitional 0 calls 0 list 1 reference 4 types 11 unsupported 1 sdk 20 glue 4 unlisted 0 called 0")
-string(APPEND expected " stale 0 skipped 237")
+string(APPEND expected " stale 0 skipped 238")
 execute_process(COMMAND "${SL_SEAM_AUDIT}" --policy "${POLICY}" --commands "${COMMANDS}" --root "${ROOT}"
                 RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors)
 message("exit ${result}:\n${output}${errors}")

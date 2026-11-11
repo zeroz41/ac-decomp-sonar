@@ -3,7 +3,8 @@
                      [--replay <recording> [--unpaced]
                       | --record <recording> [--input-script <script>] [--date <date>] [--unpaced]]
             | --goldens <scenes> <dir> [--display <width>x<height> [--set <key>=<value>]...]
-            | --measure [--present-hz <n>] [--pipeline-list <file>] [--replay <recording>]
+            | --measure [--present-hz <n>] [--pipeline-list <file>] [--render-scale <n>]
+                        [--dynamic-resolution <us>] [--replay <recording>]
             | --replay <recording>]
            [--qrand-seed <hex>] [--state-hashes <file> [--plant <n>]] [--dump <dir> --dump-tick <n>]:
    Animal Crossing on sonarlib
@@ -55,10 +56,14 @@
    player's does, each made before the frame that first needs it is presented. --pipeline-list keeps the GPU sink's
    pipeline list in that host file (sonar/render.h, sl_render_desc's pipeline_cache): read at the start, whose pipelines
    are made then, and written during the run, so a run started from a list that a run at least as long wrote makes no
-   pipeline at a submit; without it the run keeps no list. At the limit the game thread prints the measure line, the
-   presents line, the report, named measured, and the pipelines line, and the run ends, exit 0. With --replay, which
-   needs --ticks, the recording plays from tick 0, as headless: when it ends before the limit, the game thread prints
-   the measure and presents lines, then the report, named replay, and the saves line, and the run ends, exit 0.
+   pipeline at a submit; without it the run keeps no list. --render-scale draws at that render scale, 1 to 16, else
+   at 1x, and --dynamic-resolution turns the GPU sink's dynamic resolution on with a target of that many microseconds,
+   1 to 10000000 (sonar/render.h, sl_render_set_dynamic_resolution). At the limit the game thread prints the measure
+   line, the presents line, the report, named measured, and the pipelines line, with either of those two the
+   resolution line after it, and the run ends, exit 0. With --replay, which needs --ticks, the recording plays from
+   tick 0, as headless: when it ends before the limit, the game thread prints the measure and presents lines, with
+   either of those two the resolution line, then the report, named replay, and the saves line, and the run ends,
+   exit 0.
 
    --reference: the kit is not made, and the console's emu64 draws every task through the GX front end into the
    game's own frame (emu64_glue.c), headless, with --goldens or with --measure at no present rate.
@@ -125,6 +130,7 @@ static const char* const usage_lines[] = {
     "                      [--unpaced]]",
     " | --goldens <scenes> <dir> [--display <width>x<height> [--set <key>=<value>]...]",
     " | --measure [--present-hz <n>] [--pipeline-list <file>]",
+    "             [--render-scale <n>] [--dynamic-resolution <us>]",
     "             [--replay <recording>]",
     " | --replay <recording>]",
     "[--qrand-seed <hex>] [--state-hashes <file> [--plant <n>]]",
@@ -151,6 +157,8 @@ static uint64_t measured_first;  /* the tick of the first */
 static uint64_t measured_last;   /* and of the latest */
 static uint32_t present_hz;      /* --present-hz: the measured run's display rate; 0, each frame presented once */
 static const char* pipeline_list; /* --pipeline-list: the measured run's pipeline list, a host file */
+static uint64_t render_scale;    /* --render-scale: the measured run's render scale; 0, 1x */
+static uint64_t dynamic_us;      /* --dynamic-resolution: the measured run's target in microseconds; 0, off */
 static int seed_given;           /* --qrand-seed */
 static u32 seed;
 static const char* replay;               /* --replay's recording */
@@ -260,6 +268,22 @@ static void pipelines_report(void) {
     fflush(stdout);
 }
 
+/* The resolution line, with --render-scale or --dynamic-resolution: the draw scale the last present drew at, in
+   sixteenths of a logical pixel, the dynamic resolution controller's changes of it, the presents its clock timed and
+   those of them over the target, the target, and the GPU's time of the latest present it timed (sonar/render.h,
+   sl_render_stats). Its last four depend on the GPU's times. */
+static void resolution_report(void) {
+    sl_render_stats render;
+    if (render_scale == 0 && dynamic_us == 0)
+        return;
+    sl_render_get_stats(&render);
+    printf("ac_port: resolution draw-scale %" PRIu32 " changes %" PRIu64 " timed %" PRIu64 " over %" PRIu64
+           " target-ns %" PRIu64 " gpu-ns %" PRIu64 "\n",
+           render.draw_scale, render.draw_scale_changes, render.presents_timed, render.presents_over,
+           render.resolution_target_ns, render.gpu_present_ns);
+    fflush(stdout);
+}
+
 /* The presents line: the display's rate, 0 without one, then the presents, those held at alpha 1, the display times
    late, the frames dropped, the presents going backward, the frames with one before to blend from, the snaps only the
    library's checks found, and the snaps by cause, in sl_snap_cause's order, at each such frame's first present. */
@@ -348,14 +372,15 @@ static sl_result saves_report(void) {
 
 /* Ends the run once the runtime has begun the limit's ticks without a frame of play; with --goldens, stops the
    captures, and the main thread ends the run. With --measure, once play was reached, stops the measured run and prints
-   its two lines, the report and the pipelines line, here on the game thread at a retrace, while no present runs: the
-   game thread waits in sl_measure_frame for each frame's presents. With --replay, first ends the run once the replay
-   has ended, with the report, named replay, and the saves line, after the measured run's two lines with --measure. In a
-   window, the only runs it is registered for are a replay's, for which it prints the two lines once and tells the
-   present loop, which ends the run, as it does at --ticks's limit, and a recording's: at the retrace where the runtime
-   has begun the limit's ticks, or the first after the window closed, it stops the recording, which ends at that tick's
-   boundary, after the retrace callbacks, and one retrace later, where a replay of it ends, it closes the file, prints
-   the report, named record, and the saves line, and tells the present loop. */
+   its two lines, the report, the pipelines line and, with --render-scale or --dynamic-resolution, the resolution line,
+   here on the game thread at a retrace, while no present runs: the game thread waits in sl_measure_frame for each
+   frame's presents. With --replay, first ends the run once the replay has ended, with the report, named replay, and
+   the saves line, after the measured run's two lines and its resolution line with --measure. In a window, the only
+   runs it is registered for are a replay's, for which it prints the two lines once and tells the present loop, which
+   ends the run, as it does at --ticks's limit, and a recording's: at the retrace where the runtime has begun the
+   limit's ticks, or the first after the window closed, it stops the recording, which ends at that tick's boundary,
+   after the retrace callbacks, and one retrace later, where a replay of it ends, it closes the file, prints the report,
+   named record, and the saves line, and tells the present loop. */
 static void stop_at_limit(void* user, uint64_t retrace) {
     (void)user;
     (void)retrace;
@@ -372,6 +397,7 @@ static void stop_at_limit(void* user, uint64_t retrace) {
             sl_measure_stop();
             measure_report();
             presents_report();
+            resolution_report();
         }
         ac_reference_submitted(); /* under --diff, its line before the replay's */
         ac_port_report("replay");
@@ -412,6 +438,7 @@ static void stop_at_limit(void* user, uint64_t retrace) {
             presents_report();
             ac_port_report("measured");
             pipelines_report();
+            resolution_report();
             _Exit(0);
         }
         ac_port_report("limit");
@@ -457,17 +484,17 @@ static int parse_size(const char* text, uint32_t* width, uint32_t* height) {
     return 1;
 }
 
-/* --present-hz's rate: a whole number from 1 to 1000. */
-static int parse_hz(const char* text, uint32_t* hz) {
+/* A whole number from 1 to `most`: --present-hz's rate, --render-scale's scale and --dynamic-resolution's target. */
+static int parse_whole(const char* text, uint64_t most, uint64_t* value) {
     char* end = NULL;
-    unsigned long value;
+    unsigned long long parsed;
     if (text[0] < '0' || text[0] > '9')
         return 0;
     errno = 0;
-    value = strtoul(text, &end, 10);
-    if (errno != 0 || *end != '\0' || value < 1 || value > 1000)
+    parsed = strtoull(text, &end, 10);
+    if (errno != 0 || *end != '\0' || parsed < 1 || parsed > most)
         return 0;
-    *hz = (uint32_t)value;
+    *value = (uint64_t)parsed;
     return 1;
 }
 
@@ -1065,12 +1092,14 @@ static void present(sl_window shown) {
     printf("ac_port: window ticks %" PRIu64 " frames %" PRIu64 " blended %" PRIu64 " audio %" PRIu64 " loud %" PRIu64
            " dsp %" PRIu64 " pacing %s limit %" PRIu64 " gain %.3f pipelines %" PRIu32 " warmed %" PRIu32
            " lists %" PRIu32 " specialized %" PRIu32 " specialized-warmed %" PRIu32 " unspecialized %" PRIu64
-           " cards %s %s target %" PRIu32 "x%" PRIu32 "\n",
+           " cards %s %s draw-scale %" PRIu32 " draw-scale-changes %" PRIu64 " gpu-timed %" PRIu64
+           " gpu-over %" PRIu64 " target %" PRIu32 "x%" PRIu32 "\n",
            sl_tick_count(), frames, blended, audio.frames, audio.loud_frames, (uint64_t)ac_dsp_sounding_frames(),
            (uint32_t)info.pacing < sizeof pacings / sizeof pacings[0] ? pacings[info.pacing] : "unknown",
            whole_hz(info.frame_limit), (double)sl_audio_output_gain(), render.pipelines, render.pipelines_warmed,
            render.pipeline_lists_written, render.pipelines_specialized, render.pipelines_specialized_warmed,
-           render.draws_unspecialized, cards[0], cards[1], target_width, target_height);
+           render.draws_unspecialized, cards[0], cards[1], render.draw_scale, render.draw_scale_changes,
+           render.presents_timed, render.presents_over, target_width, target_height);
     fflush(stdout);
     if (record != NULL)
         _Exit(atomic_load(&run_ended) && run_result == SL_OK ? 0 : 1);
@@ -1113,7 +1142,15 @@ int main(int argc, char** argv) {
         } else if (strcmp(argv[i], "--pipeline-list") == 0 && i + 1 < argc && pipeline_list == NULL) {
             pipeline_list = argv[++i];
         } else if (strcmp(argv[i], "--present-hz") == 0 && i + 1 < argc) {
-            if (!parse_hz(argv[++i], &present_hz))
+            uint64_t hz;
+            if (!parse_whole(argv[++i], 1000, &hz))
+                return usage_error();
+            present_hz = (uint32_t)hz;
+        } else if (strcmp(argv[i], "--render-scale") == 0 && i + 1 < argc && render_scale == 0) {
+            if (!parse_whole(argv[++i], 16, &render_scale))
+                return usage_error();
+        } else if (strcmp(argv[i], "--dynamic-resolution") == 0 && i + 1 < argc && dynamic_us == 0) {
+            if (!parse_whole(argv[++i], 10000000, &dynamic_us))
                 return usage_error();
         } else if (strcmp(argv[i], "--window") == 0 && goldens == NULL) {
             window = 1;
@@ -1180,6 +1217,8 @@ int main(int argc, char** argv) {
         return usage_error(); /* a display's rate is the measured run's, and the reference is measured at none */
     if (pipeline_list != NULL && !measure)
         return usage_error(); /* the list is a measured run's: a player's is in their cache, the others keep none */
+    if ((render_scale != 0 || dynamic_us != 0) && !measure)
+        return usage_error(); /* the scale and the target are a measured run's: a window's follow its settings */
     if (ac_reference_enabled() && (window || ac_diff_enabled() || (emu64_flags & SL_EMU64_VALIDATE) != 0))
         return usage_error(); /* the reference runs headless, without the kit */
     if (display_given && goldens == NULL)
@@ -1262,6 +1301,7 @@ int main(int argc, char** argv) {
         desc.max_snaps = 8192;
         desc.snap_distance = 40.0f;
         desc.pipeline_cache = pipeline_list; /* NULL: a window's in the player's cache, else none */
+        desc.render_scale = (uint32_t)render_scale; /* 0: 1x */
         result = sl_render_init(&desc);
         if (result != SL_OK)
             return failed("sl_render_init", result);
@@ -1296,6 +1336,11 @@ int main(int argc, char** argv) {
         result = sl_measure_open(&desc);
         if (result != SL_OK)
             return failed("sl_measure_open", result);
+        if (dynamic_us != 0) {
+            result = sl_render_set_dynamic_resolution(dynamic_us * 1000u);
+            if (result != SL_OK)
+                return failed("sl_render_set_dynamic_resolution", result);
+        }
     }
     if (!ac_reference_enabled()) {
         /* emu64's texture cache takes the executable's read-only and initialized data as static (emu64.c's

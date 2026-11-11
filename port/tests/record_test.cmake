@@ -154,9 +154,11 @@ macro(record name recording script)
     string(FIND "${output}" "${record_line}" record_at)
     string(FIND "${output}" "${saves_line}" saves_at)
     string(FIND "${output}" "${window_line}" window_at)
-    if(saves_at LESS record_at OR window_at LESS saves_at OR NOT window_line MATCHES " cards card-a - target 640x480$")
+    if(saves_at LESS record_at OR window_at LESS saves_at OR NOT window_line MATCHES
+       " cards card-a - draw-scale 16 draw-scale-changes 0 gpu-timed 0 gpu-over 0 target 640x480$")
         message(FATAL_ERROR "ac_port_record: the ${name} record run's saves line and window line do not follow the "
-                            "record line, with card-a in slot A and the target at scale 1:\n${output}")
+                            "record line, with card-a in slot A and the target at scale 1, drawn at it and "
+                            "untimed:\n${output}")
     endif()
     set(${name}_lines "${lines}")
     set(${name}_saves "${saves_line}")

@@ -1,5 +1,5 @@
-# The port's measured runs (sonarlib docs/roadmap.md, M6 steps 7b, 9a, 9b, 9f0, 10a and 12b; port/NOTES.md, Measured
-# runs):
+# The port's measured runs (sonarlib docs/roadmap.md, M6 steps 7b, 9a, 9b, 9f0, 10a, 12b and 9e3; port/NOTES.md,
+# Measured runs):
 #   cmake -DAC_IMPORT=<ac-import> -DAC_PORT=<ac_port> -DAC_PORT_REFERENCE=<ac_port_reference> -DAC_DISC=<disc>
 #         -DAC_VERSION=<version> -DOUT_DIR=<dir> -DAC_LAVAPIPE_ICD=<lavapipe's ICD> -P measure_test.cmake
 # ac-import writes the package from the player's disc into OUT_DIR. Then ac_port runs as it is, ac_port_reference with
@@ -20,6 +20,11 @@
 # Then the kit's measured run at 144 Hz and at 360 Hz, from no list, once each: the same measured line and ticks as at
 # no rate, its frames and its dropped ones the frames at no rate, more presents than frames, more at 360 Hz than at
 # 144 Hz, none held or backward, no unexplained snap, and the same frames dropped, pairs and snaps at both rates.
+# Then dynamic resolution, the kit's --measure --ticks 600 --render-scale 2: alone, its resolution line at draw scale
+# 32 with nothing timed; with --dynamic-resolution 1, a microsecond no present meets, at draw scale 16 with a change
+# or more; with --dynamic-resolution 1000000, a second, at 32 with none; the three runs' other lines the same once the
+# times are taken out. --render-scale and --dynamic-resolution without --measure, on each program, and out of their
+# ranges exit 2 with the program's usage.
 # Last, the kit's --measure --ticks 7200 once, the title left idle past where step 11d's port died: it exits 0 with
 # its four lines, the measured line at tick 7200 and nothing invalid, overflowed, refused, unowned or stray. It
 # prints every line. When AC_DISC names no disc or there is no lavapipe it prints the line the test's
@@ -351,6 +356,71 @@ if(NOT at_144 STREQUAL at_360)
     message(FATAL_ERROR "ac_port_measure: the runs at 144 Hz and 360 Hz dropped or snapped differently:\n"
                         "${at_144}\n${at_360}")
 endif()
+
+# Dynamic resolution (sonarlib's step 9e3): at render scale 2, a target of a microsecond, which no present meets,
+# lowers the draw scale to 1x, 16 sixteenths of a logical pixel; a target of a second, which each meets, keeps it at
+# the ceiling, 32. Neither changes what is drawn and counted, only the pixels it is drawn in.
+set(resolution_pattern "ac_port: resolution draw-scale ${count} changes ${count} timed ${count} over ${count}")
+string(APPEND resolution_pattern " target-ns ${count} gpu-ns ${count}")
+set(scale_untimed "")
+foreach(target IN ITEMS none 1 1000000)
+    set(options --measure --ticks 600 --render-scale 2)
+    if(NOT target STREQUAL "none")
+        list(APPEND options --dynamic-resolution ${target})
+    endif()
+    run("kit at render scale 2, target ${target}" lines MEASURE OPTIONS ${options}
+        PATTERNS ${measured_patterns} "${resolution_pattern}")
+    list(GET lines 0 measure_line)
+    list(GET lines 1 presents_line)
+    list(GET lines 2 measured_line)
+    list(GET lines 3 pipelines_line)
+    list(GET lines 4 resolution_line)
+    check_report("the run at render scale 2, target ${target}" "${measured_line}")
+    foreach(field IN ITEMS draw-scale changes timed over target-ns)
+        string(REPLACE "-" "_" name "${field}")
+        presents_field("${resolution_line}" ${field} ${name})
+    endforeach()
+    if(target STREQUAL "none")
+        set(drawn FALSE)
+        if(resolution_line MATCHES " draw-scale 32 changes 0 timed 0 over 0 target-ns 0 gpu-ns 0$")
+            set(drawn TRUE)
+        endif()
+    elseif(target STREQUAL "1")
+        set(drawn FALSE)
+        if(draw_scale EQUAL 16 AND changes GREATER 0 AND timed GREATER 0 AND over GREATER 0
+           AND target_ns EQUAL 1000)
+            set(drawn TRUE)
+        endif()
+    else()
+        set(drawn FALSE)
+        if(draw_scale EQUAL 32 AND changes EQUAL 0 AND timed GREATER 0 AND target_ns EQUAL 1000000000)
+            set(drawn TRUE)
+        endif()
+    endif()
+    if(NOT drawn)
+        message(FATAL_ERROR "ac_port_measure: the run at render scale 2, target ${target}, did not end at the draw "
+                            "scale its target gives:\n${resolution_line}")
+    endif()
+    string(REGEX REPLACE " (game|prepare|present|gpu) [0-9]+ [0-9]+ [0-9]+" " \\1" measure_line "${measure_line}")
+    list(APPEND scale_untimed "${measure_line}\n${presents_line}\n${measured_line}\n${pipelines_line}")
+endforeach()
+list(GET scale_untimed 0 alone)
+foreach(index IN ITEMS 1 2)
+    list(GET scale_untimed ${index} with_target)
+    if(NOT with_target STREQUAL alone)
+        message(FATAL_ERROR "ac_port_measure: dynamic resolution changed what the run drew or counted:\n${alone}\n"
+                            "${with_target}")
+    endif()
+endforeach()
+# The scale and the target are a measured run's, and each within its range.
+refused("--render-scale without --measure" ac_port --render-scale 2)
+refused("--dynamic-resolution without --measure" ac_port --dynamic-resolution 1000)
+refused("--render-scale without --measure in ac_port_reference" ac_port_reference --render-scale 2)
+refused("--dynamic-resolution without --measure in ac_port_reference" ac_port_reference --dynamic-resolution 1000)
+refused("--render-scale 0" ac_port --measure --render-scale 0)
+refused("--render-scale 17" ac_port --measure --render-scale 17)
+refused("--dynamic-resolution 0" ac_port --measure --dynamic-resolution 0)
+refused("--dynamic-resolution past 10 s" ac_port --measure --dynamic-resolution 10000001)
 
 # The title left idle to tick 7200, past where step 11d's port died between ticks 5737 and 5751, when jaudio's DVD
 # queue had run past its buffer (port/NOTES.md, The edits on the path).

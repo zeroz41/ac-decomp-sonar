@@ -95,7 +95,8 @@ macro(run_window)
     string(CONCAT window_line "ac_port: window ticks ([0-9]+) frames ([0-9]+) blended [0-9]+ audio [0-9]+ "
            "loud ([0-9]+) dsp ([0-9]+) pacing [a-z]+ limit [0-9]+ gain [0-9.]+ pipelines [0-9]+ "
            "warmed ([0-9]+) lists ([0-9]+) specialized [0-9]+ specialized-warmed [0-9]+ unspecialized [0-9]+ "
-           "cards ([^ \n]+) ([^ \n]+) target ([0-9]+x[0-9]+)")
+           "cards ([^ \n]+) ([^ \n]+) draw-scale [0-9]+ draw-scale-changes [0-9]+ gpu-timed [0-9]+ gpu-over [0-9]+ "
+           "target ([0-9]+x[0-9]+)")
     string(REGEX MATCH "${window_line}" line "${output}")
     set(ticks "${CMAKE_MATCH_1}")
     set(frames "${CMAKE_MATCH_2}")
